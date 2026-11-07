@@ -14,3 +14,6 @@ web/node_modules
 web/.output
 web/.nitro
 web/.tanstack
+web/test-results
+web/playwright-report
+web/blob-report

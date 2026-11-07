@@ -490,6 +490,10 @@ write_prompt() {
       echo "Read .opencode/skills/ats-plugin/SKILL.md and follow it, including references/factor-worksheet.md."
       echo "The skill id is ats-plugin."
     fi
+    if [[ "$id" == ui ]]; then
+      echo
+      echo "Playwright in web/e2e covers the library, sign-in, and teardown. scripts/check.sh runs it when web/playwright.config.ts is present. Keep those tests. Do not delete them to make the gate green."
+    fi
     if [[ -s "$FACTORY_STATE/$id/notes" ]]; then
       echo
       echo "Previous attempt:"

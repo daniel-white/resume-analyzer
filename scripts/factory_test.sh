@@ -125,7 +125,14 @@ prompt=$(
 )
 grep -q 'api/spine' <<<"$prompt" || fail "spine prompt missing branch"
 grep -q 'docs/contracts.md' <<<"$prompt" || fail "spine prompt missing contracts"
-ok "catalog"
+  grep -q 'playwright.config.ts' "$root/scripts/check.sh" || fail "web gate does not run playwright"
+  grep -q 'web/e2e' "$root/factory/waves.tsv" || fail "ui wave does not allow the playwright suite"
+  ui_prompt=$(
+    cd "$root"
+    FACTORY_STATE=$tmp/real-state bash "$factory" plan ui
+  )
+  grep -q 'web/e2e' <<<"$ui_prompt" || fail "ui prompt missing the playwright suite"
+  ok "catalog"
 
 echo "act merges a green wave"
 repo=$(new_repo merge)

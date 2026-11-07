@@ -65,7 +65,16 @@ fi
 
 if [[ "$run_web" == 1 ]]; then
   echo "check: web"
-  (cd web && pnpm typecheck && pnpm test)
+  (
+    cd web
+    pnpm typecheck
+    pnpm test
+    if [[ -f playwright.config.ts ]]; then
+      echo "check: web playwright"
+      pnpm exec playwright install chromium
+      pnpm test:e2e
+    fi
+  )
 fi
 
 if [[ "$run_factory" == 1 ]]; then

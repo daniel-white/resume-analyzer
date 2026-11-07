@@ -229,7 +229,7 @@ not an agent definition. No agent profile is committed.
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-pnpm typecheck and pnpm test, in web/
+pnpm typecheck, pnpm test, and, when web/playwright.config.ts exists, pnpm test:e2e, in web/
 scripts/factory_test.sh, when the factory, its catalog, or the ATS plugin skill changed
 ```
 
@@ -246,7 +246,7 @@ Tests are written with the change they cover:
 | `crates/storage` | outbox claims with `SKIP LOCKED` under two concurrent workers, idempotency dedupe, HMAC rejection on skew and on replay | Postgres |
 | `crates/app` | upload through parse through callback to a terminal state, driven through the router in-process | Postgres |
 | `crates/auth` | magic link single use and expiry, session cookie round trip | Postgres |
-| `web` | server functions against a mocked API, and a render test that the detail page shows four cards | vitest |
+| `web` | server functions against a mocked API, and Playwright on the library, sign-in, and teardown | vitest, playwright |
 
 There is no coverage-percentage gate. The assertions above are the gate,
 because a percentage would not catch the regression that matters, which is the

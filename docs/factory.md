@@ -24,3 +24,5 @@ heal and moves nothing. A crashed run leaves a lock whose pid is dead; the
 next run removes it.
 
 `scripts/factory_test.sh` is the gate for this actor. It does not call a model.
+
+The web half of `scripts/check.sh` runs Playwright when `web/playwright.config.ts` is on the branch. The `ui` wave may change `web/e2e`, and it is not done until those tests are on `main`.
