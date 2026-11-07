@@ -202,6 +202,164 @@ fn take_callbacks(buffer: &mut String) -> Vec<serde_json::Value> {
     found
 }
 
+#[tokio::test]
+async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
+    let database = database().await;
+    let store = storage::Store::connect(&database.url).await.unwrap();
+    store.migrate().await.unwrap();
+    let objects = Arc::new(MemoryObjects::default());
+    let auth_secret = "blast-track-auth-test";
+    let now = auth::OffsetDateTime::now_utc();
+    let issued = auth::request_magic_link(store.pool(), "blast@example.com", now)
+        .await
+        .unwrap();
+    let session = auth::verify_magic_link(store.pool(), &issued.token, now)
+        .await
+        .unwrap();
+    let cookie = format!("session={}", auth::seal_session(auth_secret, session.id));
+    let old_plugins: Vec<Arc<dyn domain::Ats>> =
+        vec![Arc::new(plugins::Stub::new("test-plugin-secret"))];
+    let mut plugins = old_plugins.clone();
+    plugins.push(Arc::new(plugins::BlastTrack::new("test-plugin-secret")));
+    let bus = Bus::default();
+    let api = Arc::new(Api {
+        store: store.clone(),
+        objects: objects.clone(),
+        plugins: plugins.clone(),
+        bus: bus.clone(),
+        mail: mail::Smtp::new("127.0.0.1", 1),
+        auth_secret: auth_secret.into(),
+        app_origin: "http://127.0.0.1:3000".into(),
+        cookie_secure: false,
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move { axum::serve(listener, api_router(api)).await.unwrap() });
+    let old_worker = Worker::new(
+        store.clone(),
+        objects.clone(),
+        old_plugins,
+        bus.clone(),
+        base.clone(),
+    );
+    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone());
+    let client = reqwest::Client::new();
+    let accepted = upload(&base, &cookie, "before.pdf", &plain_pdf()).await;
+    let id = accepted["id"].as_str().unwrap();
+    let version = uuid::Uuid::parse_str(accepted["version_id"].as_str().unwrap()).unwrap();
+    old_worker.drain().await.unwrap();
+    let old_verdict: serde_json::Value =
+        sqlx::query_scalar("select verdict from runs where version_id = $1 and plugin_id = 'stub'")
+            .bind(version)
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    let status: String = sqlx::query_scalar("select status from versions where id = $1")
+        .bind(version)
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(status, "complete");
+    let url = format!("{base}/api/resumes/{id}");
+    assert_eq!(
+        client.get(&url).send().await.unwrap().status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+    let other = auth::request_magic_link(store.pool(), "other@example.com", now)
+        .await
+        .unwrap();
+    let other_session = auth::verify_magic_link(store.pool(), &other.token, now)
+        .await
+        .unwrap();
+    let other_cookie = format!(
+        "session={}",
+        auth::seal_session(auth_secret, other_session.id)
+    );
+    assert_eq!(
+        client
+            .get(&url)
+            .header("cookie", other_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NOT_FOUND
+    );
+    let count: i64 = sqlx::query_scalar("select count(*) from runs where version_id = $1")
+        .bind(version)
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    let (left, right) = tokio::join!(
+        client.get(&url).header("cookie", &cookie).send(),
+        client.get(&url).header("cookie", &cookie).send(),
+    );
+    for response in [left.unwrap(), right.unwrap()] {
+        response.error_for_status().unwrap();
+    }
+    // Concurrent reads can straddle the transaction. Check the authoritative
+    // state after both visits finish, then verify another visit creates no work.
+    let reconciled: serde_json::Value = client
+        .get(&url)
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(reconciled["versions"][0]["status"], "running");
+    assert_eq!(
+        reconciled["versions"][0]["runs"].as_array().unwrap().len(),
+        2
+    );
+    let requested: i64 = sqlx::query_scalar("select count(*) from outbox where version_id = $1 and name = 'AtsRunRequested' and payload->>'plugin_id' = 'blast_track'")
+        .bind(version).fetch_one(store.pool()).await.unwrap();
+    assert_eq!(requested, 1);
+    worker.drain().await.unwrap();
+    let detail: serde_json::Value = client
+        .get(&url)
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(detail["versions"][0]["status"], "complete");
+    let runs = detail["versions"][0]["runs"].as_array().unwrap();
+    assert_eq!(
+        runs.iter().find(|run| run["plugin_id"] == "stub").unwrap()["verdict"],
+        old_verdict
+    );
+    assert_eq!(
+        runs.iter()
+            .find(|run| run["plugin_id"] == "blast_track")
+            .unwrap()["status"],
+        "complete"
+    );
+    let fresh = upload(&base, &cookie, "new.pdf", &plain_pdf()).await;
+    worker.drain().await.unwrap();
+    let fresh: serde_json::Value = client
+        .get(format!(
+            "{base}/api/resumes/{}",
+            fresh["id"].as_str().unwrap()
+        ))
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(fresh["versions"][0]["status"], "complete");
+    assert_eq!(fresh["versions"][0]["runs"].as_array().unwrap().len(), 2);
+    server.abort();
+}
+
 async fn one_callback(
     base: &str,
     cookie: &str,

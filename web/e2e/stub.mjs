@@ -25,6 +25,11 @@ const plugins = [
     name: "IndyHackersHiring",
     subtitle: "Tolerates tables and text boxes, loses columns and images. Simulated, modeled on publicly described parser behavior.",
   },
+  {
+    id: "blast_track",
+    name: "BlastTrack",
+    subtitle: "Keeps contact and table text, needs linear chronology. Simulated, modeled on publicly described parser behavior.",
+  },
 ];
 
 const scenarios = new Map();

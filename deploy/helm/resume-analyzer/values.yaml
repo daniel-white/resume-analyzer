@@ -6,9 +6,9 @@ api:
   pullPolicy: Never
   port: 8080
   # ClusterIP names for the Python fake, not a gateway route.
-  # The host default is 127.0.0.1:8101-8106. `ATS_PROVIDERS=stub` is the
+  # The host default is 127.0.0.1:8101-8107. `ATS_PROVIDERS=stub` is the
   # compiled stub. The callback has to be reachable from those pods.
-  providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080,smart_resume=http://smart-resume:8080,indy_hackers_hiring=http://indy-hackers-hiring:8080"
+  providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080,smart_resume=http://smart-resume:8080,indy_hackers_hiring=http://indy-hackers-hiring:8080,blast_track=http://blast-track:8080"
   callbackUrl: "http://api:8080"
   pluginSecret: "spine-stub-secret"
 

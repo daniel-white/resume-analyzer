@@ -1,7 +1,8 @@
 //! Simulated ATS integrations. The spine still compiles in `stub` so an upload
 //! can reach one callback without the Python providers. `fleet` is Greenline,
-//! Levr, Workdaye, Ash, SmartResume, and IndyHackersHiring. The running API posts those files to the Python
-//! fake and does not call `read` or `call`. `read` is what the fleet tests
+//! Levr, Workdaye, Ash, SmartResume, IndyHackersHiring, and BlastTrack. The running
+//! API posts those files to the Python fake and does not call `read` or `call`.
+//! `read` is what the fleet tests
 //! call. The factor lists disagree.
 //!
 //! A plugin does not return the verdict to the worker. `call` signs a callback
@@ -17,6 +18,7 @@ use domain::{
 use zip::ZipArchive;
 
 mod ash;
+mod blast_track;
 mod greenline;
 mod indy_hackers_hiring;
 mod levr;
@@ -24,6 +26,7 @@ mod smart_resume;
 mod workdaye;
 
 pub use ash::Ash;
+pub use blast_track::BlastTrack;
 pub use greenline::Greenline;
 pub use indy_hackers_hiring::IndyHackersHiring;
 pub use levr::Levr;
@@ -77,8 +80,8 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
-/// Greenline, Levr, Workdaye, Ash, SmartResume, and IndyHackersHiring. The worker posts each file to the
-/// matching Python provider instead of calling `read`.
+/// The simulated fleet. The worker posts each file to the matching Python
+/// provider instead of calling `read`.
 pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
     vec![
         Arc::new(Greenline::new(secret.clone())),
@@ -86,7 +89,8 @@ pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
         Arc::new(Workdaye::new(secret.clone())),
         Arc::new(Ash::new(secret.clone())),
         Arc::new(SmartResume::new(secret.clone())),
-        Arc::new(IndyHackersHiring::new(secret)),
+        Arc::new(IndyHackersHiring::new(secret.clone())),
+        Arc::new(BlastTrack::new(secret)),
     ]
 }
 

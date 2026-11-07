@@ -21,7 +21,8 @@ levr=http://127.0.0.1:8102,\
 workdaye=http://127.0.0.1:8103,\
 ash=http://127.0.0.1:8104,\
 smart_resume=http://127.0.0.1:8105,\
-indy_hackers_hiring=http://127.0.0.1:8106";
+indy_hackers_hiring=http://127.0.0.1:8106,\
+blast_track=http://127.0.0.1:8107";
 
 pub fn fleet_from_env(secret: String) -> anyhow::Result<Fleet> {
     let spec = std::env::var("ATS_PROVIDERS").ok();
@@ -79,7 +80,7 @@ mod tests {
     #[test]
     fn unset_spec_uses_the_python_fleet() {
         let fleet = fleet_from_spec("secret".into(), None).unwrap();
-        assert_eq!(fleet.plugins.len(), 6);
+        assert_eq!(fleet.plugins.len(), 7);
         assert_eq!(
             fleet
                 .plugins
@@ -92,7 +93,8 @@ mod tests {
                 "workdaye",
                 "ash",
                 "smart_resume",
-                "indy_hackers_hiring"
+                "indy_hackers_hiring",
+                "blast_track"
             ]
         );
         assert_eq!(
@@ -113,6 +115,9 @@ mod tests {
             fleet.endpoints["indy_hackers_hiring"],
             "http://127.0.0.1:8106"
         );
+        assert_eq!(fleet.plugins[6].name(), "BlastTrack");
+        assert_eq!(fleet.plugins[6].secret(), "secret");
+        assert_eq!(fleet.endpoints["blast_track"], "http://127.0.0.1:8107");
         assert!(fleet.plugins[3].subtitle().contains("Simulated"));
     }
 

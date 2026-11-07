@@ -4,7 +4,7 @@
 use std::io::{Cursor, Write};
 
 use domain::{Ats, DOCX, LayoutConfidence, ResumeFile};
-use plugins::{Ash, Greenline, IndyHackersHiring, Levr, SmartResume, Workdaye};
+use plugins::{Ash, BlastTrack, Greenline, IndyHackersHiring, Levr, SmartResume, Workdaye};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -80,8 +80,17 @@ fn the_fleet_disagrees_on_the_designed_fixture() {
     let ash = labels(&file, &Ash::new("secret"));
     let smart_resume = labels(&file, &SmartResume::new("secret"));
     let indy = labels(&file, &IndyHackersHiring::new("secret"));
+    let blast_track = labels(&file, &BlastTrack::new("secret"));
 
-    let lists = [&greenline, &levr, &workdaye, &ash, &smart_resume, &indy];
+    let lists = [
+        &greenline,
+        &levr,
+        &workdaye,
+        &ash,
+        &smart_resume,
+        &indy,
+        &blast_track,
+    ];
     for index in 0..lists.len() {
         for other in (index + 1)..lists.len() {
             assert_ne!(lists[index], lists[other], "designed factor lists tied");
@@ -106,6 +115,14 @@ fn the_fleet_disagrees_on_the_designed_fixture() {
             ("two columns".into(), -1),
             ("image".into(), -1),
             ("standard headings".into(), 1),
+        ]
+    );
+    assert_eq!(
+        blast_track,
+        vec![
+            ("email kept".into(), 1),
+            ("column reading order".into(), -1),
+            ("ambiguous chronology".into(), -1),
         ]
     );
     assert_eq!(
@@ -149,6 +166,7 @@ fn the_fleet_agrees_on_the_plain_fixture() {
         Box::new(Ash::new("secret")),
         Box::new(SmartResume::new("secret")),
         Box::new(IndyHackersHiring::new("secret")),
+        Box::new(BlastTrack::new("secret")),
     ];
 
     for plugin in &fleet {
@@ -188,6 +206,11 @@ fn smart_resume_python_and_rust_agree_on_raw_files() {
 #[test]
 fn indy_hackers_hiring_python_and_rust_agree_on_raw_files() {
     python_and_rust_agree(&IndyHackersHiring::new("secret"));
+}
+
+#[test]
+fn blast_track_python_and_rust_agree_on_raw_files() {
+    python_and_rust_agree(&BlastTrack::new("secret"));
 }
 
 fn python_and_rust_agree(plugin: &dyn Ats) {
@@ -232,6 +255,7 @@ fn python_and_rust_agree(plugin: &dyn Ats) {
         assert_eq!(rust.verdict.kept, python.verdict.kept);
         assert_eq!(rust.verdict.dropped, python.verdict.dropped);
         assert_eq!(rust.verdict.factors, python.verdict.factors);
+        assert_eq!(rust.verdict.score, python.verdict.score);
         assert_eq!(rust.verdict.summary, python.verdict.summary);
     }
 }

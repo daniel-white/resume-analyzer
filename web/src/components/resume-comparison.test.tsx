@@ -10,7 +10,7 @@ function version(number: number, scores: ComparisonVersion["scores"]): Compariso
 
 describe("comparison rows", () => {
   it("shows each system's logo and the before/after letter grades with numeric scores", () => {
-    const systems = ["greenline", "levr", "workdaye", "ash", "smart_resume", "indy_hackers_hiring"];
+    const systems = ["greenline", "levr", "workdaye", "ash", "smart_resume", "indy_hackers_hiring", "blast_track"];
     const html = renderToStaticMarkup(<ResumeComparison versionId="v2" versions={[
       version(1, systems.map((id) => ({ id, name: id, score: 77 }))),
       version(2, systems.map((id) => ({ id, name: id, score: 93 }))),

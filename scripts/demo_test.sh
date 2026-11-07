@@ -18,6 +18,7 @@ const web = documents.find(doc => doc.includes("kind: Deployment") && doc.includ
 const api = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: api\n"));
 assert(api?.includes("smart_resume=http://smart-resume:8080"));
 assert(api?.includes("indy_hackers_hiring=http://indy-hackers-hiring:8080"));
+assert(api.includes("blast_track=http://blast-track:8080"));
 assert(web?.includes("image: resume-analyzer/web:dev"));
 assert(web.includes("value: http://api:8080"));
 assert(web.includes('value: "3000"'));
@@ -39,7 +40,12 @@ const indyDeployment = documents.find(doc => doc.includes("kind: Deployment") &&
 assert(indyService?.includes("type: ClusterIP"));
 assert(indyDeployment?.includes('- "indy_hackers_hiring"'));
 assert(indyDeployment.includes("name: PLUGIN_SECRET"));
-assert.equal(documents.filter(doc => doc.includes("kind: Service")).length, 6);
+const blastService = documents.find(doc => doc.includes("kind: Service") && doc.includes("  name: blast-track\n"));
+const blastDeployment = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: blast-track\n"));
+assert(blastService?.includes("type: ClusterIP"));
+assert(blastDeployment?.includes('- "blast_track"'));
+assert(blastDeployment.includes("name: PLUGIN_SECRET"));
+assert.equal(documents.filter(doc => doc.includes("kind: Service")).length, 7);
 assert(!providersHasRoute(documents));
 function providersHasRoute(docs) {
   return docs.some(doc => /kind: (HTTPRoute|Ingress|Gateway)\b/.test(doc));

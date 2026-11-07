@@ -10,3 +10,4 @@ providers:
   - ash
   - smart_resume
   - indy_hackers_hiring
+  - blast_track

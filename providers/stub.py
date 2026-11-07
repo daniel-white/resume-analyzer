@@ -9,7 +9,7 @@ Nothing in the gateway routes to these ports.
 
     python3 -m providers --all
 
-    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105,indy_hackers_hiring=http://127.0.0.1:8106
+    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105,indy_hackers_hiring=http://127.0.0.1:8106,blast_track=http://127.0.0.1:8107
 
 Inside the cluster the chart passes `--cluster --bind 0.0.0.0`. That listens on
 the pod interface so a ClusterIP service can reach it. It is still not routed.
@@ -164,6 +164,7 @@ FLEET = (
     Provider("ash", "Ash", 8104, (26.0, 30.0)),
     Provider("smart_resume", "SmartResume", 8105, (18.0, 22.0)),
     Provider("indy_hackers_hiring", "IndyHackersHiring", 8106, (16.0, 20.0)),
+    Provider("blast_track", "BlastTrack", 8107, (16.0, 20.0)),
 )
 
 
@@ -425,6 +426,8 @@ def decide(provider_id: str, parsed: Read) -> Verdict:
         return decide_smart_resume(parsed)
     if provider_id == "indy_hackers_hiring":
         return decide_indy_hackers_hiring(parsed)
+    if provider_id == "blast_track":
+        return decide_blast_track(parsed)
     raise KeyError(provider_id)
 
 
@@ -663,6 +666,35 @@ def decide_indy_hackers_hiring(parsed: Read) -> Verdict:
     return verdict(kept, dropped, factors)
 
 
+def decide_blast_track(parsed: Read) -> Verdict:
+    kept: list[str] = []
+    dropped: list[str] = []
+    factors: list[Factor] = []
+    if parsed.email:
+        kept.append("email")
+        factors.append(factor("email kept", 15, "Keep the email where it is."))
+    if parsed.has_tables:
+        kept.append("table text")
+    if parsed.has_text_boxes:
+        kept.append("text box text")
+    if parsed.columns >= 2:
+        dropped.append("column reading order")
+        factors.append(factor(
+            layout_label(parsed, "column reading order"), -18,
+            "Put experience in one column to preserve reading order.",
+        ))
+    if parsed.dates == "other":
+        dropped.append("date precision")
+        factors.append(factor(
+            "ambiguous chronology", -12,
+            "Write dates as MM/YYYY to make the chronology unambiguous.",
+        ))
+    elif parsed.dates == "mm-yyyy":
+        kept.append("dates")
+        factors.append(factor("dates MM/YYYY", 10, "Keep dates in MM/YYYY."))
+    return verdict(kept, dropped, factors)
+
+
 def pause(item: Provider, run_id: str) -> float:
     low, high = delay_band(item)
     if high < low:
@@ -690,6 +722,7 @@ def provider_report(item: Provider, run_id: str, parsed: Read, result: Verdict) 
         "ash": ("StructureFlow", "4.6.0", "Structure-tolerant scoring with skill normalization; images are excluded."),
         "smart_resume": ("CellReader", "1.9.3", "Table-cell text is supported; text boxes are excluded from scoring."),
         "indy_hackers_hiring": ("Compact Intake", "1.0.0", "Tables and text boxes are tolerated; multi-column layout and images are excluded from scoring."),
+        "blast_track": ("ChronoRail", "1.0.0", "Contact and table text are supported; competing columns and ambiguous dates disrupt chronology."),
     }
     engine, version, policy = engines[item.id]
     notes = []
