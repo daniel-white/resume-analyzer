@@ -9,3 +9,11 @@ web/.output
 web/.nitro
 .local-certs
 .run
+.factory
+.env
+.env.*
+**/__pycache__
+web/.tanstack
+web/test-results
+web/playwright-report
+web/blob-report

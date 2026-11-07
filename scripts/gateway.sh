@@ -5,6 +5,11 @@
 # small enough to install normally. Versions match the engops cluster.
 set -euo pipefail
 
+root=$(git rev-parse --show-toplevel)
+# Also support invoking gateway.sh directly, outside up.sh.
+# shellcheck source=docker-cred.sh
+source "$root/scripts/docker-cred.sh"
+
 profile=${MINIKUBE_PROFILE:-resume-analyzer}
 export MINIKUBE_PROFILE=$profile
 

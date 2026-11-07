@@ -8,6 +8,9 @@ set -euo pipefail
 mode=${1:-deps}
 root=$(git rev-parse --show-toplevel)
 cd "$root"
+# Helm OCI pulls in gateway.sh also use Docker's credential helper.
+# shellcheck source=docker-cred.sh
+source "$root/scripts/docker-cred.sh"
 profile=${MINIKUBE_PROFILE:-resume-analyzer}
 
 "$root/scripts/cluster.sh"
@@ -16,7 +19,7 @@ profile=${MINIKUBE_PROFILE:-resume-analyzer}
 
 ip=$(minikube ip --profile "$profile")
 
-docker buildx bake --file docker-bake.hcl providers
+"$root/scripts/bake.sh" providers
 minikube image load --profile "$profile" resume-analyzer/ats:dev
 helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 5m
 
@@ -33,7 +36,7 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    docker buildx bake --file docker-bake.hcl api
+    "$root/scripts/bake.sh" api
     minikube image load --profile "$profile" resume-analyzer/api:dev
     if docker image inspect resume-analyzer/web:dev >/dev/null 2>&1; then
       minikube image load --profile "$profile" resume-analyzer/web:dev
