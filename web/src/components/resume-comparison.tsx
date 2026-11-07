@@ -1,8 +1,19 @@
-import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, GitCompareArrows, Minus } from "lucide-react";
+import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, GitCompareArrows, Minus, ScanText } from "lucide-react";
 import { useState } from "react";
 
 import { compareVersions, comparisonMessage } from "~/lib/version-comparison";
 import type { ComparisonVersion } from "~/server/resumes";
+import { letterGrade, scoreTone } from "./score";
+
+const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume"]);
+
+function ComparisonScore({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-muted-foreground">Pending</span>;
+  return <span className="comparison-score-value">
+    <span className={`comparison-grade ${scoreTone(value)}`} aria-label={`Grade ${letterGrade(value)}`}>{letterGrade(value)}</span>
+    <span className="comparison-numeric-score">{value}</span>
+  </span>;
+}
 
 function ScoreChange({ delta }: { delta: number | null }) {
   if (delta === null) return <span className="score-change">Awaiting results</span>;
@@ -58,7 +69,7 @@ export function ResumeComparison({ versions, versionId }: {
     </div>
     <div className="comparison-summary" role="status" aria-live="polite" aria-atomic="true">
       <div className="comparison-score"><span>Overall score (median)</span>
-        <strong>{comparison.before ?? "—"} <ArrowRight size={18} aria-label="to" /> {comparison.after ?? "—"}</strong>
+        <strong><ComparisonScore value={comparison.before} /> <ArrowRight size={18} aria-label="to" /> <ComparisonScore value={comparison.after} /></strong>
         <ScoreChange delta={comparison.delta} />
       </div>
       <div><p>{comparisonMessage(comparison.delta)}</p>
@@ -69,7 +80,15 @@ export function ResumeComparison({ versions, versionId }: {
     <div className="comparison-table-scroll"><table className="comparison-table">
       <caption>ATS score changes from v{from.number} to v{to.number}</caption>
       <thead><tr><th scope="col">System</th><th scope="col">v{from.number}</th><th scope="col">v{to.number}</th><th scope="col">Change</th></tr></thead>
-      <tbody>{comparison.rows.map((row) => <tr key={row.id}><th scope="row">{row.name}</th><td>{row.before ?? "Pending"}</td><td>{row.after ?? "Pending"}</td><td><ScoreChange delta={row.delta} /></td></tr>)}</tbody>
+      <tbody>{comparison.rows.map((row) => <tr key={row.id}>
+        <th scope="row"><span className="comparison-system">
+          <span className="mark-frame comparison-system-mark" aria-hidden="true">
+            {marked.has(row.id) ? <img src={`/marks/${row.id}.png`} alt="" className="mark-img" /> : <ScanText size={20} />}
+          </span>
+          <span>{row.name}</span>
+        </span></th>
+        <td><ComparisonScore value={row.before} /></td><td><ComparisonScore value={row.after} /></td><td><ScoreChange delta={row.delta} /></td>
+      </tr>)}</tbody>
     </table></div>
     <p className="comparison-note">Simulated ATS scores are feedback on parsing, not a measure of your potential or a prediction of hiring outcomes.</p>
     </details>

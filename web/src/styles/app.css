@@ -184,6 +184,11 @@ input:focus-visible {
 .comparison-table th, .comparison-table td { padding: 0.65rem 0.5rem; border-bottom: 1px solid var(--border); }
 .comparison-table thead th { color: var(--muted-foreground); font-weight: 400; }
 .comparison-table tbody th { font-weight: 500; }
+.comparison-system { display: flex; align-items: center; gap: 0.65rem; }
+.mark-frame.comparison-system-mark { display: flex; align-items: center; justify-content: center; width: 2.75rem; height: 2rem; border-radius: 0.4rem; color: var(--muted-foreground); }
+.comparison-score-value { display: inline-flex; align-items: baseline; gap: 0.45rem; }
+.comparison-grade { font-family: var(--font-serif); font-size: 1.1em; font-weight: 600; }
+.comparison-numeric-score { font-family: var(--font-mono); font-size: 0.8em; font-weight: 400; color: var(--muted-foreground); }
 .comparison-table td { white-space: nowrap; }
 @media (max-width: 600px) {
   .comparison-pickers { flex-wrap: wrap; }
