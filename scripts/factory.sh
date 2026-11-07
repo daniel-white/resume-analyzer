@@ -493,6 +493,7 @@ write_prompt() {
     if [[ "$id" == ui ]]; then
       echo
       echo "Playwright in web/e2e covers the library, sign-in, and teardown. scripts/check.sh runs it when web/playwright.config.ts is present. Keep those tests. Do not delete them to make the gate green."
+      echo "That suite is already on branch web/playwright-ui. Bring it onto this branch. Do not write a second one."
     fi
     if [[ -s "$FACTORY_STATE/$id/notes" ]]; then
       echo
