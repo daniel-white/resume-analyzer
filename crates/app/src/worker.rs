@@ -1,15 +1,13 @@
-//! Drain the outbox in this process. A compiled plugin's return value is posted
-//! back as a signed callback. A private provider is handed the file and posts
-//! that callback itself. Only the callback is stored.
+//! Drain the outbox in this process. A compiled plugin is called with the raw
+//! file and the webhook URL. A private provider is handed the file and posts
+//! the callback itself. Only that callback is stored.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine;
-use domain::{
-    Ats, CallbackBody, EventName, EventRecord, ResumeFile, RunPayload, UploadedPayload, sign,
-};
+use domain::{Ats, EventName, EventRecord, ResumeFile, RunPayload, UploadedPayload};
 use plugins::structure;
 use serde::Serialize;
 use storage::{Objects, Store};
@@ -138,40 +136,21 @@ impl Worker {
                 .await?;
             return Ok(());
         }
-        let read = plugin.read(&ResumeFile {
-            media_type: &media_type,
-            bytes: &bytes,
-        });
-        let body = CallbackBody {
-            run_id: payload.run_id,
-            parse: read.parse,
-            verdict: read.verdict,
-        };
-        let raw = serde_json::to_vec(&body)?;
-        let timestamp = chrono::Utc::now().timestamp();
-        let signature = sign(plugin.secret(), timestamp, &raw);
-        let url = format!(
+        let webhook_url = format!(
             "{}/api/callbacks/{}",
             self.self_url.trim_end_matches('/'),
             plugin.id()
         );
-        let response = self
-            .client
-            .post(url)
-            .header("content-type", "application/json")
-            .header("x-timestamp", timestamp.to_string())
-            .header("x-signature", signature)
-            .header("idempotency-key", payload.run_id.to_string())
-            .body(raw)
-            .send()
-            .await?;
-        anyhow::ensure!(
-            response.status().is_success(),
-            "callback for {} returned {}",
+        plugins::call(
+            plugin.as_ref(),
+            &ResumeFile {
+                media_type: &media_type,
+                bytes: &bytes,
+            },
+            &webhook_url,
             payload.run_id,
-            response.status()
-        );
-        Ok(())
+        )
+        .await
     }
 
     /// The provider accepts, waits, then signs `POST /api/callbacks/{plugin_id}` itself.

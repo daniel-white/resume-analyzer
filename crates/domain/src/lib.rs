@@ -335,9 +335,10 @@ pub struct ResumeDetail {
     pub versions: Vec<VersionDetail>,
 }
 
-/// Compiled-in integrations. `read` opens the stored file. The worker posts
-/// that result as a signed callback and does not store the return value.
-/// Only the callback becomes a run result. Plugins do not share a parse.
+/// Compiled-in integrations. `read` opens the stored file. The caller invokes
+/// the plugin with that file and the webhook URL, and the plugin posts a
+/// signed callback. The return value is not stored. Only the callback becomes
+/// a run result. Plugins do not share a parse.
 pub trait Ats: Send + Sync {
     fn id(&self) -> &'static str;
     fn name(&self) -> &'static str;

@@ -94,10 +94,12 @@ Payloads:
 
 `ResumeUploaded` is the app's read of that version. It stores the verification
 parse and emits `ResumeParsed`. `ResumeParsed` fans out one run per plugin for
-that version only. `AtsRunRequested` loads the version's object and hands the
-bytes to that plugin. The plugin reads the file itself and does not receive the
-verification parse. An empty verification parse still fans out. Nothing waits
-for the user to approve it. A new version does not rerun the previous one.
+that version only. `AtsRunRequested` loads the version's object and calls that
+plugin with the raw file and the webhook URL for `POST /api/callbacks/:plugin_id`.
+The plugin reads the file itself and does not receive the verification parse.
+It posts the signed callback to that URL. The worker does not store the
+in-process return value. An empty verification parse still fans out. Nothing
+waits for the user to approve it. A new version does not rerun the previous one.
 
 ## Callback
 

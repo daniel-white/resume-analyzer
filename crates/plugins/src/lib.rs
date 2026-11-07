@@ -58,6 +58,51 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
+/// Call one plugin with the raw file and the webhook that receives its score.
+/// The parse and verdict exist only long enough to sign the callback. The
+/// caller does not keep them.
+pub async fn call(
+    plugin: &dyn Ats,
+    file: &ResumeFile<'_>,
+    webhook_url: &str,
+    run_id: uuid::Uuid,
+) -> anyhow::Result<()> {
+    let read = plugin.read(file);
+    let body = domain::CallbackBody {
+        run_id,
+        parse: read.parse,
+        verdict: read.verdict,
+    };
+    let raw = serde_json::to_vec(&body)?;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| anyhow::anyhow!("clock is before the unix epoch"))?
+        .as_secs()
+        .try_into()
+        .unwrap_or(i64::MAX);
+    let signature = domain::sign(plugin.secret(), timestamp, &raw);
+    let response = http()
+        .post(webhook_url)
+        .header("content-type", "application/json")
+        .header("x-timestamp", timestamp.to_string())
+        .header("x-signature", signature)
+        .header("idempotency-key", run_id.to_string())
+        .body(raw)
+        .send()
+        .await?;
+    anyhow::ensure!(
+        response.status().is_success(),
+        "callback for {run_id} returned {}",
+        response.status()
+    );
+    Ok(())
+}
+
+fn http() -> &'static reqwest::Client {
+    static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(reqwest::Client::new);
+    &CLIENT
+}
+
 fn extract(file: &ResumeFile<'_>) -> (ParseInput, bool) {
     match file.media_type {
         domain::DOCX => match read_docx(file.bytes) {
