@@ -40,12 +40,14 @@ export const getAccount = createServerFn({ method: "GET" }).handler(
 
 export const sendMagicLink = createServerFn({ method: "POST" })
   .validator((email: string) => email)
-  .handler(async ({ data }): Promise<MagicLinkResult> => requestMagicLink(apiBase(), data));
+  .handler(async ({ data }): Promise<MagicLinkResult> =>
+    requestMagicLink(apiBase(), data, cookie()),
+  );
 
 export const verifyLink = createServerFn({ method: "POST" })
   .validator((token: string) => token)
   .handler(async ({ data }): Promise<{ ok: false; message: string }> => {
-    const result = await verifyMagicLink(apiBase(), data);
+    const result = await verifyMagicLink(apiBase(), data, cookie());
     if (!result.ok) return result;
     copySetCookie(result.setCookie);
     throw redirect({

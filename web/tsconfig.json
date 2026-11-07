@@ -1,5 +1,5 @@
 {
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts"],
   "compilerOptions": {
     "strict": true,
     "esModuleInterop": true,

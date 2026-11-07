@@ -32,12 +32,13 @@ export function verifyMessage(status: number, body: string): string {
 export async function requestMagicLink(
   baseUrl: string,
   email: string,
+  cookie?: string,
 ): Promise<MagicLinkResult> {
   const trimmed = email.trim();
   if (!trimmed) return { ok: false, message: "Enter your email." };
   const response = await fetch(new URL("/api/auth/magic-link", baseUrl), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: jsonHeaders(cookie),
     body: JSON.stringify({ email: trimmed }),
   });
   if (response.status === 202) return { ok: true };
@@ -47,11 +48,12 @@ export async function requestMagicLink(
 export async function verifyMagicLink(
   baseUrl: string,
   token: string,
+  cookie?: string,
 ): Promise<VerifyResult> {
   if (!token) return { ok: false, message: "That link did not sign you in." };
   const response = await fetch(new URL("/api/auth/magic-link/verify", baseUrl), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: jsonHeaders(cookie),
     body: JSON.stringify({ token }),
   });
   if (!response.ok) {
@@ -84,6 +86,12 @@ export async function postLogout(
     headers,
   });
   return readSetCookie(response.headers);
+}
+
+function jsonHeaders(cookie?: string): Headers {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (cookie) headers.set("cookie", cookie);
+  return headers;
 }
 
 function errorCode(body: string): string | null {
