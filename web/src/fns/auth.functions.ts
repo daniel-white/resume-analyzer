@@ -40,9 +40,9 @@ export const getAccount = createServerFn({ method: "GET" }).handler(
 );
 
 export const sendMagicLink = createServerFn({ method: "POST" })
-  .validator((data: { email: string; returnTo?: string }) => ({ email: data.email, returnTo: resumeReturnTo(data.returnTo) }))
+  .validator((data: { email: string; returnTo?: string; uploadId?: string }) => ({ email: data.email, returnTo: resumeReturnTo(data.returnTo), uploadId: data.uploadId }))
   .handler(async ({ data }): Promise<MagicLinkResult> =>
-    requestMagicLink(apiBase(), data.email, cookie(), data.returnTo),
+    requestMagicLink(apiBase(), data.email, cookie(), data.returnTo, data.uploadId),
   );
 
 export const verifyLink = createServerFn({ method: "POST" })

@@ -3,6 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import { magicLinkMessage, requestMagicLink, verifyMessage } from "./auth";
 
 describe("sign-in messages", () => {
+  it("binds a staged upload to the email link and its destination", async () => {
+    const id = "12345678-1234-1234-1234-123456789abc";
+    const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    try {
+      expect(await requestMagicLink("http://localhost:8080", "ada@example.com", undefined, `/resumes/${id}`, id)).toEqual({ ok: true });
+      expect(JSON.parse(mock.mock.calls[0][1]!.body as string)).toEqual({ email: "ada@example.com", return_to: `/resumes/${id}`, upload_id: id });
+      expect(magicLinkMessage(400, '{"error":"upload"}')).toContain("upload has expired");
+    } finally { mock.mockRestore(); }
+  });
   it("names a bad email and a mail failure", () => {
     expect(magicLinkMessage(400, JSON.stringify({ error: "email" }))).toBe(
       "That email does not look right.",

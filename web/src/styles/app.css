@@ -1,5 +1,6 @@
 /* Keep generated SSR output out of the client/server stylesheet hash. */
 @import "tailwindcss" source("../");
+@import "./landing.css";
 
 @theme inline {
   --font-sans: Fraunces, "Iowan Old Style", Palatino, Georgia, serif;

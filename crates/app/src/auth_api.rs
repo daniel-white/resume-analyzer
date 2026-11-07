@@ -17,6 +17,7 @@ use crate::api::Api;
 struct EmailBody {
     email: String,
     return_to: Option<String>,
+    upload_id: Option<auth::Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -71,6 +72,13 @@ async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailB
             return error(StatusCode::INTERNAL_SERVER_ERROR, "unavailable");
         }
     };
+    if let Some(id) = body.upload_id {
+        match auth::bind_upload(api.store.pool(), &issued.token, id).await {
+            Ok(true) => {}
+            Ok(false) => return error(StatusCode::BAD_REQUEST, "upload"),
+            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "unavailable"),
+        }
+    }
     let origin = api.app_origin.trim_end_matches('/');
     let mut url = match reqwest::Url::parse(&format!("{origin}/login/verify")) {
         Ok(url) => url,

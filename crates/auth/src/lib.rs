@@ -107,6 +107,19 @@ pub async fn verify_magic_link(
     store::consume_magic_link(pool, &raw, now, now + SESSION).await
 }
 
+pub async fn bind_upload(
+    pool: &sqlx::PgPool,
+    token: &str,
+    upload_id: Uuid,
+) -> Result<bool, AuthError> {
+    let Some(raw) = decode_token(token) else {
+        return Err(AuthError::Link);
+    };
+    let result = sqlx::query("update magic_links set pending_upload_id = $2 where token_hash = $1 and used_at is null and exists (select 1 from pending_uploads where id = $2 and expires_at > now())")
+        .bind(hash_token(&raw).as_slice()).bind(upload_id).execute(pool).await?;
+    Ok(result.rows_affected() == 1)
+}
+
 pub async fn find_session(
     pool: &sqlx::PgPool,
     session_id: Uuid,

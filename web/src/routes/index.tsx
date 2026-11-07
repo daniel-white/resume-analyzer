@@ -6,15 +6,19 @@ import { Page } from "~/components/page";
 import { LiveAnalysis } from "~/components/live-analysis";
 import { ResumeRow } from "~/components/resume-row";
 import { SiteHeader } from "~/components/site-header";
+import { LandingPage } from "~/components/landing-page";
 import { getLibrary } from "~/fns/resumes.functions";
 
 export const Route = createFileRoute("/")({
+  head: () => ({ meta: [{ title: "The Other Read — Make your experience count" }, { name: "description", content: "See what simulated hiring software picks up from your resume. Upload a PDF or DOCX before signing in, compare ATS readers, and find practical fixes." }] }),
   loader: () => getLibrary(),
   component: LibraryPage,
 });
 
 function LibraryPage() {
-  const { rows, drop, email } = Route.useLoaderData();
+  const library = Route.useLoaderData();
+  if (!library) return <LandingPage />;
+  const { rows, drop, email } = library;
 
   return (
     <Page>

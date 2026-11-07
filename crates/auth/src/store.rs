@@ -54,17 +54,17 @@ pub async fn consume_magic_link(
     session_expires_at: OffsetDateTime,
 ) -> Result<Session, AuthError> {
     let mut tx = pool.begin().await?;
-    let email: Option<String> = sqlx::query_scalar(
+    let link: Option<(String, Option<Uuid>)> = sqlx::query_as(
         "UPDATE magic_links
          SET used_at = $2
          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > $2
-         RETURNING email",
+         RETURNING email, pending_upload_id",
     )
     .bind(hash_token(token).as_slice())
     .bind(now)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some(email) = email else {
+    let Some((email, upload_id)) = link else {
         return Err(AuthError::Link);
     };
     let user_id: Uuid = sqlx::query_scalar(
@@ -77,6 +77,25 @@ pub async fn consume_magic_link(
     .bind(&email)
     .fetch_one(&mut *tx)
     .await?;
+    if let Some(id) = upload_id {
+        let pending: Option<(String, String, String)> = sqlx::query_as(
+            "delete from pending_uploads where id = $1 and expires_at > $2 returning filename, media_type, object_key"
+        ).bind(id).bind(now).fetch_optional(&mut *tx).await?;
+        let Some((filename, media_type, object_key)) = pending else {
+            return Err(AuthError::Link);
+        };
+        let version_id = Uuid::new_v4();
+        sqlx::query("insert into resumes (id, user_id, title) values ($1, $2, $3)")
+            .bind(id)
+            .bind(user_id)
+            .bind(&filename)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("insert into versions (id, resume_id, number, filename, media_type, object_key, status) values ($1, $2, 1, $3, $4, $5, 'uploaded')")
+            .bind(version_id).bind(id).bind(&filename).bind(&media_type).bind(&object_key).execute(&mut *tx).await?;
+        sqlx::query("insert into outbox (id, resume_id, version_id, name, payload) values ($1, $2, $3, 'ResumeUploaded', jsonb_build_object('user_id', $4::text, 'resume_id', $2::text, 'version_id', $3::text, 'filename', $5::text, 'media_type', $6::text, 'object_key', $7::text))")
+            .bind(Uuid::new_v4()).bind(id).bind(version_id).bind(user_id.to_string()).bind(filename).bind(media_type).bind(object_key).execute(&mut *tx).await?;
+    }
     let session_id = Uuid::new_v4();
     sqlx::query("INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)")
         .bind(session_id)

@@ -2,14 +2,16 @@ import { expect, test } from "@playwright/test";
 
 import { designed, installApi, reading, ready, stored } from "./api";
 
-test("asks a signed-out visitor to sign in", async ({ page }) => {
+test("welcomes a signed-out visitor with an upload-first landing", async ({ page }) => {
   await installApi(page, { signedIn: false, resumes: [] });
 
   await page.goto("/");
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("They see data.");
+  await expect(page.getByRole("button", { name: "Choose my resume" })).toBeVisible();
+  await page.getByRole("link", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  await expect(page.getByText(/email you a link\. No password\./)).toBeVisible();
 });
 
 test("lists a scored resume and a file still being read", async ({ page }) => {

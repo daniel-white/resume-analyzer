@@ -66,6 +66,37 @@ impl Store {
         &self.pool
     }
 
+    pub async fn stage_upload(
+        &self,
+        id: Uuid,
+        filename: &str,
+        media_type: &str,
+        object_key: &str,
+    ) -> anyhow::Result<()> {
+        sqlx::query("insert into pending_uploads (id, filename, media_type, object_key) values ($1, $2, $3, $4)")
+            .bind(id).bind(filename).bind(media_type).bind(object_key).execute(&self.pool).await?;
+        Ok(())
+    }
+
+    /// Expired bytes are deleted before their metadata, so failed deletes retry.
+    pub async fn clean_pending_uploads(&self, objects: &dyn crate::Objects) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        // Prevent cleanup from deleting bytes during a concurrent verified claim.
+        let rows: Vec<(Uuid, String)> =
+            sqlx::query_as("select id, object_key from pending_uploads where expires_at <= now() limit 100 for update skip locked")
+                .fetch_all(&mut *tx)
+                .await?;
+        for (id, key) in rows {
+            objects.delete(&key).await?;
+            sqlx::query("delete from pending_uploads where id = $1 and expires_at <= now()")
+                .bind(id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Claim a version once the oldest pending result's batching window expires.
     /// Include all its ready results, including arrivals inside that window.
     pub async fn claim_analysis_batch(&self) -> anyhow::Result<Option<AnalysisBatch>> {

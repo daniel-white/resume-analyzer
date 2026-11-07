@@ -7,6 +7,7 @@ import {
   fetchLibrary,
   fetchTeardown,
   postResume,
+  stageResume,
   deleteResume,
   type DeleteResult,
   type LibraryView,
@@ -34,20 +35,26 @@ function signedOut(returnTo?: string): never {
 }
 
 export const getLibrary = createServerFn({ method: "GET" }).handler(
-  async (): Promise<SignedInLibrary> => {
+  async (): Promise<SignedInLibrary | null> => {
     try {
-      const [library, account] = await Promise.all([
-        fetchLibrary(apiBase(), cookie()),
-        fetchAccount(apiBase(), cookie()),
-      ]);
-      if (!account) signedOut();
+      const account = await fetchAccount(apiBase(), cookie());
+      if (!account) return null;
+      const library = await fetchLibrary(apiBase(), cookie());
       return { ...library, email: account.email };
     } catch (error) {
-      if (error instanceof SignedOut) signedOut();
+      if (error instanceof SignedOut) return null;
       throw error;
     }
   },
 );
+
+export const stageUpload = createServerFn({ method: "POST" })
+  .validator((data: FormData) => data)
+  .handler(async ({ data }) => {
+    const file = data.get("file");
+    if (!(file instanceof File)) return { ok: false as const, message: "Choose a PDF or DOCX." };
+    return stageResume(apiBase(), file, cookie());
+  });
 
 export const getTeardown = createServerFn({ method: "GET" })
   .validator((data: { id: string; versionId?: string; provider?: string }) => {

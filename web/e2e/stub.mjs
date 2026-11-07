@@ -45,6 +45,7 @@ const server = createServer(async (request, response) => {
         streams: new Set(),
         connections: 0,
         detailReads: 0,
+        pending: new Map(),
       });
       return sendJson(response, 201, { id });
     }
@@ -89,6 +90,9 @@ const server = createServer(async (request, response) => {
     }
 
     if (pathname === "/api/auth/magic-link" && method === "POST") {
+      const body = await readJson(request);
+      if (body.upload_id && !scenario.pending.has(body.upload_id)) return sendJson(response, 400, { error: "upload" });
+      scenario.linkUpload = body.upload_id;
       if (scenario.magicLinkStatus !== 202) {
         return sendJson(response, scenario.magicLinkStatus, { error: "email" });
       }
@@ -100,6 +104,13 @@ const server = createServer(async (request, response) => {
         return sendJson(response, scenario.verifyStatus, { error: "link" });
       }
       scenario.signedIn = true;
+      if (scenario.linkUpload) {
+        const pending = scenario.pending.get(scenario.linkUpload);
+        if (!pending) return sendJson(response, 400, { error: "link" });
+        scenario.resumes.unshift(resume({ id: scenario.linkUpload, filename: pending, status: "uploaded", parse: null, runs: [] }));
+        scenario.pending.delete(scenario.linkUpload);
+        scenario.linkUpload = undefined;
+      }
       return sendJson(
         response,
         200,
@@ -118,6 +129,13 @@ const server = createServer(async (request, response) => {
     if (pathname === "/api/resumes" && method === "GET") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
       return sendJson(response, 200, { resumes: scenario.resumes.map(summary) });
+    }
+
+    if (pathname === "/api/uploads" && method === "POST") {
+      const filename = (await filenameFrom(request)) ?? "resume.pdf";
+      const id = randomUUID();
+      scenario.pending.set(id, filename);
+      return sendJson(response, 202, { id });
     }
 
     if (pathname === "/api/resumes" && method === "POST") {

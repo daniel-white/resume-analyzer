@@ -442,6 +442,17 @@ export async function postResume(
   return { ok: true, id: accepted.id, version_id: accepted.version_id };
 }
 
+export async function stageResume(baseUrl: string, file: File, cookie?: string): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  if (file.size === 0) return { ok: false, message: "Choose a PDF or DOCX." };
+  if (file.size > 5 * 1024 * 1024) return { ok: false, message: "That file is over five megabytes." };
+  const body = new FormData();
+  body.set("file", file, file.name);
+  const response = await fetch(new URL("/api/uploads", baseUrl), { method: "POST", body, headers: cookie ? { cookie } : undefined });
+  if (!response.ok) return { ok: false, message: uploadFailure(response.status, await response.text()) };
+  const result = await response.json() as { id: string };
+  return { ok: true, id: result.id };
+}
+
 export type DeleteResult = { ok: true } | { ok: false; message: string };
 
 export async function deleteResume(

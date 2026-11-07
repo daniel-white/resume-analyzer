@@ -80,6 +80,43 @@ pub async fn create_resume(
     }
 }
 
+/// No account or public file URL is created. The random id is a short-lived
+/// upload capability, passed only to the magic-link request.
+pub async fn stage_resume(State(api): State<Arc<Api>>, mut multipart: Multipart) -> Response {
+    let field = match next_file(&mut multipart).await {
+        Ok(field) => field,
+        Err(response) => return *response,
+    };
+    if field.name != "file" {
+        return text(StatusCode::BAD_REQUEST, "missing file");
+    }
+    let Some(media_type) = sniff(&field.bytes) else {
+        return text(
+            StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            "That file is neither a PDF nor a DOCX.",
+        );
+    };
+    let filename = field
+        .filename
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| default_name(media_type).to_owned());
+    let id = Uuid::new_v4();
+    let key = format!("pending/{id}");
+    if api.objects.put(&key, &field.bytes).await.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    if api
+        .store
+        .stage_upload(id, &filename, media_type, &key)
+        .await
+        .is_err()
+    {
+        let _ = api.objects.delete(&key).await;
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    (StatusCode::ACCEPTED, Json(serde_json::json!({ "id": id }))).into_response()
+}
+
 pub async fn add_version(
     State(api): State<Arc<Api>>,
     headers: HeaderMap,

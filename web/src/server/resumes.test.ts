@@ -5,6 +5,7 @@ import {
   deleteResume,
   fetchTeardown,
   postResume,
+  stageResume,
   dropCopy,
   extractFields,
   libraryRow,
@@ -21,6 +22,29 @@ import {
   type RunView,
   type Verdict,
 } from "./resumes";
+
+describe("private anonymous staging", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("accepts a private upload without requiring a session", async () => {
+    const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "pending-id" }), { status: 202 }));
+    expect(await stageResume("http://localhost:8080", new File(["%PDF"], "resume.pdf"))).toEqual({ ok: true, id: "pending-id" });
+    expect(String(mock.mock.calls[0][0])).toBe("http://localhost:8080/api/uploads");
+    expect(mock.mock.calls[0][1]!.method).toBe("POST");
+  });
+
+  it("rejects empty and oversized uploads before contacting storage", async () => {
+    const mock = vi.spyOn(globalThis, "fetch");
+    expect(await stageResume("http://localhost:8080", new File([], "empty.pdf"))).toEqual({ ok: false, message: "Choose a PDF or DOCX." });
+    expect(await stageResume("http://localhost:8080", new File([new Uint8Array(5 * 1024 * 1024 + 1)], "large.pdf"))).toEqual({ ok: false, message: "That file is over five megabytes." });
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces server-side content validation failures", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 415 }));
+    expect(await stageResume("http://localhost:8080", new File(["fake"], "resume.pdf"))).toEqual({ ok: false, message: "That file is neither a PDF nor a DOCX." });
+  });
+});
 
 const plugins: Plugin[] = [
   {

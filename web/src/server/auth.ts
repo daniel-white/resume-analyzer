@@ -17,6 +17,7 @@ type ErrorBody = {
 export function magicLinkMessage(status: number, body: string): string {
   const code = errorCode(body);
   if (status === 400 && code === "email") return "That email does not look right.";
+  if (status === 400 && code === "upload") return "That upload has expired. Please choose your resume again.";
   if (status === 502 || code === "mail") return "The sign-in email did not send.";
   return "The sign-in email did not send.";
 }
@@ -34,13 +35,14 @@ export async function requestMagicLink(
   email: string,
   cookie?: string,
   returnTo?: string,
+  uploadId?: string,
 ): Promise<MagicLinkResult> {
   const trimmed = email.trim();
   if (!trimmed) return { ok: false, message: "Enter your email." };
   const response = await fetch(new URL("/api/auth/magic-link", baseUrl), {
     method: "POST",
     headers: jsonHeaders(cookie),
-    body: JSON.stringify({ email: trimmed, return_to: returnTo }),
+    body: JSON.stringify({ email: trimmed, return_to: returnTo, upload_id: uploadId }),
   });
   if (response.status === 202) return { ok: true };
   return { ok: false, message: magicLinkMessage(response.status, await response.text()) };

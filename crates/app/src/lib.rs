@@ -61,6 +61,7 @@ pub fn api_router(api: Arc<Api>) -> Router {
         )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
+        .route("/api/uploads", post(api::stage_resume))
         .route("/api/callbacks/{plugin_id}", post(api::callback))
         .merge(auth_api::routes())
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES + 256 * 1024))
@@ -137,6 +138,20 @@ pub async fn serve() {
             .notifications(api.mail.clone(), &config.app_origin),
     );
     worker.spawn();
+    let cleanup_api = api.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            if let Err(err) = cleanup_api
+                .store
+                .clean_pending_uploads(cleanup_api.objects.as_ref())
+                .await
+            {
+                eprintln!("pending upload cleanup: {err}");
+            }
+        }
+    });
     let health = HealthState { config, s3 };
     eprintln!("listening on {address}");
     axum::serve(listener, router(health, api))
