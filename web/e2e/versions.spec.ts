@@ -102,7 +102,7 @@ test("uploads a new version of the same resume and can return to old results", a
   await expect(page.getByLabel("Pending").first()).toBeVisible();
   await page.getByLabel("Version", { exact: true }).selectOption(designed.versions[0].id);
   await expect(page.getByRole("heading", { name: designed.versions[0].filename })).toBeVisible();
-  await expect(page.getByLabel("Grade F", { exact: true })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Greenline", exact: true }).getByLabel("Grade F", { exact: true })).toBeVisible();
 });
 
 test("cancels deletion, then deletes only the selected version", async ({ page }) => {
