@@ -36,6 +36,12 @@ assert(targets.web.tags.includes("resume-analyzer/web:dev"));
 assert(targets.api.tags.includes("resume-analyzer/api:dev"));
 '
 grep -Fq '"$root/scripts/bake.sh" --load api web' scripts/up.sh
+grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev |' scripts/up.sh
+grep -Fq 'minikube image load --profile "$profile" --overwrite -' scripts/up.sh
+if grep -Eq 'minikube image load .*resume-analyzer/(api|web|ats):dev' scripts/up.sh; then
+  echo "demo: stream daemon images, not cached named :dev archives" >&2
+  exit 1
+fi
 grep -Fq 'args+=(--set api.enabled=true --set web.enabled=true)' scripts/up.sh
 grep -Fq 'COPY web/src ./src' Dockerfile.web
 if grep -Fq 'COPY web/ ./' Dockerfile.web; then

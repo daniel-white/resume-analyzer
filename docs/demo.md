@@ -14,6 +14,9 @@ The gateway serves one HTTPS origin:
 Web server functions use `API_URL=http://api:8080` inside the cluster;
 session cookies stay on the browser's own origin. Re-running `just demo`
 replaces the API and web pods even though their local `:dev` tags are reused.
+Images are streamed from Docker as fresh archives rather than loaded by tag,
+so Minikube cannot reuse an older cached `:dev` image. An `account returned 404`
+error can indicate a stale API image; re-run `just demo` to replace it.
 
 ## Three-minute walkthrough
 

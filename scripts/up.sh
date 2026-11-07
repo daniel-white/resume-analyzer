@@ -20,7 +20,7 @@ profile=${MINIKUBE_PROFILE:-resume-analyzer}
 ip=$(minikube ip --profile "$profile")
 
 "$root/scripts/bake.sh" providers
-minikube image load --profile "$profile" resume-analyzer/ats:dev
+docker save resume-analyzer/ats:dev | minikube image load --profile "$profile" --overwrite -
 helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 5m
 
 args=(
@@ -37,8 +37,10 @@ case "$mode" in
     ;;
   demo)
     "$root/scripts/bake.sh" --load api web
-    minikube image load --profile "$profile" resume-analyzer/api:dev
-    minikube image load --profile "$profile" resume-analyzer/web:dev
+    # Named :dev loads can reuse Minikube's cached archive even after a new
+    # Docker build. Stream the actual daemon images to replace that cache.
+    docker save resume-analyzer/api:dev resume-analyzer/web:dev |
+      minikube image load --profile "$profile" --overwrite -
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
