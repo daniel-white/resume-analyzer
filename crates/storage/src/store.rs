@@ -48,6 +48,10 @@ impl Store {
         Ok(Self { pool })
     }
 
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+
     pub async fn migrate(&self) -> anyhow::Result<()> {
         sqlx::migrate!("../../migrations").run(&self.pool).await?;
         Ok(())

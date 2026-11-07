@@ -7,6 +7,22 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: resume
+          POSTGRES_PASSWORD: resume
+          POSTGRES_DB: resume
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U resume -d resume"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://resume:resume@localhost:5432/resume
     steps:
       - uses: actions/checkout@v4
         with:

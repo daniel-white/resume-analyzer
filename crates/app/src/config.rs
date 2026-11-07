@@ -12,6 +12,10 @@ pub struct Config {
     pub smtp_host: String,
     pub smtp_port: u16,
     pub bind: String,
+    /// HMAC key for the session cookie. The demo default is not a production secret.
+    pub auth_secret: String,
+    /// Origin of the web app, used as the prefix of the link in the email.
+    pub app_origin: String,
 }
 
 impl Config {
@@ -31,7 +35,13 @@ impl Config {
                 .parse()
                 .expect("SMTP_PORT must be a port number"),
             bind: env("BIND", "0.0.0.0:8080"),
+            auth_secret: env("AUTH_SECRET", "dev-only-auth-secret-change-me"),
+            app_origin: env("APP_ORIGIN", "https://app.resume.local"),
         }
+    }
+
+    pub fn cookie_secure(&self) -> bool {
+        self.app_origin.starts_with("https://")
     }
 
     /// Ports nothing listens on, for the degraded-health test.
@@ -47,6 +57,8 @@ impl Config {
             smtp_host: "127.0.0.1".into(),
             smtp_port: 1,
             bind: "127.0.0.1:0".into(),
+            auth_secret: "dev-only-auth-secret-change-me".into(),
+            app_origin: "https://app.resume.local".into(),
         }
     }
 }

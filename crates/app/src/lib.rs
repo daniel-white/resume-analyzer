@@ -1,10 +1,12 @@
 //! HTTP server, the outbox worker, and the live event stream.
 
 mod api;
+mod auth_api;
 mod bus;
 mod config;
 mod health;
 mod objects;
+mod providers;
 mod worker;
 
 use std::net::SocketAddr;
@@ -49,6 +51,7 @@ pub fn api_router(api: Arc<Api>) -> Router {
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
         .route("/api/callbacks/{plugin_id}", post(api::callback))
+        .merge(auth_api::routes())
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES + 256 * 1024))
         .with_state(api)
 }
@@ -76,6 +79,9 @@ pub fn callback_url(address: SocketAddr) -> String {
 
 pub async fn serve() {
     let config = Config::from_env();
+    if config.auth_secret.len() < 16 {
+        panic!("AUTH_SECRET must be at least 16 characters");
+    }
     let bind = config.bind.clone();
     let s3 = health::s3_client(&config).await;
     let store = storage::Store::connect(&config.database_url)
@@ -86,13 +92,22 @@ pub async fn serve() {
         .await
         .unwrap_or_else(|err| panic!("migrate: {err}"));
     let objects = Arc::new(S3Objects::new(s3.clone(), config.s3_bucket.clone()));
-    let plugins = compiled_plugins();
+    let fleet = providers::fleet_from_env(worker::plugin_secret())
+        .unwrap_or_else(|err| panic!("ats providers: {err}"));
+    for (id, url) in &fleet.endpoints {
+        eprintln!("ats {id} {url}");
+    }
+    let plugins = fleet.plugins;
     let bus = Bus::default();
     let api = Arc::new(Api {
         store: store.clone(),
         objects: objects.clone(),
         plugins: plugins.clone(),
         bus: bus.clone(),
+        mail: mail::Smtp::new(&config.smtp_host, config.smtp_port),
+        auth_secret: config.auth_secret.clone(),
+        app_origin: config.app_origin.clone(),
+        cookie_secure: config.cookie_secure(),
     });
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
@@ -100,13 +115,9 @@ pub async fn serve() {
     let address = listener
         .local_addr()
         .unwrap_or_else(|err| panic!("local address: {err}"));
-    let worker = Arc::new(Worker::new(
-        store,
-        objects,
-        plugins,
-        bus,
-        callback_url(address),
-    ));
+    let worker = Arc::new(
+        Worker::new(store, objects, plugins, bus, callback_url(address)).endpoints(fleet.endpoints),
+    );
     worker.spawn();
     let health = HealthState { config, s3 };
     eprintln!("listening on {address}");

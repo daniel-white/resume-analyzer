@@ -1,5 +1,6 @@
 //! Upload, list, detail, the live event stream, and the signed callback.
-//! Until auth exists every request belongs to the demo user.
+//! A resume belongs to the session from the magic-link cookie. Callbacks stay
+//! on their own HMAC.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,7 +11,7 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use domain::{Ats, CallbackBody, DEMO_USER_ID, DOCX, MAX_UPLOAD_BYTES, PDF, verify};
+use domain::{Ats, CallbackBody, DOCX, MAX_UPLOAD_BYTES, PDF, verify};
 use futures_util::Stream;
 use serde::Serialize;
 use storage::{Objects, RecordOutcome};
@@ -23,6 +24,10 @@ pub struct Api {
     pub objects: Arc<dyn Objects>,
     pub plugins: Vec<Arc<dyn Ats>>,
     pub bus: Bus,
+    pub mail: mail::Smtp,
+    pub auth_secret: String,
+    pub app_origin: String,
+    pub cookie_secure: bool,
 }
 
 impl Api {
@@ -60,8 +65,16 @@ struct CallbackStatus {
     status: &'static str,
 }
 
-pub async fn create_resume(State(api): State<Arc<Api>>, multipart: Multipart) -> Response {
-    match store_upload(&api, UploadKind::New, multipart).await {
+pub async fn create_resume(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    multipart: Multipart,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match store_upload(&api, user_id, UploadKind::New, multipart).await {
         Ok(body) => (StatusCode::ACCEPTED, Json(body)).into_response(),
         Err(response) => *response,
     }
@@ -69,24 +82,41 @@ pub async fn create_resume(State(api): State<Arc<Api>>, multipart: Multipart) ->
 
 pub async fn add_version(
     State(api): State<Arc<Api>>,
+    headers: HeaderMap,
     Path(resume_id): Path<Uuid>,
     multipart: Multipart,
 ) -> Response {
-    match store_upload(&api, UploadKind::Existing(resume_id), multipart).await {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match store_upload(&api, user_id, UploadKind::Existing(resume_id), multipart).await {
         Ok(body) => (StatusCode::ACCEPTED, Json(body)).into_response(),
         Err(response) => *response,
     }
 }
 
-pub async fn list_resumes(State(api): State<Arc<Api>>) -> Response {
-    match api.store.list(DEMO_USER_ID).await {
+pub async fn list_resumes(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match api.store.list(user_id).await {
         Ok(resumes) => Json(ResumeList { resumes }).into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 
-pub async fn resume_detail(State(api): State<Arc<Api>>, Path(id): Path<Uuid>) -> Response {
-    match api.store.detail(DEMO_USER_ID, id).await {
+pub async fn resume_detail(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match api.store.detail(user_id, id).await {
         Ok(Some(detail)) => Json(detail).into_response(),
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
@@ -112,11 +142,13 @@ pub async fn plugins(State(api): State<Arc<Api>>) -> Response {
 /// that were already dispatched are not replayed.
 pub async fn events(
     State(api): State<Arc<Api>>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
 ) -> Result<Sse<impl Stream<Item = Result<Event, std::convert::Infallible>>>, StatusCode> {
+    let user_id = crate::auth_api::current_user(&api, &headers).await?;
     if api
         .store
-        .detail(DEMO_USER_ID, id)
+        .detail(user_id, id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .is_none()
@@ -206,6 +238,7 @@ enum UploadKind {
 
 async fn store_upload(
     api: &Api,
+    user_id: Uuid,
     kind: UploadKind,
     mut multipart: Multipart,
 ) -> Result<Accepted, Box<Response>> {
@@ -229,7 +262,7 @@ async fn store_upload(
         UploadKind::Existing(id) => {
             let known = api
                 .store
-                .detail(DEMO_USER_ID, id)
+                .detail(user_id, id)
                 .await
                 .map_err(|_| Box::new(StatusCode::INTERNAL_SERVER_ERROR.into_response()))?;
             if known.is_none() {
@@ -238,7 +271,7 @@ async fn store_upload(
             id
         }
     };
-    let object_key = domain::version_object_key(DEMO_USER_ID, resume_id, version_id);
+    let object_key = domain::version_object_key(user_id, resume_id, version_id);
     api.objects
         .put(&object_key, &field.bytes)
         .await
@@ -247,7 +280,7 @@ async fn store_upload(
         UploadKind::New => {
             api.store
                 .create_resume(
-                    DEMO_USER_ID,
+                    user_id,
                     resume_id,
                     version_id,
                     &filename,
@@ -261,7 +294,7 @@ async fn store_upload(
             let number = api
                 .store
                 .add_version(
-                    DEMO_USER_ID,
+                    user_id,
                     resume_id,
                     version_id,
                     &filename,

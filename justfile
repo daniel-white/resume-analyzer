@@ -23,3 +23,7 @@ check:
 # Wave catalog, dirty main, and the next wave. `just factory act` runs one.
 factory *args:
     ./scripts/factory.sh {{args}}
+
+# Private ATS stubs on 127.0.0.1. Not routed. The API calls ATS_PROVIDERS.
+providers:
+    python3 -m providers --all

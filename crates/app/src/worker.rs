@@ -1,14 +1,19 @@
-//! Drain the outbox in this process. A plugin's return value is posted back
-//! as a signed callback; only that request is stored.
+//! Drain the outbox in this process. A compiled plugin's return value is posted
+//! back as a signed callback. A private provider is handed the file and posts
+//! that callback itself. Only the callback is stored.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use base64::Engine;
 use domain::{
     Ats, CallbackBody, EventName, EventRecord, ResumeFile, RunPayload, UploadedPayload, sign,
 };
 use plugins::structure;
+use serde::Serialize;
 use storage::{Objects, Store};
+use uuid::Uuid;
 
 use crate::bus::Bus;
 
@@ -16,6 +21,7 @@ pub struct Worker {
     store: Store,
     objects: Arc<dyn Objects>,
     plugins: Vec<Arc<dyn Ats>>,
+    endpoints: HashMap<String, String>,
     bus: Bus,
     self_url: String,
     client: reqwest::Client,
@@ -33,10 +39,17 @@ impl Worker {
             store,
             objects,
             plugins,
+            endpoints: HashMap::new(),
             bus,
             self_url: self_url.into(),
             client: reqwest::Client::new(),
         }
+    }
+
+    /// Private provider urls, keyed by plugin id. Empty keeps the in-process stub.
+    pub fn endpoints(mut self, endpoints: HashMap<String, String>) -> Self {
+        self.endpoints = endpoints;
+        self
     }
 
     /// Keep claiming until the outbox is idle. Used by the spine test so an
@@ -115,9 +128,16 @@ impl Worker {
             .plugins
             .iter()
             .find(|plugin| plugin.id() == payload.plugin_id)
+            .cloned()
             .ok_or_else(|| anyhow::anyhow!("unknown plugin {}", payload.plugin_id))?;
+        let endpoint = self.endpoints.get(plugin.id()).cloned();
         let (object_key, media_type) = self.store.file_of(event.version_id).await?;
         let bytes = self.objects.get(&object_key).await?;
+        if let Some(url) = endpoint {
+            self.handoff(&url, plugin.id(), payload.run_id, &media_type, &bytes)
+                .await?;
+            return Ok(());
+        }
         let read = plugin.read(&ResumeFile {
             media_type: &media_type,
             bytes: &bytes,
@@ -153,6 +173,57 @@ impl Worker {
         );
         Ok(())
     }
+
+    /// The provider accepts, waits, then signs `POST /api/callbacks/{plugin_id}` itself.
+    async fn handoff(
+        &self,
+        url: &str,
+        plugin_id: &str,
+        run_id: Uuid,
+        media_type: &str,
+        bytes: &[u8],
+    ) -> anyhow::Result<()> {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let callback_url = format!(
+            "{}/api/callbacks/{plugin_id}",
+            self.self_url.trim_end_matches('/')
+        );
+        let response = self
+            .client
+            .post(format!("{url}/"))
+            .timeout(Duration::from_secs(5))
+            .json(&ProviderJob {
+                run_id,
+                file: ProviderFile {
+                    media_type,
+                    bytes_base64: &encoded,
+                },
+                callback_url: &callback_url,
+            })
+            .send()
+            .await?;
+        anyhow::ensure!(
+            response.status() == reqwest::StatusCode::ACCEPTED,
+            "provider {plugin_id} returned {}",
+            response.status()
+        );
+        Ok(())
+    }
+}
+
+#[derive(Serialize)]
+struct ProviderFile<'a> {
+    media_type: &'a str,
+    bytes_base64: &'a str,
+}
+
+/// What the worker posts to a private provider. `file` is the plugin's
+/// `ResumeFile`. The callback body the provider sends back is `CallbackBody`.
+#[derive(Serialize)]
+struct ProviderJob<'a> {
+    run_id: Uuid,
+    file: ProviderFile<'a>,
+    callback_url: &'a str,
 }
 
 pub fn plugin_secret() -> String {

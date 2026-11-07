@@ -33,6 +33,10 @@ localstack:
 mailpit:
   image: axllent/mailpit:v1.27
 
+auth:
+  # Demo cookie key. Replace it before this chart leaves a laptop.
+  secret: dev-only-auth-secret-change-me
+
 s3:
   bucket: resumes
   region: us-east-1

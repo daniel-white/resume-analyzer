@@ -39,6 +39,11 @@
             minikube
             mkcert
             awscli2
+            # On the default shell so `use flake` can run the web app.
+            # PKG_CONFIG_PATH stays pinned below so Node's OpenSSL does not
+            # steal the Rust link.
+            nodejs_22
+            pnpm
           ]
           ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.vfkit ]
           ++ buildInputs;
@@ -49,7 +54,7 @@
           };
 
           shellHook = ''
-            echo "rust $(rustc --version) — resume-analyzer dev shell"
+            echo "rust $(rustc --version), node $(node --version), pnpm $(pnpm --version) — resume-analyzer dev shell"
           '';
         };
 

@@ -7,6 +7,7 @@ use async_trait::async_trait;
 pub trait Objects: Send + Sync {
     async fn put(&self, key: &str, bytes: &[u8]) -> anyhow::Result<()>;
     async fn get(&self, key: &str) -> anyhow::Result<Vec<u8>>;
+    async fn delete(&self, key: &str) -> anyhow::Result<()>;
 }
 
 #[derive(Clone, Default)]
@@ -31,5 +32,10 @@ impl Objects for MemoryObjects {
             .get(key)
             .cloned()
             .ok_or_else(|| anyhow::anyhow!("missing object {key}"))
+    }
+
+    async fn delete(&self, key: &str) -> anyhow::Result<()> {
+        self.inner.lock().expect("objects").remove(key);
+        Ok(())
     }
 }

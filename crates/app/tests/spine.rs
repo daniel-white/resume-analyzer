@@ -66,10 +66,11 @@ fn multipart(filename: &str, bytes: &[u8]) -> (String, Vec<u8>) {
     (format!("multipart/form-data; boundary={boundary}"), body)
 }
 
-async fn upload(base: &str, filename: &str, bytes: &[u8]) -> serde_json::Value {
+async fn upload(base: &str, cookie: &str, filename: &str, bytes: &[u8]) -> serde_json::Value {
     let (content_type, body) = multipart(filename, bytes);
     let response = reqwest::Client::new()
         .post(format!("{base}/api/resumes"))
+        .header("cookie", cookie)
         .header("content-type", content_type)
         .body(body)
         .send()
@@ -84,11 +85,13 @@ async fn upload(base: &str, filename: &str, bytes: &[u8]) -> serde_json::Value {
 /// the worker stays idle until the response headers are back.
 async fn callback_on_the_stream(
     base: &str,
+    cookie: &str,
     resume_id: &str,
     worker: &Worker,
 ) -> Vec<serde_json::Value> {
     let response = reqwest::Client::new()
         .get(format!("{base}/api/resumes/{resume_id}/events"))
+        .header("cookie", cookie)
         .send()
         .await
         .expect("stream");
@@ -154,18 +157,19 @@ fn take_callbacks(buffer: &mut String) -> Vec<serde_json::Value> {
 
 async fn one_callback(
     base: &str,
+    cookie: &str,
     worker: &Worker,
     filename: &str,
     media_type: &str,
     bytes: &[u8],
     score: u8,
 ) {
-    let accepted = upload(base, filename, bytes).await;
+    let accepted = upload(base, cookie, filename, bytes).await;
     assert_eq!(accepted["status"], "uploaded");
     let resume_id = accepted["id"].as_str().expect("resume id");
     let version_id = accepted["version_id"].as_str().expect("version id");
 
-    let callbacks = callback_on_the_stream(base, resume_id, worker).await;
+    let callbacks = callback_on_the_stream(base, cookie, resume_id, worker).await;
     assert_eq!(callbacks.len(), 1, "one stub callback on the stream");
     let event = &callbacks[0];
     assert_eq!(event["name"], "AtsCallbackReceived");
@@ -178,7 +182,10 @@ async fn one_callback(
         .expect("summary");
     assert!(summary.starts_with(&format!("Score {score} of 100.")));
 
-    let detail: serde_json::Value = reqwest::get(format!("{base}/api/resumes/{resume_id}"))
+    let detail: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base}/api/resumes/{resume_id}"))
+        .header("cookie", cookie)
+        .send()
         .await
         .expect("detail")
         .json()
@@ -207,11 +214,24 @@ async fn upload_reaches_a_callback() {
     let objects = Arc::new(MemoryObjects::default());
     let plugins = compiled_plugins();
     let bus = Bus::default();
+    let secret = "test-secret-value";
+    let now = auth::OffsetDateTime::now_utc();
+    let issued = auth::request_magic_link(store.pool(), "ada@example.com", now)
+        .await
+        .expect("link");
+    let session = auth::verify_magic_link(store.pool(), &issued.token, now)
+        .await
+        .expect("session");
+    let cookie = format!("session={}", auth::seal_session(secret, session.id));
     let api = Arc::new(Api {
         store: store.clone(),
         objects: objects.clone(),
         plugins: plugins.clone(),
         bus: bus.clone(),
+        mail: mail::Smtp::new("127.0.0.1", 1),
+        auth_secret: secret.to_owned(),
+        app_origin: "http://127.0.0.1:3000".to_owned(),
+        cookie_secure: false,
     });
     let app = api_router(api);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -224,10 +244,22 @@ async fn upload_reaches_a_callback() {
     });
     let worker = Worker::new(store, objects, plugins, bus, base.clone());
 
-    one_callback(&base, &worker, "designed.docx", DOCX, &designed_docx(), 15).await;
-    one_callback(&base, &worker, "plain.pdf", PDF, &plain_pdf(), 65).await;
+    one_callback(
+        &base,
+        &cookie,
+        &worker,
+        "designed.docx",
+        DOCX,
+        &designed_docx(),
+        15,
+    )
+    .await;
+    one_callback(&base, &cookie, &worker, "plain.pdf", PDF, &plain_pdf(), 65).await;
 
-    let listed: serde_json::Value = reqwest::get(format!("{base}/api/resumes"))
+    let listed: serde_json::Value = reqwest::Client::new()
+        .get(format!("{base}/api/resumes"))
+        .header("cookie", &cookie)
+        .send()
         .await
         .expect("list")
         .json()

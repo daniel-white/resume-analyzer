@@ -43,4 +43,14 @@ impl Objects for S3Objects {
         let bytes = object.body.collect().await?.into_bytes();
         Ok(bytes.to_vec())
     }
+
+    async fn delete(&self, key: &str) -> anyhow::Result<()> {
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await?;
+        Ok(())
+    }
 }

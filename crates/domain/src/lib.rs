@@ -11,7 +11,7 @@ pub const DOCX: &str = "application/vnd.openxmlformats-officedocument.wordproces
 pub const MAX_UPLOAD_BYTES: usize = 5 * 1024 * 1024;
 pub const SKEW_SECONDS: i64 = 300;
 
-/// Uploads belong to this user until the magic-link wave supplies a session.
+/// Owner used by storage tests that never open a session.
 pub const DEMO_USER_ID: Uuid = Uuid::from_u128(1);
 
 pub fn version_object_key(user_id: Uuid, resume_id: Uuid, version_id: Uuid) -> String {

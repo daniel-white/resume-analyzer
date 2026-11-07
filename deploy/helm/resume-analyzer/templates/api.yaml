@@ -40,6 +40,10 @@ spec:
               value: mailpit
             - name: SMTP_PORT
               value: "1025"
+            - name: APP_ORIGIN
+              value: https://app.resume.local
+            - name: AUTH_SECRET
+              value: {{ .Values.auth.secret | quote }}
           readinessProbe:
             httpGet:
               path: /health

@@ -175,7 +175,11 @@ by a server-side session row.
 
 Magic link first. The request stores only the SHA-256 of a 32-byte token, valid
 for 15 minutes, single use, and provisions the user on first use. lettre sends
-the message to Mailpit, whose web interface is part of the demo.
+the message to Mailpit, whose web interface is part of the demo. Signing out
+deletes that session row. Deleting the account deletes the user, every session,
+outstanding magic links, and that user's resumes and files. A later link
+provisions a new user. Resume routes require the session cookie. Callbacks stay
+on their own HMAC.
 
 Passkeys second, and only as a follow-up. webauthn-rs, a discoverable
 credential, registered after the first login. This needs a secure context, so
@@ -192,7 +196,9 @@ POST /api/auth/passkey/register/finish
 POST /api/auth/passkey/login/start
 POST /api/auth/passkey/login/finish
 POST /api/auth/logout
-GET  /api/me
+DELETE /api/auth/sessions/:id
+GET  /api/me                    email, id, and this account's sessions
+DELETE /api/me                  delete the account
 
 POST /api/resumes              multipart, 5MB, PDF or DOCX by magic bytes, 202
 GET  /api/resumes
@@ -308,9 +314,11 @@ mid-wave:
 | `just dev` | A `resume-analyzer` Minikube profile runs Postgres, LocalStack, and Mailpit. Envoy Gateway terminates mkcert TLS for `https://app.resume.local` and `https://mail.resume.local`, announced over mDNS at the node IP. Port-forwards let `cargo run` on the host reach the dependencies | building |
 | `just demo` | `docker buildx bake`, `minikube image load`, Helm upgrade with the API and web pods enabled, same hostnames | what judges see |
 
-The Nix flake provides two dev shells, `default` for Rust and `web` for Node,
-because a single shell carrying both toolchains is where native dependencies
-break. `direnv` with `use flake` is the expected entry.
+The Nix flake provides two dev shells. `default` carries Rust and Node, because
+`direnv` with `use flake` is the expected entry and has to be able to run
+`pnpm`. `web` is Node only, for a shell that does not need the Rust toolchain.
+`PKG_CONFIG_PATH` in the default shell stays pinned to the OpenSSL used to link
+the AWS SDK, so Node's own OpenSSL does not take that path.
 
 ## Follow-ups
 
