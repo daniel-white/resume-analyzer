@@ -6,7 +6,7 @@ Nothing in the gateway routes to these ports.
 
     python3 -m providers --all
 
-    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104
+    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105
 
 Inside the cluster the chart passes `--cluster --bind 0.0.0.0`. That listens on
 the pod interface so a ClusterIP service can reach it. It is still not routed.
@@ -140,6 +140,7 @@ FLEET = (
     Provider("levr", "Levr", 8102, (0.55, 1.50)),
     Provider("workdaye", "Workdaye", 8103, (0.40, 1.90)),
     Provider("ash", "Ash", 8104, (0.80, 2.20)),
+    Provider("smart_resume", "SmartResume", 8105, (0.60, 1.70)),
 )
 
 
@@ -397,6 +398,8 @@ def decide(provider_id: str, parsed: Read) -> Verdict:
         return decide_workdaye(parsed)
     if provider_id == "ash":
         return decide_ash(parsed)
+    if provider_id == "smart_resume":
+        return decide_smart_resume(parsed)
     raise KeyError(provider_id)
 
 
@@ -542,6 +545,38 @@ def decide_ash(parsed: Read) -> Verdict:
         factors.append(factor("image", -10, "Leave images off the page."))
     heading_factor(parsed, kept, factors, 5)
     return verdict(kept, dropped, factors, ASH_BASE)
+
+
+def decide_smart_resume(parsed: Read) -> Verdict:
+    kept: list[str] = []
+    dropped: list[str] = []
+    factors: list[Factor] = []
+    if parsed.email:
+        kept.append("email")
+        factors.append(factor("email kept", 15, "Keep the email where it is."))
+    if parsed.has_tables:
+        kept.append("table text")
+        factors.append(
+            factor(
+                layout_label(parsed, "table text kept"),
+                10,
+                "Keep the table text. This parser reads its cells.",
+            )
+        )
+    if parsed.has_text_boxes:
+        dropped.append("text box")
+        factors.append(
+            factor(
+                layout_label(parsed, "text box"),
+                -20,
+                "Take the text out of the text box.",
+            )
+        )
+    heading_factor(parsed, kept, factors, 10)
+    if parsed.bullet_count >= 2:
+        kept.append("experience bullets")
+        factors.append(factor("bullet density", 15, "Keep the bullets. This parser counts them."))
+    return verdict(kept, dropped, factors)
 
 
 def pause(item: Provider, run_id: str) -> float:

@@ -58,12 +58,12 @@ const designedParse = {
   layout_confidence: "structural" as const,
 };
 
-function run(pluginId: string, scored: Verdict | null) {
+function run(pluginId: string, scored: Verdict | null, parse: typeof designedParse | null = null) {
   return {
     id: `run-${pluginId}`,
     plugin_id: pluginId,
     status: scored ? ("complete" as const) : ("requested" as const),
-    parse: null,
+    parse,
     verdict: scored,
   };
 }

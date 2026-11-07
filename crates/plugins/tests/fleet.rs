@@ -1,10 +1,10 @@
-//! Greenline, Levr, Workdaye, and Ash on the two fixture resumes.
+//! Greenline, Levr, Workdaye, Ash, and SmartResume on the two fixture resumes.
 //! Factor labels and signs are the assertion. The headline score is not.
 
 use std::io::{Cursor, Write};
 
-use domain::{DOCX, LayoutConfidence, ResumeFile};
-use plugins::{Ash, Greenline, Levr, Workdaye};
+use domain::{Ats, DOCX, LayoutConfidence, ResumeFile};
+use plugins::{Ash, Greenline, Levr, SmartResume, Workdaye};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -72,14 +72,15 @@ fn labels(file: &[u8], plugin: &dyn domain::Ats) -> Vec<(String, i32)> {
 }
 
 #[test]
-fn greenline_levr_workdaye_and_ash_disagree_on_the_designed_fixture() {
+fn greenline_levr_workdaye_ash_and_smart_resume_disagree_on_the_designed_fixture() {
     let file = designed();
     let greenline = labels(&file, &Greenline::new("secret"));
     let levr = labels(&file, &Levr::new("secret"));
     let workdaye = labels(&file, &Workdaye::new("secret"));
     let ash = labels(&file, &Ash::new("secret"));
+    let smart_resume = labels(&file, &SmartResume::new("secret"));
 
-    let lists = [&greenline, &levr, &workdaye, &ash];
+    let lists = [&greenline, &levr, &workdaye, &ash, &smart_resume];
     for index in 0..lists.len() {
         for other in (index + 1)..lists.len() {
             assert_ne!(lists[index], lists[other], "designed factor lists tied");
@@ -97,6 +98,15 @@ fn greenline_levr_workdaye_and_ash_disagree_on_the_designed_fixture() {
         ]
     );
     assert_eq!(levr, vec![("skills not normalized".into(), -1)]);
+    assert_eq!(
+        smart_resume,
+        vec![
+            ("email kept".into(), 1),
+            ("table text kept".into(), 1),
+            ("text box".into(), -1),
+            ("standard headings".into(), 1),
+        ]
+    );
     assert_eq!(
         workdaye,
         vec![
@@ -127,6 +137,7 @@ fn the_fleet_agrees_on_the_plain_fixture() {
         Box::new(Levr::new("secret")),
         Box::new(Workdaye::new("secret")),
         Box::new(Ash::new("secret")),
+        Box::new(SmartResume::new("secret")),
     ];
 
     for plugin in &fleet {
@@ -155,5 +166,51 @@ fn the_fleet_agrees_on_the_plain_fixture() {
             "{} subtitle must say the system is simulated",
             plugin.id()
         );
+    }
+}
+
+#[test]
+fn smart_resume_python_and_rust_agree_on_raw_files() {
+    use std::process::{Command, Stdio};
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let python = std::env::var("PYTHON3").unwrap_or_else(|_| "python3".into());
+    for (media_type, bytes) in [
+        (DOCX, designed()),
+        (DOCX, plain()),
+        (
+            domain::PDF,
+            b"%PDF-1.4\n(ada@example.com) Tj\n%%EOF".to_vec(),
+        ),
+        (DOCX, b"not a zip".to_vec()),
+    ] {
+        let rust = SmartResume::new("secret").read(&ResumeFile {
+            media_type,
+            bytes: &bytes,
+        });
+        let mut command = Command::new(&python);
+        // Nix points DEVELOPER_DIR at its SDK, which has no Apple Python shim.
+        // The provider needs the host interpreter, not the Rust build SDK.
+        #[cfg(target_os = "macos")]
+        command.env_remove("DEVELOPER_DIR");
+        let mut child = command.current_dir(&root)
+            .args([
+                "-c",
+                "import json,sys; from providers.stub import read_file,as_parse,decide; p=read_file(sys.argv[1],sys.stdin.buffer.read()); print(json.dumps({'parse':as_parse(p),'verdict':decide('smart_resume',p)}))",
+                media_type,
+            ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Python provider needs python3");
+        child.stdin.take().unwrap().write_all(&bytes).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success());
+        let python: domain::VendorRead = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(rust.parse, python.parse);
+        assert_eq!(rust.verdict.kept, python.verdict.kept);
+        assert_eq!(rust.verdict.dropped, python.verdict.dropped);
+        assert_eq!(rust.verdict.factors, python.verdict.factors);
+        assert_eq!(rust.verdict.summary, python.verdict.summary);
     }
 }

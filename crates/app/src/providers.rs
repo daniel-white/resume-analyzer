@@ -19,7 +19,8 @@ const LOCAL_PYTHON: &str = "\
 greenline=http://127.0.0.1:8101,\
 levr=http://127.0.0.1:8102,\
 workdaye=http://127.0.0.1:8103,\
-ash=http://127.0.0.1:8104";
+ash=http://127.0.0.1:8104,\
+smart_resume=http://127.0.0.1:8105";
 
 pub fn fleet_from_env(secret: String) -> anyhow::Result<Fleet> {
     let spec = std::env::var("ATS_PROVIDERS").ok();
@@ -77,14 +78,14 @@ mod tests {
     #[test]
     fn unset_spec_uses_the_python_fleet() {
         let fleet = fleet_from_spec("secret".into(), None).unwrap();
-        assert_eq!(fleet.plugins.len(), 4);
+        assert_eq!(fleet.plugins.len(), 5);
         assert_eq!(
             fleet
                 .plugins
                 .iter()
                 .map(|plugin| plugin.id())
                 .collect::<Vec<_>>(),
-            ["greenline", "levr", "workdaye", "ash"]
+            ["greenline", "levr", "workdaye", "ash", "smart_resume"]
         );
         assert_eq!(
             fleet.endpoints.get("greenline").map(String::as_str),
@@ -95,6 +96,9 @@ mod tests {
             Some("http://127.0.0.1:8104")
         );
         assert_eq!(fleet.plugins[0].secret(), "secret");
+        assert_eq!(fleet.plugins[4].name(), "SmartResume");
+        assert_eq!(fleet.plugins[4].secret(), "secret");
+        assert_eq!(fleet.endpoints["smart_resume"], "http://127.0.0.1:8105");
         assert!(fleet.plugins[3].subtitle().contains("Simulated"));
     }
 

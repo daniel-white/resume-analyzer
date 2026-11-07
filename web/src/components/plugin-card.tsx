@@ -8,7 +8,7 @@ type CardVerdict = Pick<Verdict, "score" | "kept" | "dropped" | "factors"> & {
   summary?: string;
 };
 
-const marked = new Set(["greenline", "levr", "workdaye", "ash"]);
+const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume"]);
 
 const aside: Record<string, string> = {
   greenline: "Skips the header. Likes plain headings.",
