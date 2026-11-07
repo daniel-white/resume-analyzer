@@ -156,6 +156,7 @@ describe("library rows", () => {
       id: "resume-1",
       filename: "ada-designed.pdf",
       status: "waiting",
+      overallScore: null,
       label: "Stored. Waiting for the first read.",
     });
   });
@@ -164,6 +165,7 @@ describe("library rows", () => {
     expect(libraryRow(summary("parsed"), [run("greenline", null)]).status).toBe("reading");
     const running = libraryRow(summary("running"), [run("greenline", 35)]);
     expect(running.status === "reading" && running.label).toBe("Reading");
+    expect(running.overallScore).toBe(35);
   });
 
   it("spreads the verdict scores and colors by the low one", () => {
@@ -183,6 +185,7 @@ describe("library rows", () => {
       high: 78,
       spread: "5\u201378",
       band: "low",
+      overallScore: 52.5,
     });
   });
 
@@ -235,12 +238,12 @@ describe("drop copy", () => {
     });
     expect(
       dropCopy([
-        { id: "a", filename: "ada-designed.pdf", status: "waiting", label: "Stored. Waiting for the first read." },
+        { id: "a", filename: "ada-designed.pdf", overallScore: null, status: "waiting", label: "Stored. Waiting for the first read." },
       ]).title,
     ).toBe("Drop another file");
     expect(
       dropCopy([
-        { id: "a", filename: "ada-designed.pdf", status: "reading", label: "Reading" },
+        { id: "a", filename: "ada-designed.pdf", overallScore: null, status: "reading", label: "Reading" },
       ]),
     ).toMatchObject({ title: "Drop a PDF or DOCX", tone: "list" });
   });

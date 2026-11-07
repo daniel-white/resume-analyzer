@@ -1,4 +1,5 @@
 import { cn } from "~/lib/utils";
+export { medianScore } from "~/lib/grades";
 
 export function letterGrade(score: number): string {
   if (score >= 97) return "A+";
@@ -24,13 +25,6 @@ export function scoreTone(score: number): string {
 
 export function goodWork(score: number): boolean {
   return score >= 80;
-}
-
-export function medianScore(scores: number[]): number | null {
-  if (scores.length === 0) return null;
-  const sorted = [...scores].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 export function ScoreStamp({ value }: { value: number }) {

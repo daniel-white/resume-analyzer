@@ -32,7 +32,7 @@ export function ResumeOverview({ filename, cards, number }: {
           <span className="overall-rating-note">Median of completed scores</span>
         </div>
         <div><span className="stat-label"><ScanLine aria-hidden="true" /> Systems analyzed</span><strong>{scores.length}<small> / {cards.length}</small></strong></div>
-        <div><span className="stat-label"><Sparkles aria-hidden="true" /> Grade range</span><strong>{spread}</strong></div>
+        <div className="grade-range"><span className="stat-label"><Sparkles aria-hidden="true" /> Grade range</span><strong>{spread}</strong></div>
         <p className={`analysis-state ${complete ? "is-complete" : ""}`} role="status">
           {complete ? <CheckCheck aria-hidden="true" /> : <ScanLine aria-hidden="true" />}
           {complete ? "Analysis complete" : "Analysis in progress"}

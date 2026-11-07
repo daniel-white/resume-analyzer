@@ -1,4 +1,5 @@
 import { apiFetch } from "./session";
+import { medianScore } from "../lib/grades";
 
 export type ResumeStatus = "uploaded" | "parsed" | "running" | "complete";
 export type RunStatus = "requested" | "complete";
@@ -105,7 +106,7 @@ export type AcceptedUpload = {
 
 export type ScoreBand = "low" | "mid" | "high";
 
-export type LibraryRow =
+export type LibraryRow = { overallScore: number | null } & (
   | {
       id: string;
       filename: string;
@@ -128,7 +129,7 @@ export type LibraryRow =
       high: number;
       spread: string;
       band: ScoreBand;
-    };
+    });
 
 export type DropCopy = {
   title: string;
@@ -228,17 +229,16 @@ export function formatDelta(delta: number): string {
 export function libraryRow(summary: ResumeSummary, runs: RunView[]): LibraryRow {
   const id = summary.id;
   const filename = summary.latest.filename;
+  const scores = runs.flatMap((run) => run.verdict ? [run.verdict.score] : []);
+  const overallScore = medianScore(scores);
   if (summary.latest.status === "uploaded") {
-    return { id, filename, status: "waiting", label: "Stored. Waiting for the first read." };
+    return { id, filename, overallScore, status: "waiting", label: "Stored. Waiting for the first read." };
   }
   if (summary.latest.status !== "complete") {
-    return { id, filename, status: "reading", label: "Reading" };
+    return { id, filename, overallScore, status: "reading", label: "Reading" };
   }
-  const scores = runs.flatMap((run) =>
-    run.verdict ? [run.verdict.score] : [],
-  );
   if (scores.length === 0) {
-    return { id, filename, status: "reading", label: "Reading" };
+    return { id, filename, overallScore, status: "reading", label: "Reading" };
   }
   const low = Math.min(...scores);
   const high = Math.max(...scores);
@@ -246,6 +246,7 @@ export function libraryRow(summary: ResumeSummary, runs: RunView[]): LibraryRow 
   return {
     id,
     filename,
+    overallScore,
     status: "scored",
     reads,
     readsLabel: reads === 1 ? "1 read" : `${reads} reads`,

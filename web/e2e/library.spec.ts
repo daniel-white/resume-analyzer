@@ -20,9 +20,12 @@ test("lists a scored resume and a file still being read", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
   await expect(page.getByText("ada@example.com")).toBeVisible();
   await expect(page.getByRole("link", { name: /ada-designed\.pdf/ })).toBeVisible();
-  await expect(page.getByText("2 reads")).toBeVisible();
-  await expect(page.getByText("F–C-")).toBeVisible();
-  await expect(page.getByRole("link", { name: /workshop\.pdf/ })).toContainText("Reading");
+  const analyzed = page.getByRole("link", { name: /ada-designed\.pdf/ });
+  await expect(analyzed).toContainText("Analysis complete · 2 reads");
+  await expect(analyzed.getByLabel("Overall rating")).toContainText("F");
+  await expect(analyzed.getByLabel("Overall rating")).toContainText("Needs work");
+  await expect(page.getByRole("link", { name: /workshop\.pdf/ })).toContainText("Analysis in progress");
+  await expect(page.locator(".library-row").first()).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
 
 test("shows an empty library until a file is stored", async ({ page }, testInfo) => {
@@ -144,7 +147,7 @@ test("uploads a file and lands on its teardown", async ({ page }) => {
   await ready(page);
   await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
   await expect(page.getByRole("link", { name: /just-added\.docx/ })).toContainText(
-    "Stored. Waiting for the first read.",
+    "Waiting for analysis",
   );
   await page.locator('input[type="file"]').setInputFiles({
     name: "dropped.pdf",
