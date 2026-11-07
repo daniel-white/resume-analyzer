@@ -1,6 +1,9 @@
-//! Simulated ATS integrations. This spine ships one, so the callback path can
-//! land before the fleet does. The stub reads the raw file. The four named
-//! parsers replace it without a change to the callback contract.
+//! Simulated ATS integrations. The spine still compiles in `stub` so an upload
+//! can reach one callback. `fleet` is Greenline, Levr, Workdaye, and Ash: they
+//! share this crate's file read and disagree on the factor list.
+//!
+//! A plugin does not return the verdict to the worker. `call` signs it and
+//! posts the callback.
 
 use std::io::{Cursor, Read};
 use std::sync::{Arc, LazyLock};
@@ -10,6 +13,16 @@ use domain::{
     aggregate, summarize,
 };
 use zip::ZipArchive;
+
+mod ash;
+mod greenline;
+mod levr;
+mod workdaye;
+
+pub use ash::Ash;
+pub use greenline::Greenline;
+pub use levr::Levr;
+pub use workdaye::Workdaye;
 
 pub struct Stub {
     secret: String,
@@ -58,6 +71,17 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
+/// The four simulated parsers. The spine keeps `compiled` on the stub until a
+/// later wave points the worker here.
+pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
+    vec![
+        Arc::new(Greenline::new(secret.clone())),
+        Arc::new(Levr::new(secret.clone())),
+        Arc::new(Workdaye::new(secret.clone())),
+        Arc::new(Ash::new(secret)),
+    ]
+}
+
 /// Call one plugin with the raw file and the webhook that receives its score.
 /// The parse and verdict exist only long enough to sign the callback. The
 /// caller does not keep them.
@@ -103,7 +127,7 @@ fn http() -> &'static reqwest::Client {
     &CLIENT
 }
 
-fn extract(file: &ResumeFile<'_>) -> (ParseInput, bool) {
+pub(crate) fn extract(file: &ResumeFile<'_>) -> (ParseInput, bool) {
     match file.media_type {
         domain::DOCX => match read_docx(file.bytes) {
             Some(parse) => (parse, false),
@@ -116,73 +140,98 @@ fn extract(file: &ResumeFile<'_>) -> (ParseInput, bool) {
 
 fn score(input: &ParseInput, unreadable: bool) -> Verdict {
     if unreadable {
-        return verdict(
-            vec![],
-            vec!["file".into()],
-            vec![factor(
-                "could not read file",
-                -40,
-                "Upload a PDF or DOCX the parser can open.",
-            )],
-        );
+        return unreadable_verdict(Stub::BASE);
     }
 
-    let mut kept = Vec::new();
-    let mut dropped = Vec::new();
-    let mut factors = Vec::new();
+    let mut marks = Marks::new();
 
     if input.layout.contact_in_header {
-        dropped.push("header contact".into());
-        factors.push(factor(
+        marks.lose("header contact");
+        marks.factor(
             "contact in header",
             -25,
             "Move the email and phone into the body, not the header.",
-        ));
+        );
     } else if input.profile.email.is_some() {
-        kept.push("email".into());
-        factors.push(factor("email in body", 15, "Keep the email in the body."));
+        marks.keep("email");
+        marks.factor("email in body", 15, "Keep the email in the body.");
     }
 
     if input.layout.has_tables {
-        dropped.push("table".into());
-        factors.push(factor(
-            "table",
-            -20,
-            "Replace the table with plain lines of text.",
-        ));
+        marks.lose("table");
+        marks.factor("table", -20, "Replace the table with plain lines of text.");
     }
 
     for section in &input.profile.sections {
         if !section.heading.is_empty() {
-            kept.push(section.heading.clone());
-            factors.push(factor(
-                "standard headings",
-                10,
-                "Keep the standard headings.",
-            ));
+            marks.keep(section.heading.clone());
+            marks.factor("standard headings", 10, "Keep the standard headings.");
         }
     }
 
-    verdict(kept, dropped, factors)
+    marks.verdict(Stub::BASE)
 }
 
-fn factor(label: &str, delta: i32, advice: &str) -> Factor {
-    Factor {
-        label: label.to_owned(),
-        delta,
-        advice: advice.to_owned(),
+pub(crate) struct Marks {
+    kept: Vec<String>,
+    dropped: Vec<String>,
+    factors: Vec<Factor>,
+}
+
+impl Marks {
+    pub(crate) fn new() -> Self {
+        Self {
+            kept: Vec::new(),
+            dropped: Vec::new(),
+            factors: Vec::new(),
+        }
+    }
+
+    pub(crate) fn keep(&mut self, item: impl Into<String>) {
+        self.kept.push(item.into());
+    }
+
+    pub(crate) fn lose(&mut self, item: impl Into<String>) {
+        self.dropped.push(item.into());
+    }
+
+    pub(crate) fn factor(&mut self, label: impl Into<String>, delta: i32, advice: &str) {
+        self.factors.push(Factor {
+            label: label.into(),
+            delta,
+            advice: advice.to_owned(),
+        });
+    }
+
+    pub(crate) fn verdict(self, base: i32) -> Verdict {
+        let score = aggregate(base, &self.factors);
+        Verdict {
+            summary: summarize(score, &self.factors),
+            score,
+            kept: self.kept,
+            dropped: self.dropped,
+            factors: self.factors,
+        }
     }
 }
 
-fn verdict(kept: Vec<String>, dropped: Vec<String>, factors: Vec<Factor>) -> Verdict {
-    let score = aggregate(Stub::BASE, &factors);
-    Verdict {
-        summary: summarize(score, &factors),
-        score,
-        kept,
-        dropped,
-        factors,
+/// A drop that was guessed from positioned text is not reported as a fact.
+pub(crate) fn layout_label(input: &ParseInput, fact: &str) -> String {
+    match input.layout_confidence {
+        LayoutConfidence::Inferred => format!("{fact} (inferred)"),
+        LayoutConfidence::Structural => fact.to_owned(),
     }
+}
+
+pub(crate) fn unreadable_verdict(base: i32) -> Verdict {
+    let mut marks = Marks::new();
+    marks.lose("file");
+    marks.factor(
+        "could not read file",
+        -40,
+        "Upload a PDF or DOCX the parser can open.",
+    );
+    marks.verdict(base)
 }
 
 fn read_pdf(bytes: &[u8]) -> ParseInput {
@@ -224,12 +273,22 @@ fn parse_docx(body: &str, header: &str) -> ParseInput {
     parse.profile.name = plausible_name(&header_texts).or_else(|| plausible_name(&body_texts));
     parse.profile.sections = headings(body);
     parse.layout.contact_in_header = first_email(&header_text).is_some();
+    parse.layout.columns = column_count(body);
     parse.layout.has_tables = body.contains("<w:tbl");
     parse.layout.has_text_boxes = body.contains("<w:txbx");
     parse.layout.has_images = body.contains("<w:drawing") || body.contains("<a:blip");
     parse.layout.bullet_count = u32::try_from(body.matches("<w:numPr").count()).unwrap_or(u32::MAX);
     parse.layout.dates = date_style(&body_text);
     parse
+}
+
+fn column_count(body: &str) -> u32 {
+    static COLS: LazyLock<regex::Regex> =
+        LazyLock::new(|| regex::Regex::new(r#"<w:cols\b[^>]*\bw:num="(\d+)""#).expect("cols"));
+    COLS.captures(body)
+        .and_then(|cap| cap.get(1)?.as_str().parse().ok())
+        .filter(|count| *count >= 1)
+        .unwrap_or(1)
 }
 
 fn headings(body: &str) -> Vec<Section> {
