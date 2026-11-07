@@ -141,6 +141,8 @@ class SmartResumeTests(unittest.TestCase):
                 self.assertEqual(set(body), {"run_id", "parse", "verdict"})
                 self.assertEqual(body["parse"], stub.as_parse(stub.read_file(stub.DOCX, job.file)))
                 self.assertEqual(body["verdict"]["dropped"], ["text box"])
+                self.assertEqual(body["verdict"], stub.demo_decide(item.id, job.run_id,
+                                                                 stub.read_file(stub.DOCX, job.file)))
         finally:
             for server in servers:
                 server.shutdown()

@@ -46,14 +46,35 @@ if grep -q '  name: web$\|  name: app$' <<<"$deps"; then
   exit 1
 fi
 
-docker buildx bake --print --file docker-bake.hcl api web | node --input-type=module -e '
+docker buildx bake --print --file docker-bake.hcl api web providers | node --input-type=module -e '
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const targets = JSON.parse(readFileSync(0, "utf8")).target;
 assert.equal(targets.web.dockerfile, "Dockerfile.web");
 assert(targets.web.tags.includes("resume-analyzer/web:dev"));
 assert(targets.api.tags.includes("resume-analyzer/api:dev"));
+assert.equal(targets.providers.context, "providers");
+assert(targets.providers.tags.includes("resume-analyzer/ats:dev"));
 '
+node --input-type=module <<'JS'
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const script = readFileSync("scripts/up.sh", "utf8");
+const steps = [
+  '"$root/scripts/bake.sh" --load providers',
+  'docker save resume-analyzer/ats:dev | minikube image load --profile "$profile" --overwrite -',
+  'helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 5m',
+  'kubectl rollout restart deployment -l app.kubernetes.io/name=ats-providers',
+  'kubectl rollout status deployment -l app.kubernetes.io/name=ats-providers --timeout=5m',
+  'case "$mode" in',
+];
+let previous = -1;
+for (const step of steps) {
+  const position = script.indexOf(step);
+  assert(position > previous, `provider refresh step missing or out of order: ${step}`);
+  previous = position;
+}
+JS
 grep -Fq '"$root/scripts/bake.sh" --load api web' scripts/up.sh
 grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev |' scripts/up.sh
 grep -Fq 'minikube image load --profile "$profile" --overwrite -' scripts/up.sh

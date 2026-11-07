@@ -19,9 +19,14 @@ profile=${MINIKUBE_PROFILE:-resume-analyzer}
 
 ip=$(minikube ip --profile "$profile")
 
-"$root/scripts/bake.sh" providers
+"$root/scripts/bake.sh" --load providers
 docker save resume-analyzer/ats:dev | minikube image load --profile "$profile" --overwrite -
 helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 5m
+# The :dev tag stays the same across builds, so Helm alone leaves old provider
+# processes running. Replace them after loading the fresh image, in both modes,
+# and wait before the API can hand off any new work.
+kubectl rollout restart deployment -l app.kubernetes.io/name=ats-providers
+kubectl rollout status deployment -l app.kubernetes.io/name=ats-providers --timeout=5m
 
 args=(
   upgrade --install resume-analyzer deploy/helm/resume-analyzer

@@ -2,6 +2,9 @@
 
 Each process listens on a private URL. The API worker POSTs the file there.
 The stub waits a fuzzy amount of time, then POSTs the signed callback itself.
+Delivered findings get a positive demo variation seeded by provider and run id:
+new runs vary, while retries of the same run keep identical signed body bytes.
+The deterministic decide() remains the calibration shared with Rust tests.
 Nothing in the gateway routes to these ports.
 
     python3 -m providers --all
@@ -413,6 +416,45 @@ def heading_factor(parsed: Read, kept: list[str], factors: list[Factor], delta: 
     factors.append(factor("standard headings", delta, "Keep the standard headings."))
 
 
+def demo_decide(provider_id: str, run_id: str, parsed: Read) -> Verdict:
+    """Vary demo findings without inventing parse facts or hiding failed reads."""
+    original = decide(provider_id, parsed)
+    if parsed.unreadable:
+        return original
+    rng = random.Random(f"ats-demo-v1:{provider_id}:{run_id.lower()}")
+    has_penalties = any(item["delta"] < 0 for item in original["factors"])
+    # Lift problematic layouts without reversing their biases. On clean files,
+    # vary reward strength so the 100-point cap does not erase every difference.
+    factors = [
+        factor(
+            item["label"],
+            (item["delta"] + rng.randint(0, 4) if has_penalties
+             else max(1, round(item["delta"] * rng.uniform(0.45, 1.0))))
+            if item["delta"] > 0
+            else -max(1, round(abs(item["delta"]) * rng.uniform(0.35, 0.7))),
+            item["advice"],
+        )
+        for item in original["factors"]
+    ]
+    # These are supported by the raw-file parse, not randomized claims that a
+    # dropped table, header, or text box suddenly survived a different parser.
+    candidates = []
+    if parsed.columns == 1:
+        candidates.append(("single-column layout", "Keep the single-column layout."))
+    if not parsed.has_tables:
+        candidates.append(("table-free layout", "Keep the layout free of tables."))
+    if not parsed.has_text_boxes:
+        candidates.append(("text-box-free layout", "Keep the text outside text boxes."))
+    if parsed.dates == "mm-yyyy":
+        candidates.append(("consistent date format", "Keep the MM/YYYY dates."))
+    if parsed.email and not parsed.contact_in_header:
+        candidates.append(("accessible contact details", "Keep the contact details in the body."))
+    rng.shuffle(candidates)
+    for label, advice in candidates[:rng.randint(1, 3)]:
+        factors.append(factor(label, rng.randint(2, 6), advice))
+    return verdict(list(original["kept"]), list(original["dropped"]), factors, base_for(provider_id))
+
+
 def decide_greenline(parsed: Read) -> Verdict:
     kept: list[str] = []
     dropped: list[str] = []
@@ -600,7 +642,7 @@ def deliver(item: Provider, job: Job, parsed: Read) -> None:
     body: CallbackBody = {
         "run_id": job.run_id,
         "parse": as_parse(parsed),
-        "verdict": decide(item.id, parsed),
+        "verdict": demo_decide(item.id, job.run_id, parsed),
     }
     raw = json.dumps(body, separators=(",", ":")).encode()
     key = secret()
@@ -622,7 +664,7 @@ def deliver(item: Provider, job: Job, parsed: Read) -> None:
             with urllib.request.urlopen(request, timeout=10) as response:
                 response.read()
             print(
-                f"{item.id}: {job.run_id}: callback {response.status}",
+                f"{item.id}: {job.run_id}: callback {response.status}, score {body['verdict']['score']}",
                 file=sys.stderr,
                 flush=True,
             )
