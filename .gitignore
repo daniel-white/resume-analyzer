@@ -8,3 +8,8 @@ result-*
 .DS_Store
 .local-certs/
 .run/
+
+web/node_modules
+web/.output
+web/.nitro
+web/.tanstack
