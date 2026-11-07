@@ -6,7 +6,7 @@ import { FileHeading } from "~/components/file-heading";
 import { Lede } from "~/components/lede";
 import { NotFound } from "~/components/not-found";
 import { Page } from "~/components/page";
-import { RefreshWhileReading } from "~/components/refresh-while-reading";
+import { LiveAnalysis } from "~/components/live-analysis";
 import { ResumeViewer } from "~/components/resume-viewer";
 import { SiteHeader } from "~/components/site-header";
 import { VerdictGrid } from "~/components/verdict-grid";
@@ -24,12 +24,13 @@ export const Route = createFileRoute("/resumes/$id")({
 
 function TeardownPage() {
   const view = Route.useLoaderData();
+  const { id } = Route.useParams();
 
   return (
     <Page wide>
       <SiteHeader email={view.email} />
       <BackLink />
-      <RefreshWhileReading active={view.kind === "reading"} />
+      <LiveAnalysis resumeId={id} active={view.kind === "reading"} />
       <FileHeading filename={view.filename} />
       <Lede>{view.lede}</Lede>
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}

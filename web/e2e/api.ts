@@ -150,4 +150,14 @@ export async function installApi(page: Page, options: ApiOptions = {}) {
       url: app,
     },
   ]);
+  return {
+    update: async (data: { resumes?: Array<typeof designed>; onConnectResumes?: Array<typeof designed>; event?: string; disconnect?: boolean }) => {
+      const result = await page.request.post(`${api}/__seed/${id}`, { data });
+      if (!result.ok()) throw new Error(`update failed: ${result.status()}`);
+    },
+    stats: async () => {
+      const result = await page.request.get(`${api}/__seed/${id}`);
+      return await result.json() as { connections: number; streams: number; detailReads: number };
+    },
+  };
 }

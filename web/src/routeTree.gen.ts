@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginVerifyRouteImport } from './routes/login.verify'
 import { Route as ResumesIdRouteImport } from './routes/resumes/$id'
+import { Route as ApiResumesIdEventsRouteImport } from './routes/api/resumes/$id/events'
 import { Route as ApiResumesIdVersionsVersionIdFileRouteImport } from './routes/api/resumes/$id/versions/$versionId/file'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const ResumesIdRoute = ResumesIdRouteImport.update({
   path: '/resumes/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResumesIdEventsRoute = ApiResumesIdEventsRouteImport.update({
+  id: '/api/resumes/$id/events',
+  path: '/api/resumes/$id/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiResumesIdVersionsVersionIdFileRoute =
   ApiResumesIdVersionsVersionIdFileRouteImport.update({
     id: '/api/resumes/$id/versions/$versionId/file',
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login/': typeof LoginIndexRoute
+  '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login': typeof LoginIndexRoute
+  '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login/': typeof LoginIndexRoute
+  '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login/'
+    | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login'
+    | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   id:
     | '__root__'
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login/'
+    | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesById: FileRoutesById
 }
@@ -115,6 +127,7 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRouteWithChildren
   ResumesIdRoute: typeof ResumesIdRoute
+  ApiResumesIdEventsRoute: typeof ApiResumesIdEventsRoute
   ApiResumesIdVersionsVersionIdFileRoute: typeof ApiResumesIdVersionsVersionIdFileRoute
 }
 
@@ -162,6 +175,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResumesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/resumes/$id/events': {
+      id: '/api/resumes/$id/events'
+      path: '/api/resumes/$id/events'
+      fullPath: '/api/resumes/$id/events'
+      preLoaderRoute: typeof ApiResumesIdEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/resumes/$id/versions/$versionId/file': {
       id: '/api/resumes/$id/versions/$versionId/file'
       path: '/api/resumes/$id/versions/$versionId/file'
@@ -189,6 +209,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRoute,
   LoginRoute: LoginRouteWithChildren,
   ResumesIdRoute: ResumesIdRoute,
+  ApiResumesIdEventsRoute: ApiResumesIdEventsRoute,
   ApiResumesIdVersionsVersionIdFileRoute:
     ApiResumesIdVersionsVersionIdFileRoute,
 }
