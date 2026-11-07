@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi, reading } from "./api";
+import { designed, installApi, reading, stored } from "./api";
 
 const plugin = {
   id: "smart_resume",
@@ -31,6 +31,7 @@ for (const pending of [true, false]) {
     };
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
+    await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
     await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
     await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
@@ -51,3 +52,15 @@ for (const pending of [true, false]) {
     await card.screenshot({ path: testInfo.outputPath("smart-resume-card.png") });
   });
 }
+
+test("SmartResume and the original DOCX viewer render together", async ({ page }) => {
+  await installApi(page, { resumes: [stored] });
+  await page.goto(`/resumes/${stored.id}`);
+  const preview = page.getByLabel("Original resume");
+  await expect(preview.getByText("Original DOCX resume")).toBeVisible();
+  await expect(preview.getByRole("link", { name: "Download original" })).toBeVisible();
+  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
+  await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
+  await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
+  await expect(card.getByLabel("Pending")).toBeVisible();
+});
