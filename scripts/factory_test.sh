@@ -93,10 +93,25 @@ status=$(
   FACTORY_STATE=$tmp/real-state bash "$factory" status
 )
 grep -q $'^wave\tbootstrap\tdone\t' <<<"$status" || fail "bootstrap not done"
-grep -q $'^wave\tspine\tready\t' <<<"$status" || fail "spine not ready"
-grep -q $'^wave\tui\twaiting\t' <<<"$status" || fail "ui should wait"
-grep -q $'^next\tspine$' <<<"$status" || fail "next should be spine"
-if ! (
+# The live catalog moves as waves land. The board has to agree with itself.
+next=$(awk -F '\t' '$1 == "next" { print $2; exit }' <<<"$status")
+if [[ "$next" == none || -z "$next" ]]; then
+  grep -q $'\tready\t' <<<"$status" && fail "a ready wave but next is none"
+  grep -q $'\twaiting\t' <<<"$status" && fail "a waiting wave but next is none"
+else
+  grep -q $'^wave\t'"$next"$'\tready\t' <<<"$status" || fail "next wave $next is not ready"
+fi
+while IFS= read -r line; do
+  [[ "$line" == wave*$'\t'waiting$'\t'* ]] || continue
+  [[ "$line" == *$'\tneeds '* ]] || fail "waiting wave missing needs: $line"
+done <<<"$status"
+if grep -q $'^wave\tfleet\tdone\t' <<<"$status"; then
+  plugin_prompt=$(
+    cd "$root"
+    FACTORY_STATE=$tmp/real-state bash "$factory" plan plugin north
+  )
+  grep -q 'plugins/north' <<<"$plugin_prompt" || fail "plugin prompt missing branch"
+elif ! (
   cd "$root"
   FACTORY_STATE=$tmp/real-state bash "$factory" plan plugin north
 ) >/dev/null 2>"$tmp/plan.err"; then
