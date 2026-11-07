@@ -1,0 +1,10 @@
+image: resume-analyzer/ats:dev
+pullPolicy: Never
+port: 8080
+# Must match the API PLUGIN_SECRET. This is the API's dev fallback.
+secret: spine-stub-secret
+providers:
+  - greenline
+  - levr
+  - workdaye
+  - ash

@@ -8,6 +8,9 @@ Nothing in the gateway routes to these ports.
 
     ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104
 
+Inside the cluster the chart passes `--cluster --bind 0.0.0.0`. That listens on
+the pod interface so a ClusterIP service can reach it. It is still not routed.
+
 The request is the plugin's file plus the run the callback has to name.
 The callback body is the contract: run id, parse, verdict.
 `PLUGIN_SECRET` is the same value the API uses to verify the signature.
@@ -650,12 +653,20 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Private stub ATS providers.")
     parser.add_argument("provider", nargs="?", choices=choices)
     parser.add_argument("--all", action="store_true", help="listen for every provider")
+    parser.add_argument(
+        "--cluster",
+        action="store_true",
+        help="listen on the pod interface for a ClusterIP service. Still has no public route.",
+    )
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int)
     args = parser.parse_args(argv)
     if args.all == bool(args.provider):
         parser.error("pass a provider id or --all")
-    if args.bind not in {"127.0.0.1", "localhost", "::1"}:
+    loopback = args.bind in {"127.0.0.1", "localhost", "::1"}
+    if args.cluster and loopback:
+        parser.error("--cluster listens on the pod interface, not loopback")
+    if not args.cluster and not loopback:
         parser.error("refusing a non-loopback bind; these stubs are not public")
     if args.provider:
         item = provider(args.provider)

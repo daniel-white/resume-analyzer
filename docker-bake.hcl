@@ -15,7 +15,7 @@ group "default" {
 }
 
 group "all" {
-  targets = ["api", "web"]
+  targets = ["api", "web", "providers"]
 }
 
 target "api" {
@@ -28,4 +28,10 @@ target "web" {
   context    = "."
   dockerfile = "Dockerfile.web"
   tags       = ["${REGISTRY}/web:${TAG}"]
+}
+
+target "providers" {
+  context    = "providers"
+  dockerfile = "Dockerfile"
+  tags       = ["${REGISTRY}/ats:${TAG}"]
 }

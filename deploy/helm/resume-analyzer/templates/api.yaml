@@ -44,6 +44,18 @@ spec:
               value: https://app.resume.local
             - name: AUTH_SECRET
               value: {{ .Values.auth.secret | quote }}
+            {{- if .Values.api.providers }}
+            - name: ATS_PROVIDERS
+              value: {{ .Values.api.providers | quote }}
+            {{- end }}
+            {{- if .Values.api.callbackUrl }}
+            - name: CALLBACK_URL
+              value: {{ .Values.api.callbackUrl | quote }}
+            {{- end }}
+            {{- if .Values.api.pluginSecret }}
+            - name: PLUGIN_SECRET
+              value: {{ .Values.api.pluginSecret | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health

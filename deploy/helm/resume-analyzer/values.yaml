@@ -5,6 +5,11 @@ api:
   image: resume-analyzer/api:dev
   pullPolicy: Never
   port: 8080
+  # Filled by scripts/up.sh in demo, from the ats-providers chart.
+  # Empty keeps the compiled stub. These URLs are ClusterIP names, not a route.
+  providers: ""
+  callbackUrl: ""
+  pluginSecret: ""
 
 web:
   enabled: false

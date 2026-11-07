@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ats-providers
+description: Private stub ATS providers. ClusterIP only. No gateway route.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

@@ -115,9 +115,13 @@ pub async fn serve() {
     let address = listener
         .local_addr()
         .unwrap_or_else(|err| panic!("local address: {err}"));
-    let worker = Arc::new(
-        Worker::new(store, objects, plugins, bus, callback_url(address)).endpoints(fleet.endpoints),
-    );
+    let callback = std::env::var("CALLBACK_URL")
+        .ok()
+        .map(|url| url.trim().trim_end_matches('/').to_owned())
+        .filter(|url| !url.is_empty())
+        .unwrap_or_else(|| callback_url(address));
+    let worker =
+        Arc::new(Worker::new(store, objects, plugins, bus, callback).endpoints(fleet.endpoints));
     worker.spawn();
     let health = HealthState { config, s3 };
     eprintln!("listening on {address}");

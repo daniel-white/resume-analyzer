@@ -4,7 +4,7 @@
 # Dependencies, gateway, and https://app.resume.local. Then the API on the host.
 dev:
     ./scripts/up.sh deps
-    cargo run -p app
+    ATS_PROVIDERS="greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104" CALLBACK_URL="http://host.minikube.internal:8080" cargo run -p app
 
 # Bake the API image, load it, and run it in the cluster.
 demo:
@@ -16,6 +16,7 @@ bake *args:
 # Render the chart without a cluster or a certificate.
 template:
     helm template resume-analyzer deploy/helm/resume-analyzer
+    helm template ats-providers deploy/helm/ats-providers
 
 check:
     ./scripts/check.sh
