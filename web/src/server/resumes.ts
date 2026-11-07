@@ -1,0 +1,426 @@
+export type ResumeStatus = "uploaded" | "parsed" | "running" | "complete";
+export type RunStatus = "requested" | "complete";
+export type DateStyle = "mm-yyyy" | "other" | "absent";
+export type LayoutConfidence = "structural" | "inferred";
+
+export type Section = {
+  heading: string;
+  body: string;
+  in_table: boolean;
+  in_text_box: boolean;
+  in_header: boolean;
+};
+
+export type Profile = {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  sections: Section[];
+};
+
+export type Layout = {
+  columns: number;
+  contact_in_header: boolean;
+  has_tables: boolean;
+  has_text_boxes: boolean;
+  has_images: boolean;
+  bullet_count: number;
+  dates: DateStyle;
+};
+
+export type ParseInput = {
+  profile: Profile;
+  layout: Layout;
+  layout_confidence: LayoutConfidence;
+};
+
+export type Factor = {
+  label: string;
+  delta: number;
+  advice: string;
+};
+
+export type Verdict = {
+  kept: string[];
+  dropped: string[];
+  score: number;
+  summary: string;
+  factors: Factor[];
+};
+
+export type VersionSummary = {
+  id: string;
+  number: number;
+  filename: string;
+  status: ResumeStatus;
+  created_at: string;
+};
+
+export type ResumeSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  latest: VersionSummary;
+};
+
+export type RunView = {
+  id: string;
+  plugin_id: string;
+  status: RunStatus;
+  parse: ParseInput | null;
+  verdict: Verdict | null;
+};
+
+export type VersionDetail = {
+  id: string;
+  number: number;
+  filename: string;
+  media_type: string;
+  status: ResumeStatus;
+  created_at: string;
+  parse: ParseInput | null;
+  runs: RunView[];
+};
+
+export type ResumeDetail = {
+  id: string;
+  title: string;
+  created_at: string;
+  versions: VersionDetail[];
+};
+
+export type Plugin = {
+  id: string;
+  name: string;
+  subtitle: string;
+};
+
+export type AcceptedUpload = {
+  id: string;
+  version_id: string;
+  status: string;
+};
+
+export type ScoreBand = "low" | "mid" | "high";
+
+export type LibraryRow =
+  | {
+      id: string;
+      filename: string;
+      status: "waiting";
+      label: "Stored. Waiting for the first read.";
+    }
+  | {
+      id: string;
+      filename: string;
+      status: "reading";
+      label: "Reading";
+    }
+  | {
+      id: string;
+      filename: string;
+      status: "scored";
+      reads: number;
+      readsLabel: string;
+      low: number;
+      high: number;
+      spread: string;
+      band: ScoreBand;
+    };
+
+export type DropCopy = {
+  title: string;
+  hint: string | null;
+  tone: "empty" | "waiting" | "list";
+};
+
+export type LibraryView = {
+  rows: LibraryRow[];
+  drop: DropCopy;
+};
+
+export type ExtractField = {
+  label: string;
+  value: string;
+};
+
+export type FactorLine = {
+  label: string;
+  delta: string;
+};
+
+export type VerdictCard =
+  | {
+      id: string;
+      name: string;
+      subtitle: string;
+      pending: true;
+    }
+  | {
+      id: string;
+      name: string;
+      subtitle: string;
+      pending: false;
+      score: number;
+      band: ScoreBand;
+      kept: string[];
+      missed: string[];
+      factors: FactorLine[];
+    };
+
+export type Teardown =
+  | { kind: "missing" }
+  | {
+      kind: "reading" | "complete";
+      filename: string;
+      lede: string;
+      extract: ExtractField[] | null;
+      cards: VerdictCard[];
+    };
+
+export type UploadResult =
+  | { ok: true; id: string; version_id: string }
+  | { ok: false; message: string };
+
+const READING_COUNTS = [
+  "No",
+  "One",
+  "Two",
+  "Three",
+  "Four",
+  "Five",
+  "Six",
+  "Seven",
+  "Eight",
+];
+
+export function readingLede(count: number): string {
+  const word = READING_COUNTS[count] ?? String(count);
+  if (count === 1) {
+    return "One system is reading this file. It does not share a parse.";
+  }
+  return `${word} systems are reading this file. They do not share a parse.`;
+}
+
+const EMPTY = "\u2014";
+
+export function scoreBand(score: number): ScoreBand {
+  if (score >= 75) return "high";
+  if (score >= 50) return "mid";
+  return "low";
+}
+
+export function formatDelta(delta: number): string {
+  if (delta > 0) return `+${delta}`;
+  return String(delta);
+}
+
+export function libraryRow(summary: ResumeSummary, runs: RunView[]): LibraryRow {
+  const id = summary.id;
+  const filename = summary.latest.filename;
+  if (summary.latest.status === "uploaded") {
+    return { id, filename, status: "waiting", label: "Stored. Waiting for the first read." };
+  }
+  if (summary.latest.status !== "complete") {
+    return { id, filename, status: "reading", label: "Reading" };
+  }
+  const scores = runs.flatMap((run) =>
+    run.verdict ? [run.verdict.score] : [],
+  );
+  if (scores.length === 0) {
+    return { id, filename, status: "reading", label: "Reading" };
+  }
+  const low = Math.min(...scores);
+  const high = Math.max(...scores);
+  const reads = scores.length;
+  return {
+    id,
+    filename,
+    status: "scored",
+    reads,
+    readsLabel: reads === 1 ? "1 read" : `${reads} reads`,
+    low,
+    high,
+    spread: low === high ? String(low) : `${low}\u2013${high}`,
+    band: scoreBand(low),
+  };
+}
+
+export function dropCopy(rows: LibraryRow[]): DropCopy {
+  if (rows.length === 0) {
+    return {
+      title: "Drop a PDF or DOCX",
+      hint: "Each system reads the file itself. Five megabytes.",
+      tone: "empty",
+    };
+  }
+  if (rows.every((row) => row.status === "waiting")) {
+    return { title: "Drop another file", hint: null, tone: "waiting" };
+  }
+  return {
+    title: "Drop a PDF or DOCX",
+    hint: "Each system reads the file itself. Five megabytes.",
+    tone: "list",
+  };
+}
+
+export function libraryView(rows: LibraryRow[]): LibraryView {
+  return { rows, drop: dropCopy(rows) };
+}
+
+export function extractFields(parse: ParseInput): ExtractField[] {
+  return [
+    { label: "Name", value: parse.profile.name?.trim() || EMPTY },
+    { label: "Email", value: parse.profile.email?.trim() || EMPTY },
+    { label: "Layout", value: layoutLine(parse.layout) },
+    { label: "Sections", value: sectionLine(parse.profile.sections) },
+  ];
+}
+
+export function completeLede(parse: ParseInput | null): string {
+  if (!parse) return "Each system opened the file itself.";
+  const { columns, contact_in_header, has_tables } = parse.layout;
+  if (columns === 1 && !contact_in_header && !has_tables) {
+    return "One column. Contact in the body. Each system opened the file itself.";
+  }
+  const parts = [
+    contact_in_header ? "Contact in the header" : "Contact in the body",
+  ];
+  if (has_tables) parts.push("skills in a table");
+  parts.push(columnPhrase(columns));
+  return `${parts.join(", ")}. Each system opened the file itself.`;
+}
+
+export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
+  return plugins.map((plugin) => {
+    const verdict = runs.find((run) => run.plugin_id === plugin.id)?.verdict;
+    if (!verdict) {
+      return {
+        id: plugin.id,
+        name: plugin.name,
+        subtitle: plugin.subtitle,
+        pending: true,
+      };
+    }
+    return {
+      id: plugin.id,
+      name: plugin.name,
+      subtitle: plugin.subtitle,
+      pending: false,
+      score: verdict.score,
+      band: scoreBand(verdict.score),
+      kept: verdict.kept,
+      missed: verdict.dropped,
+      factors: verdict.factors.map((factor) => ({
+        label: factor.label,
+        delta: formatDelta(factor.delta),
+      })),
+    };
+  });
+}
+
+export function teardown(detail: ResumeDetail, plugins: Plugin[]): Teardown {
+  const version = detail.versions[0];
+  if (!version) return { kind: "missing" };
+  const reading = version.status !== "complete";
+  return {
+    kind: reading ? "reading" : "complete",
+    filename: version.filename,
+    lede: reading ? readingLede(plugins.length) : completeLede(version.parse),
+    extract: version.parse ? extractFields(version.parse) : null,
+    cards: pluginCards(plugins, reading ? [] : version.runs),
+  };
+}
+
+export function uploadFailure(status: number, body: string): string {
+  const text = body.trim();
+  if (text && text.length <= 200) return text;
+  if (status === 413) return "That file is over five megabytes.";
+  if (status === 415) return "That file is neither a PDF nor a DOCX.";
+  return "That file did not store.";
+}
+
+export async function fetchLibrary(baseUrl: string): Promise<LibraryView> {
+  const list = await fetchResumeList(baseUrl);
+  const rows = await Promise.all(
+    list.map(async (summary) => {
+      const detail = await fetchResume(baseUrl, summary.id);
+      const version = detail?.versions.find((item) => item.id === summary.latest.id);
+      return libraryRow(summary, version?.runs ?? []);
+    }),
+  );
+  return libraryView(rows);
+}
+
+export async function fetchTeardown(baseUrl: string, id: string): Promise<Teardown> {
+  const [detail, plugins] = await Promise.all([
+    fetchResume(baseUrl, id),
+    fetchPlugins(baseUrl),
+  ]);
+  if (!detail) return { kind: "missing" };
+  return teardown(detail, plugins);
+}
+
+export async function postResume(baseUrl: string, file: File): Promise<UploadResult> {
+  if (file.size === 0) {
+    return { ok: false, message: "Choose a PDF or DOCX." };
+  }
+  const body = new FormData();
+  body.set("file", file, file.name);
+  const response = await fetch(new URL("/api/resumes", baseUrl), {
+    method: "POST",
+    body,
+  });
+  if (!response.ok) {
+    return { ok: false, message: uploadFailure(response.status, await response.text()) };
+  }
+  const accepted = (await response.json()) as AcceptedUpload;
+  return { ok: true, id: accepted.id, version_id: accepted.version_id };
+}
+
+async function fetchResumeList(baseUrl: string): Promise<ResumeSummary[]> {
+  const response = await fetch(new URL("/api/resumes", baseUrl));
+  if (!response.ok) {
+    throw new Error(`resumes returned ${response.status}`);
+  }
+  const body = (await response.json()) as { resumes: ResumeSummary[] };
+  return body.resumes;
+}
+
+async function fetchResume(baseUrl: string, id: string): Promise<ResumeDetail | null> {
+  const response = await fetch(new URL(`/api/resumes/${id}`, baseUrl));
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(`resume ${id} returned ${response.status}`);
+  }
+  return (await response.json()) as ResumeDetail;
+}
+
+async function fetchPlugins(baseUrl: string): Promise<Plugin[]> {
+  const response = await fetch(new URL("/api/plugins", baseUrl));
+  if (!response.ok) {
+    throw new Error(`plugins returned ${response.status}`);
+  }
+  const body = (await response.json()) as { plugins: Plugin[] };
+  return body.plugins;
+}
+
+function layoutLine(layout: Layout): string {
+  const columns = layout.columns === 1 ? "1 column" : `${layout.columns} columns`;
+  const contact = layout.contact_in_header ? "contact in the header" : "contact in the body";
+  const parts = [columns, contact];
+  if (layout.has_tables) parts.push("skills in a table");
+  return parts.join(", ");
+}
+
+function sectionLine(sections: Section[]): string {
+  const headings = sections.map((section) => section.heading.trim()).filter(Boolean);
+  if (headings.length === 0) return EMPTY;
+  return headings.join(", ");
+}
+
+function columnPhrase(columns: number): string {
+  if (columns === 1) return "one column";
+  if (columns === 2) return "two columns";
+  return `${columns} columns`;
+}
