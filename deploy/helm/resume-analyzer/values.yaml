@@ -5,11 +5,12 @@ api:
   image: resume-analyzer/api:dev
   pullPolicy: Never
   port: 8080
-  # Filled by scripts/up.sh in demo, from the ats-providers chart.
-  # Empty keeps the compiled stub. These URLs are ClusterIP names, not a route.
-  providers: ""
-  callbackUrl: ""
-  pluginSecret: ""
+  # ClusterIP names for the Python fake, not a gateway route.
+  # The host default is 127.0.0.1:8101-8104. `ATS_PROVIDERS=stub` is the
+  # compiled stub. The callback has to be reachable from those pods.
+  providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080"
+  callbackUrl: "http://api:8080"
+  pluginSecret: "spine-stub-secret"
 
 web:
   enabled: false

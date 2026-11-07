@@ -1,9 +1,11 @@
 //! Simulated ATS integrations. The spine still compiles in `stub` so an upload
-//! can reach one callback. `fleet` is Greenline, Levr, Workdaye, and Ash: they
-//! share this crate's file read and disagree on the factor list.
+//! can reach one callback without the Python providers. `fleet` is Greenline,
+//! Levr, Workdaye, and Ash. The running API posts those files to the Python
+//! fake and does not call `read` or `call`. `read` is what the fleet tests
+//! call. The factor lists disagree.
 //!
-//! A plugin does not return the verdict to the worker. `call` signs it and
-//! posts the callback.
+//! A plugin does not return the verdict to the worker. `call` signs a callback
+//! and posts it. The fleet leaves that to the Python process.
 
 use std::io::{Cursor, Read};
 use std::sync::{Arc, LazyLock};
@@ -71,8 +73,8 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
-/// The four simulated parsers. The spine keeps `compiled` on the stub until a
-/// later wave points the worker here.
+/// Greenline, Levr, Workdaye, and Ash. The worker posts each file to the
+/// matching Python provider instead of calling `read`.
 pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
     vec![
         Arc::new(Greenline::new(secret.clone())),

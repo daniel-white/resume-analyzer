@@ -1,6 +1,6 @@
-//! Drain the outbox in this process. A compiled plugin is called with the raw
-//! file and the webhook URL. A private provider is handed the file and posts
-//! the callback itself. Only that callback is stored.
+//! Drain the outbox in this process. The compiled stub is called with the raw
+//! file and the webhook URL. A fleet plugin is handed to its Python provider,
+//! which posts the callback itself. Only that callback is stored.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -44,7 +44,7 @@ impl Worker {
         }
     }
 
-    /// Private provider urls, keyed by plugin id. Empty keeps the in-process stub.
+    /// Python provider urls, keyed by plugin id. Empty keeps the in-process stub.
     pub fn endpoints(mut self, endpoints: HashMap<String, String>) -> Self {
         self.endpoints = endpoints;
         self

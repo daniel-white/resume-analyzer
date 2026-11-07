@@ -25,6 +25,8 @@ check:
 factory *args:
     ./scripts/factory.sh {{args}}
 
-# Private ATS stubs on 127.0.0.1. Not routed. The API calls ATS_PROVIDERS.
+# Private ATS stubs on 127.0.0.1:8101-8104. Not routed.
+# The API uses these ports unless ATS_PROVIDERS is set. ATS_PROVIDERS=stub
+# keeps the compiled stub.
 providers:
     python3 -m providers --all

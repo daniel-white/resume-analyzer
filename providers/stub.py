@@ -43,6 +43,7 @@ PDF = "application/pdf"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MAX_FILE_BYTES = 5 * 1024 * 1024
 BASE = 50
+ASH_BASE = 55
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 MONTH = re.compile(r"\b(?:0?[1-9]|1[0-2])/(?:19|20)\d{2}\b")
@@ -344,8 +345,16 @@ def factor(label: str, delta: int, advice: str) -> Factor:
     return Factor(label=label, delta=delta, advice=advice)
 
 
-def verdict(kept: list[str], dropped: list[str], factors: list[Factor]) -> Verdict:
-    score = max(0, min(100, BASE + sum(item["delta"] for item in factors)))
+def layout_label(parsed: Read, fact: str) -> str:
+    if parsed.layout_confidence == "inferred":
+        return f"{fact} (inferred)"
+    return fact
+
+
+def verdict(
+    kept: list[str], dropped: list[str], factors: list[Factor], base: int = BASE
+) -> Verdict:
+    score = max(0, min(100, base + sum(item["delta"] for item in factors)))
     return Verdict(
         kept=kept,
         dropped=dropped,
@@ -368,12 +377,17 @@ def summarize(score: int, factors: list[Factor]) -> str:
     return text
 
 
+def base_for(provider_id: str) -> int:
+    return ASH_BASE if provider_id == "ash" else BASE
+
+
 def decide(provider_id: str, parsed: Read) -> Verdict:
     if parsed.unreadable:
         return verdict(
             [],
             ["file"],
             [factor("could not read file", -40, "Upload a PDF or DOCX the parser can open.")],
+            base_for(provider_id),
         )
     if provider_id == "greenline":
         return decide_greenline(parsed)
@@ -387,10 +401,9 @@ def decide(provider_id: str, parsed: Read) -> Verdict:
 
 
 def heading_factor(parsed: Read, kept: list[str], factors: list[Factor], delta: int) -> None:
-    names = [section["heading"] for section in parsed.sections if section["heading"]]
-    if not names:
+    if not any(section["heading"] for section in parsed.sections):
         return
-    kept.extend(names)
+    kept.append("headings")
     factors.append(factor("standard headings", delta, "Keep the standard headings."))
 
 
@@ -412,13 +425,31 @@ def decide_greenline(parsed: Read) -> Verdict:
         factors.append(factor("email in body", 15, "Keep the email in the body."))
     if parsed.has_tables:
         dropped.append("table")
-        factors.append(factor("table", -20, "Replace the table with plain lines of text."))
+        factors.append(
+            factor(
+                layout_label(parsed, "table"),
+                -20,
+                "Replace the table with plain lines of text.",
+            )
+        )
     if parsed.has_text_boxes:
         dropped.append("text box")
-        factors.append(factor("text box", -15, "Take the text out of the text box."))
+        factors.append(
+            factor(
+                layout_label(parsed, "text box"),
+                -15,
+                "Take the text out of the text box.",
+            )
+        )
     if parsed.columns >= 2:
         dropped.append("columns")
-        factors.append(factor("two columns", -15, "Keep the page to one column."))
+        factors.append(
+            factor(
+                layout_label(parsed, "two columns"),
+                -15,
+                "Keep the page to one column.",
+            )
+        )
     heading_factor(parsed, kept, factors, 10)
     return verdict(kept, dropped, factors)
 
@@ -460,13 +491,31 @@ def decide_workdaye(parsed: Read) -> Verdict:
         factors.append(factor("email in body", 15, "Keep the email in the body."))
     if parsed.has_tables:
         dropped.append("table")
-        factors.append(factor("table", -20, "Replace the table with plain lines of text."))
+        factors.append(
+            factor(
+                layout_label(parsed, "table"),
+                -20,
+                "Replace the table with plain lines of text.",
+            )
+        )
     if parsed.has_text_boxes:
         dropped.append("text box")
-        factors.append(factor("text box", -15, "Take the text out of the text box."))
+        factors.append(
+            factor(
+                layout_label(parsed, "text box"),
+                -15,
+                "Take the text out of the text box.",
+            )
+        )
     if parsed.columns >= 2:
         dropped.append("columns")
-        factors.append(factor("two columns", -15, "Keep the page to one column."))
+        factors.append(
+            factor(
+                layout_label(parsed, "two columns"),
+                -15,
+                "Keep the page to one column.",
+            )
+        )
     if parsed.dates == "mm-yyyy":
         factors.append(factor("dates MM/YYYY", 10, "Keep dates in MM/YYYY."))
     else:
@@ -492,7 +541,7 @@ def decide_ash(parsed: Read) -> Verdict:
         dropped.append("image")
         factors.append(factor("image", -10, "Leave images off the page."))
     heading_factor(parsed, kept, factors, 5)
-    return verdict(kept, dropped, factors)
+    return verdict(kept, dropped, factors, ASH_BASE)
 
 
 def pause(item: Provider, run_id: str) -> float:
