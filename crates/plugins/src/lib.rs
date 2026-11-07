@@ -1,6 +1,6 @@
 //! Simulated ATS integrations. The spine still compiles in `stub` so an upload
 //! can reach one callback without the Python providers. `fleet` is Greenline,
-//! Levr, Workdaye, Ash, and SmartResume. The running API posts those files to the Python
+//! Levr, Workdaye, Ash, SmartResume, and IndyHackersHiring. The running API posts those files to the Python
 //! fake and does not call `read` or `call`. `read` is what the fleet tests
 //! call. The factor lists disagree.
 //!
@@ -18,12 +18,14 @@ use zip::ZipArchive;
 
 mod ash;
 mod greenline;
+mod indy_hackers_hiring;
 mod levr;
 mod smart_resume;
 mod workdaye;
 
 pub use ash::Ash;
 pub use greenline::Greenline;
+pub use indy_hackers_hiring::IndyHackersHiring;
 pub use levr::Levr;
 pub use smart_resume::SmartResume;
 pub use workdaye::Workdaye;
@@ -75,7 +77,7 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
-/// Greenline, Levr, Workdaye, Ash, and SmartResume. The worker posts each file to the
+/// Greenline, Levr, Workdaye, Ash, SmartResume, and IndyHackersHiring. The worker posts each file to the
 /// matching Python provider instead of calling `read`.
 pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
     vec![
@@ -83,7 +85,8 @@ pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
         Arc::new(Levr::new(secret.clone())),
         Arc::new(Workdaye::new(secret.clone())),
         Arc::new(Ash::new(secret.clone())),
-        Arc::new(SmartResume::new(secret)),
+        Arc::new(SmartResume::new(secret.clone())),
+        Arc::new(IndyHackersHiring::new(secret)),
     ]
 }
 

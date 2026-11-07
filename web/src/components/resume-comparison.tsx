@@ -5,7 +5,7 @@ import { compareVersions, comparisonMessage } from "~/lib/version-comparison";
 import type { ComparisonVersion } from "~/server/resumes";
 import { letterGrade, scoreTone } from "./score";
 
-const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume"]);
+const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume", "indy_hackers_hiring"]);
 
 function ComparisonScore({ value }: { value: number | null }) {
   if (value === null) return <span className="text-muted-foreground">Pending</span>;

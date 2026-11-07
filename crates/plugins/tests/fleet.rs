@@ -1,10 +1,10 @@
-//! Greenline, Levr, Workdaye, Ash, and SmartResume on the two fixture resumes.
+//! The simulated fleet on the two fixture resumes.
 //! Factor labels and signs are the assertion. The headline score is not.
 
 use std::io::{Cursor, Write};
 
 use domain::{Ats, DOCX, LayoutConfidence, ResumeFile};
-use plugins::{Ash, Greenline, Levr, SmartResume, Workdaye};
+use plugins::{Ash, Greenline, IndyHackersHiring, Levr, SmartResume, Workdaye};
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
@@ -72,15 +72,16 @@ fn labels(file: &[u8], plugin: &dyn domain::Ats) -> Vec<(String, i32)> {
 }
 
 #[test]
-fn greenline_levr_workdaye_ash_and_smart_resume_disagree_on_the_designed_fixture() {
+fn the_fleet_disagrees_on_the_designed_fixture() {
     let file = designed();
     let greenline = labels(&file, &Greenline::new("secret"));
     let levr = labels(&file, &Levr::new("secret"));
     let workdaye = labels(&file, &Workdaye::new("secret"));
     let ash = labels(&file, &Ash::new("secret"));
     let smart_resume = labels(&file, &SmartResume::new("secret"));
+    let indy = labels(&file, &IndyHackersHiring::new("secret"));
 
-    let lists = [&greenline, &levr, &workdaye, &ash, &smart_resume];
+    let lists = [&greenline, &levr, &workdaye, &ash, &smart_resume, &indy];
     for index in 0..lists.len() {
         for other in (index + 1)..lists.len() {
             assert_ne!(lists[index], lists[other], "designed factor lists tied");
@@ -98,6 +99,15 @@ fn greenline_levr_workdaye_ash_and_smart_resume_disagree_on_the_designed_fixture
         ]
     );
     assert_eq!(levr, vec![("skills not normalized".into(), -1)]);
+    assert_eq!(
+        indy,
+        vec![
+            ("email kept".into(), 1),
+            ("two columns".into(), -1),
+            ("image".into(), -1),
+            ("standard headings".into(), 1),
+        ]
+    );
     assert_eq!(
         smart_resume,
         vec![
@@ -138,6 +148,7 @@ fn the_fleet_agrees_on_the_plain_fixture() {
         Box::new(Workdaye::new("secret")),
         Box::new(Ash::new("secret")),
         Box::new(SmartResume::new("secret")),
+        Box::new(IndyHackersHiring::new("secret")),
     ];
 
     for plugin in &fleet {
@@ -171,6 +182,15 @@ fn the_fleet_agrees_on_the_plain_fixture() {
 
 #[test]
 fn smart_resume_python_and_rust_agree_on_raw_files() {
+    python_and_rust_agree(&SmartResume::new("secret"));
+}
+
+#[test]
+fn indy_hackers_hiring_python_and_rust_agree_on_raw_files() {
+    python_and_rust_agree(&IndyHackersHiring::new("secret"));
+}
+
+fn python_and_rust_agree(plugin: &dyn Ats) {
     use std::process::{Command, Stdio};
 
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -184,7 +204,7 @@ fn smart_resume_python_and_rust_agree_on_raw_files() {
         ),
         (DOCX, b"not a zip".to_vec()),
     ] {
-        let rust = SmartResume::new("secret").read(&ResumeFile {
+        let rust = plugin.read(&ResumeFile {
             media_type,
             bytes: &bytes,
         });
@@ -196,8 +216,9 @@ fn smart_resume_python_and_rust_agree_on_raw_files() {
         let mut child = command.current_dir(&root)
             .args([
                 "-c",
-                "import json,sys; from providers.stub import read_file,as_parse,decide; p=read_file(sys.argv[1],sys.stdin.buffer.read()); print(json.dumps({'parse':as_parse(p),'verdict':decide('smart_resume',p)}))",
+                "import json,sys; from providers.stub import read_file,as_parse,decide; p=read_file(sys.argv[1],sys.stdin.buffer.read()); print(json.dumps({'parse':as_parse(p),'verdict':decide(sys.argv[2],p)}))",
                 media_type,
+                plugin.id(),
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

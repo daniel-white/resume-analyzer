@@ -9,7 +9,7 @@ Nothing in the gateway routes to these ports.
 
     python3 -m providers --all
 
-    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105
+    ATS_PROVIDERS=greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105,indy_hackers_hiring=http://127.0.0.1:8106
 
 Inside the cluster the chart passes `--cluster --bind 0.0.0.0`. That listens on
 the pod interface so a ClusterIP service can reach it. It is still not routed.
@@ -163,6 +163,7 @@ FLEET = (
     Provider("workdaye", "Workdaye", 8103, (22.0, 26.0)),
     Provider("ash", "Ash", 8104, (26.0, 30.0)),
     Provider("smart_resume", "SmartResume", 8105, (18.0, 22.0)),
+    Provider("indy_hackers_hiring", "IndyHackersHiring", 8106, (16.0, 20.0)),
 )
 
 
@@ -422,6 +423,8 @@ def decide(provider_id: str, parsed: Read) -> Verdict:
         return decide_ash(parsed)
     if provider_id == "smart_resume":
         return decide_smart_resume(parsed)
+    if provider_id == "indy_hackers_hiring":
+        return decide_indy_hackers_hiring(parsed)
     raise KeyError(provider_id)
 
 
@@ -640,6 +643,26 @@ def decide_smart_resume(parsed: Read) -> Verdict:
     return verdict(kept, dropped, factors)
 
 
+def decide_indy_hackers_hiring(parsed: Read) -> Verdict:
+    kept: list[str] = []
+    dropped: list[str] = []
+    factors: list[Factor] = []
+    if parsed.email:
+        kept.append("email")
+        factors.append(factor("email kept", 15, "Keep the email where it is."))
+    if parsed.columns >= 2:
+        dropped.append("columns")
+        factors.append(factor(layout_label(parsed, "two columns"), -18, "Keep the page to one column."))
+    if parsed.has_images:
+        dropped.append("image")
+        factors.append(factor("image", -12, "Leave images off the page."))
+    heading_factor(parsed, kept, factors, 10)
+    if parsed.bullet_count >= 2:
+        kept.append("experience bullets")
+        factors.append(factor("bullet density", 15, "Keep the bullets. This parser counts them."))
+    return verdict(kept, dropped, factors)
+
+
 def pause(item: Provider, run_id: str) -> float:
     low, high = delay_band(item)
     if high < low:
@@ -666,6 +689,7 @@ def provider_report(item: Provider, run_id: str, parsed: Read, result: Verdict) 
         "workdaye": ("Strict Intake", "5.2.1", "Body contact and MM/YYYY dates required; complex layout is penalized."),
         "ash": ("StructureFlow", "4.6.0", "Structure-tolerant scoring with skill normalization; images are excluded."),
         "smart_resume": ("CellReader", "1.9.3", "Table-cell text is supported; text boxes are excluded from scoring."),
+        "indy_hackers_hiring": ("Compact Intake", "1.0.0", "Tables and text boxes are tolerated; multi-column layout and images are excluded from scoring."),
     }
     engine, version, policy = engines[item.id]
     notes = []

@@ -32,7 +32,7 @@ for item in stub.FLEET:
         String::from_utf8_lossy(&output.stderr)
     );
     let output = String::from_utf8(output.stdout).unwrap();
-    assert_eq!(output.lines().count(), 5);
+    assert_eq!(output.lines().count(), 6);
     for line in output.lines() {
         let envelope: serde_json::Value = serde_json::from_str(line).unwrap();
         let raw = envelope["raw"].as_str().unwrap();
