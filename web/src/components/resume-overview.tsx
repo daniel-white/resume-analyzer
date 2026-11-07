@@ -2,8 +2,11 @@ import { CheckCheck, FileText, ScanLine, Sparkles } from "lucide-react";
 
 import type { VerdictCard } from "~/server/resumes";
 import { letterGrade, medianScore, ScoreStamp } from "./score";
+import { ResumeName } from "./resume-name";
 
-export function ResumeOverview({ filename, cards, number }: {
+export function ResumeOverview({ resumeId, title, filename, cards, number }: {
+  resumeId: string;
+  title: string;
   filename: string;
   cards: VerdictCard[];
   number: number;
@@ -21,7 +24,8 @@ export function ResumeOverview({ filename, cards, number }: {
         <span className="overview-icon" aria-hidden="true"><FileText /></span>
         <div>
           <p className="eyebrow">Resume analysis · v{number}</p>
-          <h1 className="filename">{filename}</h1>
+          <ResumeName key={resumeId} id={resumeId} title={title} />
+          <p className="set-filename">File: {filename}</p>
           <p className="lede">Review ATS scores and parsing results for this version.</p>
         </div>
       </div>

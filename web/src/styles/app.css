@@ -251,6 +251,16 @@ input:focus-visible {
 .eyebrow { font-family: var(--font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: #e8d09c; }
 .overview-title .filename { margin-top: 0.4rem; line-height: 1.2; letter-spacing: -0.035em; }
 .overview-title .lede { font-size: 0.9rem; max-width: 38rem; line-height: 1.6; }
+.resume-set-title { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; }
+.rename-set { display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; font-size: 0.75rem; cursor: pointer; }
+.rename-set:hover { background: var(--secondary); }
+.set-filename { color: var(--muted-foreground); font-size: 0.8rem; overflow-wrap: anywhere; }
+.resume-name-editor { display: grid; gap: 0.5rem; margin-block: 0.6rem; width: min(100%, 32rem); }
+.resume-name-editor label { font-size: 0.8rem; font-weight: 600; }
+.resume-name-actions { display: flex; gap: 0.5rem; }
+.resume-name-actions button { border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 0.8rem; cursor: pointer; }
+.resume-name-actions button[type="submit"] { background: var(--primary); }
+.resume-name-actions button:disabled { opacity: 0.6; cursor: wait; }
 .overview-stats { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0.5rem 1.25rem; flex: none; border-left: 1px solid #fffdf830; padding-left: 1.25rem; }
 .overall-rating { grid-row: span 2; border-right: 1px solid #fffdf830; padding-right: 1rem; }
 .overall-rating-value { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }

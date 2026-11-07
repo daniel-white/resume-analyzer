@@ -78,7 +78,8 @@ test("selects version-specific results and preserves selection on reload", async
   await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
   await page.getByLabel("Version", { exact: true }).selectOption("older-version");
   await expect(page).toHaveURL(/version=older-version/);
-  await expect(page.getByRole("heading", { name: "older.pdf" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: designed.title, exact: true })).toBeVisible();
+  await expect(page.getByText("File: older.pdf", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "Download original" })).toHaveAttribute("download", "older.pdf");
   await expect(greenline.getByLabel("Grade A", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("A");
@@ -96,7 +97,8 @@ test("uploads a new version of the same resume and can return to old results", a
     name: "revised.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 revised"),
   });
   await expect(page).toHaveURL(new RegExp(`/resumes/${designed.id}\\?version=`));
-  await expect(page.getByRole("heading", { name: "revised.pdf" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: designed.title, exact: true })).toBeVisible();
+  await expect(page.getByText("File: revised.pdf", { exact: true })).toBeVisible();
   await expect(page.getByRole("status").filter({ hasText: "New version uploaded." })).toBeVisible();
   await expect(page.getByLabel("Version", { exact: true }).locator("option")).toHaveCount(2);
   await expect(page.getByLabel("Pending").first()).toBeVisible();

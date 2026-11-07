@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   completeLede,
   deleteResume,
+  renameResume,
   fetchTeardown,
   postResume,
   stageResume,
@@ -43,6 +44,45 @@ describe("private anonymous staging", () => {
   it("surfaces server-side content validation failures", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 415 }));
     expect(await stageResume("http://localhost:8080", new File(["fake"], "resume.pdf"))).toEqual({ ok: false, message: "That file is neither a PDF nor a DOCX." });
+  });
+});
+
+describe("resume set names", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("patches a trimmed name with the owner's session", async () => {
+    const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
+    expect(await renameResume("http://api.test", "resume-1", "  Engineering roles  ", "session=test"))
+      .toEqual({ ok: true });
+    const [url, options] = mock.mock.calls[0];
+    expect(String(url)).toBe("http://api.test/api/resumes/resume-1");
+    expect(options).toMatchObject({ method: "PATCH", body: JSON.stringify({ title: "Engineering roles" }) });
+    expect(new Headers(options?.headers).get("cookie")).toBe("session=test");
+  });
+
+  it("rejects invalid names without contacting the API", async () => {
+    const mock = vi.spyOn(globalThis, "fetch");
+    for (const title of ["", "   ", "x".repeat(201)]) {
+      expect(await renameResume("http://api.test", "resume-1", title, undefined))
+        .toEqual({ ok: false, message: "Use a name between 1 and 200 characters." });
+    }
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it("reports a deleted or unowned set without pretending it saved", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 404 }));
+    expect(await renameResume("http://api.test", "resume-1", "Engineering", "session=test"))
+      .toEqual({ ok: false, message: "That resume is no longer here. Refresh and try again." });
+  });
+
+  it("reports a failed save and preserves session expiry handling", async () => {
+    const mock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(new Response(null, { status: 500 }))
+      .mockResolvedValueOnce(new Response(null, { status: 401 }));
+    expect(await renameResume("http://api.test", "resume-1", "Engineering", "session=test"))
+      .toEqual({ ok: false, message: "Could not rename your resume. Please try again." });
+    await expect(renameResume("http://api.test", "resume-1", "Engineering", "session=test"))
+      .rejects.toThrow("signed out");
+    expect(mock).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -175,9 +215,15 @@ describe("score bands", () => {
 });
 
 describe("library rows", () => {
+  it("keeps the set name distinct from the latest file", () => {
+    expect(libraryRow({ ...summary("uploaded", "revised.pdf"), title: "Engineering roles" }, []))
+      .toMatchObject({ title: "Engineering roles", filename: "revised.pdf" });
+  });
+
   it("says a stored file is waiting on the first read", () => {
     expect(libraryRow(summary("uploaded"), [])).toEqual({
       id: "resume-1",
+      title: "ada-designed.pdf",
       filename: "ada-designed.pdf",
       status: "waiting",
       overallScore: null,
@@ -262,12 +308,12 @@ describe("drop copy", () => {
     });
     expect(
       dropCopy([
-        { id: "a", filename: "ada-designed.pdf", overallScore: null, status: "waiting", label: "Stored. Waiting for the first read." },
+        { id: "a", title: "ada-designed.pdf", filename: "ada-designed.pdf", overallScore: null, status: "waiting", label: "Stored. Waiting for the first read." },
       ]).title,
     ).toBe("Drop another file");
     expect(
       dropCopy([
-        { id: "a", filename: "ada-designed.pdf", overallScore: null, status: "reading", label: "Reading" },
+        { id: "a", title: "ada-designed.pdf", filename: "ada-designed.pdf", overallScore: null, status: "reading", label: "Reading" },
       ]),
     ).toMatchObject({ title: "Drop a PDF or DOCX", tone: "list" });
   });
@@ -448,14 +494,14 @@ describe("version selection", () => {
 
   it("defaults to latest and lists the available versions", () => {
     expect(teardown(detail, plugins)).toMatchObject({
-      kind: "reading", versionId: "version-2", filename: "new.pdf",
+      kind: "reading", title: "ada.pdf", versionId: "version-2", filename: "new.pdf",
       versions: [{ id: "version-2", number: 2 }, { id: "version-1", number: 1 }],
     });
   });
 
   it("uses only the selected version's parse, status, and verdicts", () => {
     const view = teardown(detail, plugins, "version-1");
-    expect(view).toMatchObject({ kind: "complete", versionId: "version-1", filename: "old.pdf" });
+    expect(view).toMatchObject({ kind: "complete", title: "ada.pdf", versionId: "version-1", filename: "old.pdf" });
     if (view.kind === "missing") throw new Error("expected version");
     expect(view.extract?.[0].value).toBe("Old name");
     expect(view.file.url).toBe("/api/resumes/resume-1/versions/version-1/file");

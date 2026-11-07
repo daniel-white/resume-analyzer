@@ -197,6 +197,16 @@ const server = createServer(async (request, response) => {
     }
 
     const detail = pathname.match(/^\/api\/resumes\/([^/]+)$/);
+    if (detail && method === "PATCH") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      const found = scenario.resumes.find((item) => item.id === decodeURIComponent(detail[1]));
+      if (!found) return sendJson(response, 404, { error: "missing" });
+      const body = await readJson(request);
+      const title = typeof body.title === "string" ? body.title.trim() : "";
+      if (!title || [...title].length > 200) return send(response, 400, "Use a name between 1 and 200 characters.");
+      found.title = title;
+      return send(response, 204, "");
+    }
     const versionPath = pathname.match(/^\/api\/resumes\/([^/]+)\/versions(?:\/([^/]+))?$/);
     if ((detail && method === "DELETE") || (versionPath && ["POST", "DELETE"].includes(method))) {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });

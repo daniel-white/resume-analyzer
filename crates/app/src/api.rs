@@ -13,7 +13,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use domain::{Ats, CallbackBody, DOCX, MAX_UPLOAD_BYTES, PDF, verify};
 use futures_util::Stream;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use storage::{Objects, RecordOutcome};
 use uuid::Uuid;
 
@@ -140,6 +140,35 @@ pub async fn list_resumes(State(api): State<Arc<Api>>, headers: HeaderMap) -> Re
     };
     match api.store.list(user_id).await {
         Ok(resumes) => Json(ResumeList { resumes }).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct RenameResume {
+    title: String,
+}
+
+pub async fn rename_resume(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RenameResume>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    let title = body.title.trim();
+    if title.is_empty() || title.chars().count() > 200 {
+        return text(
+            StatusCode::BAD_REQUEST,
+            "Use a name between 1 and 200 characters.",
+        );
+    }
+    match api.store.rename_resume(user_id, id, title).await {
+        Ok(true) => StatusCode::NO_CONTENT.into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }

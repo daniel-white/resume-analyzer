@@ -211,6 +211,67 @@ async fn login_cookie_can_manage_the_account() {
         .expect("hidden");
     assert_eq!(hidden.status(), reqwest::StatusCode::NOT_FOUND);
 
+    let resume_uuid = uuid::Uuid::parse_str(resume_id).unwrap();
+    assert_eq!(
+        store
+            .detail(ada_uuid, resume_uuid)
+            .await
+            .unwrap()
+            .unwrap()
+            .title,
+        "ada.pdf"
+    );
+    for (cookie, expected) in [
+        (None, reqwest::StatusCode::UNAUTHORIZED),
+        (Some(&grace_cookie), reqwest::StatusCode::NOT_FOUND),
+    ] {
+        let mut request = client
+            .patch(format!("{base}/api/resumes/{resume_id}"))
+            .json(&serde_json::json!({ "title": "Not yours" }));
+        if let Some(cookie) = cookie {
+            request = request.header("cookie", cookie);
+        }
+        assert_eq!(request.send().await.unwrap().status(), expected);
+    }
+    for title in ["   ".to_owned(), "x".repeat(201)] {
+        let invalid = client
+            .patch(format!("{base}/api/resumes/{resume_id}"))
+            .header("cookie", &ada_cookie)
+            .json(&serde_json::json!({ "title": title }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), reqwest::StatusCode::BAD_REQUEST);
+    }
+    assert_eq!(
+        store
+            .detail(ada_uuid, resume_uuid)
+            .await
+            .unwrap()
+            .unwrap()
+            .title,
+        "ada.pdf"
+    );
+    let renamed = client
+        .patch(format!("{base}/api/resumes/{resume_id}"))
+        .header("cookie", &ada_cookie)
+        .json(&serde_json::json!({ "title": "  Engineering roles  " }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(renamed.status(), reqwest::StatusCode::NO_CONTENT);
+    let detail = store.detail(ada_uuid, resume_uuid).await.unwrap().unwrap();
+    assert_eq!(detail.title, "Engineering roles");
+    assert_eq!(detail.versions[0].filename, "ada.pdf");
+    assert_eq!(
+        store.list(ada_uuid).await.unwrap()[0].title,
+        "Engineering roles"
+    );
+    objects
+        .get(&object_key)
+        .await
+        .expect("rename preserves original bytes");
+
     // This resume predates the current registry. An unowned detail request
     // must not enqueue work, and repeated owner visits add the new plugin once.
     let version_uuid = uuid::Uuid::parse_str(version_id).expect("version uuid");
@@ -365,6 +426,15 @@ async fn login_cookie_can_manage_the_account() {
         .await
         .expect("docx version");
     let docx_id = new_version["version_id"].as_str().expect("docx id");
+    assert_eq!(
+        store
+            .detail(ada_uuid, resume_uuid)
+            .await
+            .unwrap()
+            .unwrap()
+            .title,
+        "Engineering roles"
+    );
     let docx_url = format!("{base}/api/resumes/{resume_id}/versions/{docx_id}/file");
     let original_docx = client
         .get(&docx_url)

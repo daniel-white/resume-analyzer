@@ -249,6 +249,22 @@ impl Store {
         Ok(Some(number))
     }
 
+    /// Renames the set, not its uploaded files. Unknown and unowned ids look alike.
+    pub async fn rename_resume(
+        &self,
+        user_id: Uuid,
+        id: Uuid,
+        title: &str,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query("update resumes set title = $3 where id = $1 and user_id = $2")
+            .bind(id)
+            .bind(user_id)
+            .bind(title)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     pub async fn list(&self, user_id: Uuid) -> anyhow::Result<Vec<ResumeSummary>> {
         let rows = sqlx::query(
             "select resumes.id, resumes.title, resumes.created_at,

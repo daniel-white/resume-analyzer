@@ -48,7 +48,9 @@ pub fn api_router(api: Arc<Api>) -> Router {
         )
         .route(
             "/api/resumes/{id}",
-            get(api::resume_detail).delete(api::delete_resume),
+            get(api::resume_detail)
+                .patch(api::rename_resume)
+                .delete(api::delete_resume),
         )
         .route("/api/resumes/{id}/versions", post(api::add_version))
         .route(

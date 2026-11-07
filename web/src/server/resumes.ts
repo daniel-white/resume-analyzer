@@ -123,7 +123,7 @@ export type AcceptedUpload = {
 
 export type ScoreBand = "low" | "mid" | "high";
 
-export type LibraryRow = { overallScore: number | null } & (
+export type LibraryRow = { title: string; overallScore: number | null } & (
   | {
       id: string;
       filename: string;
@@ -197,6 +197,7 @@ export type Teardown =
   | {
       kind: "reading" | "complete";
       resumeId: string;
+      title: string;
       versionId: string;
       versions: VersionSummary[];
       comparisonVersions: ComparisonVersion[];
@@ -247,23 +248,25 @@ export function formatDelta(delta: number): string {
 
 export function libraryRow(summary: ResumeSummary, runs: RunView[]): LibraryRow {
   const id = summary.id;
+  const title = summary.title;
   const filename = summary.latest.filename;
   const scores = runs.flatMap((run) => run.verdict ? [run.verdict.score] : []);
   const overallScore = medianScore(scores);
   if (summary.latest.status === "uploaded") {
-    return { id, filename, overallScore, status: "waiting", label: "Stored. Waiting for the first read." };
+    return { id, title, filename, overallScore, status: "waiting", label: "Stored. Waiting for the first read." };
   }
   if (summary.latest.status !== "complete") {
-    return { id, filename, overallScore, status: "reading", label: "Reading" };
+    return { id, title, filename, overallScore, status: "reading", label: "Reading" };
   }
   if (scores.length === 0) {
-    return { id, filename, overallScore, status: "reading", label: "Reading" };
+    return { id, title, filename, overallScore, status: "reading", label: "Reading" };
   }
   const low = Math.min(...scores);
   const high = Math.max(...scores);
   const reads = scores.length;
   return {
     id,
+    title,
     filename,
     overallScore,
     status: "scored",
@@ -362,6 +365,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
   return {
     kind: reading ? "reading" : "complete",
     resumeId: detail.id,
+    title: detail.title,
     versionId: version.id,
     versions: detail.versions.map(({ id, number, filename, status, created_at }) => ({
       id, number, filename, status, created_at,
@@ -454,6 +458,31 @@ export async function stageResume(baseUrl: string, file: File, cookie?: string):
 }
 
 export type DeleteResult = { ok: true } | { ok: false; message: string };
+
+export type RenameResult = { ok: true } | { ok: false; message: string };
+
+export async function renameResume(
+  baseUrl: string,
+  id: string,
+  title: string,
+  cookie: string | undefined,
+): Promise<RenameResult> {
+  const name = title.trim();
+  if (!name || [...name].length > 200) {
+    return { ok: false, message: "Use a name between 1 and 200 characters." };
+  }
+  const result = await apiFetch(baseUrl, `/api/resumes/${encodeURIComponent(id)}`, cookie, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ title: name }),
+  });
+  if (!result.ok) {
+    return { ok: false, message: result.status === 404
+      ? "That resume is no longer here. Refresh and try again."
+      : "Could not rename your resume. Please try again." };
+  }
+  return { ok: true };
+}
 
 export async function deleteResume(
   baseUrl: string,

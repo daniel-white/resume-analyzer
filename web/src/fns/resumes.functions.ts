@@ -9,6 +9,8 @@ import {
   postResume,
   stageResume,
   deleteResume,
+  renameResume,
+  type RenameResult,
   type DeleteResult,
   type LibraryView,
   type Teardown,
@@ -92,6 +94,20 @@ export const uploadResume = createServerFn({ method: "POST" })
       return await postResume(apiBase(), file, cookie(), typeof resumeId === "string" ? resumeId : undefined);
     } catch (error) {
       if (error instanceof SignedOut) signedOut();
+      throw error;
+    }
+  });
+
+export const updateResumeName = createServerFn({ method: "POST" })
+  .validator((data: { id: string; title: string }) => {
+    if (!data.id || typeof data.title !== "string") throw new Error("missing resume name");
+    return data;
+  })
+  .handler(async ({ data }): Promise<RenameResult> => {
+    try {
+      return await renameResume(apiBase(), data.id, data.title, cookie());
+    } catch (error) {
+      if (error instanceof SignedOut) signedOut(`/resumes/${data.id}`);
       throw error;
     }
   });
