@@ -169,6 +169,27 @@ const server = createServer(async (request, response) => {
     }
 
     const detail = pathname.match(/^\/api\/resumes\/([^/]+)$/);
+    const versionPath = pathname.match(/^\/api\/resumes\/([^/]+)\/versions(?:\/([^/]+))?$/);
+    if ((detail && method === "DELETE") || (versionPath && ["POST", "DELETE"].includes(method))) {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      const id = decodeURIComponent((detail ?? versionPath)[1]);
+      const found = scenario.resumes.find((item) => item.id === id);
+      if (!found) return sendJson(response, 404, { error: "missing" });
+      if (method === "POST") {
+        const filename = (await filenameFrom(request)) ?? "new.pdf";
+        const number = Math.max(...found.versions.map((version) => version.number)) + 1;
+        const version = { ...resume({ id, filename, status: "uploaded", parse: null, runs: [] }).versions[0], id: randomUUID(), number };
+        found.versions.unshift(version);
+        return sendJson(response, 202, { id, version_id: version.id, status: "uploaded" });
+      }
+      if (versionPath?.[2]) {
+        const versionId = decodeURIComponent(versionPath[2]);
+        if (!found.versions.some((version) => version.id === versionId)) return sendJson(response, 404, { error: "missing" });
+        found.versions = found.versions.filter((version) => version.id !== versionId);
+      } else found.versions = [];
+      if (!found.versions.length) scenario.resumes = scenario.resumes.filter((item) => item.id !== id);
+      return send(response, 204, "");
+    }
     if (detail && method === "GET") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
       const found = scenario.resumes.find((item) => item.id === decodeURIComponent(detail[1]));

@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   completeLede,
+  deleteResume,
+  fetchTeardown,
+  postResume,
   dropCopy,
   extractFields,
   libraryRow,
@@ -404,5 +407,80 @@ describe("upload failures", () => {
     );
     expect(uploadFailure(413, "")).toBe("That file is over five megabytes.");
     expect(uploadFailure(500, "x".repeat(201))).toBe("That file did not store.");
+  });
+});
+
+describe("version selection", () => {
+  const detail: ResumeDetail = {
+    id: "resume-1", title: "ada.pdf", created_at: "2026-11-07T18:00:00Z",
+    versions: [
+      version("running", null, [run("greenline", null)], "new.pdf", 2),
+      version("complete", parse({ name: "Old name" }), [run("greenline", 95)], "old.pdf", 1),
+    ],
+  };
+
+  it("defaults to latest and lists the available versions", () => {
+    expect(teardown(detail, plugins)).toMatchObject({
+      kind: "reading", versionId: "version-2", filename: "new.pdf",
+      versions: [{ id: "version-2", number: 2 }, { id: "version-1", number: 1 }],
+    });
+  });
+
+  it("uses only the selected version's parse, status, and verdicts", () => {
+    const view = teardown(detail, plugins, "version-1");
+    expect(view).toMatchObject({ kind: "complete", versionId: "version-1", filename: "old.pdf" });
+    if (view.kind === "missing") throw new Error("expected version");
+    expect(view.extract?.[0].value).toBe("Old name");
+    expect(view.file.url).toBe("/api/resumes/resume-1/versions/version-1/file");
+    expect(view.cards[0]).toMatchObject({ pending: false, score: 95 });
+  });
+
+  it("does not silently show the latest results for a missing version", () => {
+    expect(teardown(detail, plugins, "deleted-version")).toEqual({ kind: "missing" });
+  });
+});
+
+describe("version API requests", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("fetches fresh detail and returns the requested version's results", async () => {
+    const fetch = vi.fn(async (url: URL) => Response.json(url.pathname === "/api/plugins"
+      ? { plugins }
+      : { id: "resume-1", title: "ada.pdf", created_at: "2026-11-07T18:00:00Z", versions: [
+        version("running", null, [], "new.pdf", 2),
+        version("complete", parse({}), [run("greenline", 95)], "old.pdf", 1),
+      ] }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await fetchTeardown("http://api.test", "resume-1", "session=test", "version-1"))
+      .toMatchObject({ filename: "old.pdf", cards: expect.arrayContaining([expect.objectContaining({ score: 95 })]) });
+    expect(fetch).toHaveBeenCalledWith(new URL("http://api.test/api/resumes/resume-1"),
+      expect.objectContaining({ headers: expect.any(Headers) }));
+  });
+
+  it("uploads revisions to the existing resume with the session cookie", async () => {
+    const fetch = vi.fn(async () => Response.json({ id: "resume-1", version_id: "version-2" }, { status: 202 }));
+    vi.stubGlobal("fetch", fetch);
+    const file = new File(["%PDF"], "revision.pdf", { type: "application/pdf" });
+    expect(await postResume("http://api.test", file, "session=test", "resume-1"))
+      .toEqual({ ok: true, id: "resume-1", version_id: "version-2" });
+    const [url, init] = fetch.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.pathname).toBe("/api/resumes/resume-1/versions");
+    expect(init.method).toBe("POST");
+    expect((init.headers as Headers).get("cookie")).toBe("session=test");
+    expect((init.body as FormData).get("file")).toBeInstanceOf(File);
+  });
+
+  it("targets one version or the entire resume and reports failures", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await deleteResume("http://api.test", "resume-1", "session=test", "version-1")).toEqual({ ok: true });
+    expect(await deleteResume("http://api.test", "resume-1", "session=test")).toEqual({ ok: true });
+    const calls = fetch.mock.calls as unknown as [URL, RequestInit][];
+    expect(calls.map(([url]) => url.pathname)).toEqual([
+      "/api/resumes/resume-1/versions/version-1", "/api/resumes/resume-1",
+    ]);
+    expect(calls.every(([, init]) => init.method === "DELETE")).toBe(true);
+    fetch.mockImplementation(async () => new Response(null, { status: 500 }));
+    expect(await deleteResume("http://api.test", "resume-1", undefined)).toMatchObject({ ok: false });
   });
 });

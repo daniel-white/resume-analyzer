@@ -195,6 +195,49 @@ pub async fn plugins(State(api): State<Arc<Api>>) -> Response {
     .into_response()
 }
 
+pub async fn delete_resume(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Response {
+    delete_owned(&api, &headers, id, None).await
+}
+
+pub async fn delete_version(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path((id, version_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    delete_owned(&api, &headers, id, Some(version_id)).await
+}
+
+async fn delete_owned(
+    api: &Api,
+    headers: &HeaderMap,
+    id: Uuid,
+    version_id: Option<Uuid>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(api, headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    let removed = match api.store.delete_resume(user_id, id, version_id).await {
+        Ok(Some(removed)) => removed,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("delete resume: {err}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    for version in removed {
+        if let Err(err) = api.objects.delete(&version.object_key).await {
+            eprintln!("delete object {}: {err}", version.object_key);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+    StatusCode::NO_CONTENT.into_response()
+}
+
 /// Live only. The receiver is created when the request arrives, so events
 /// that were already dispatched are not replayed.
 pub async fn events(

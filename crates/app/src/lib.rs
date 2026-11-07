@@ -15,7 +15,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, State};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use domain::MAX_UPLOAD_BYTES;
 
 use crate::config::Config;
@@ -46,11 +46,18 @@ pub fn api_router(api: Arc<Api>) -> Router {
             "/api/resumes",
             get(api::list_resumes).post(api::create_resume),
         )
-        .route("/api/resumes/{id}", get(api::resume_detail))
+        .route(
+            "/api/resumes/{id}",
+            get(api::resume_detail).delete(api::delete_resume),
+        )
         .route("/api/resumes/{id}/versions", post(api::add_version))
         .route(
             "/api/resumes/{id}/versions/{version_id}/file",
             get(api::resume_file),
+        )
+        .route(
+            "/api/resumes/{id}/versions/{version_id}",
+            delete(api::delete_version),
         )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))

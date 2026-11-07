@@ -379,6 +379,122 @@ async fn login_cookie_can_manage_the_account() {
         .await
         .expect("hidden docx");
     assert_eq!(hidden_docx.status(), reqwest::StatusCode::NOT_FOUND);
+    // Resume deletion is scoped to the owner and cleans up the uploaded objects.
+    let (content_type, body) = multipart(&plain_pdf());
+    let extra: serde_json::Value = client
+        .post(format!("{base}/api/resumes"))
+        .header("cookie", &ada_cookie)
+        .header("content-type", content_type)
+        .body(body)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let extra_id = extra["id"].as_str().unwrap();
+    let first_id = extra["version_id"].as_str().unwrap();
+    let (content_type, body) = multipart(&plain_pdf());
+    let revised: serde_json::Value = client
+        .post(format!("{base}/api/resumes/{extra_id}/versions"))
+        .header("cookie", &ada_cookie)
+        .header("content-type", content_type)
+        .body(body)
+        .send()
+        .await
+        .unwrap()
+        .error_for_status()
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let revised_id = revised["version_id"].as_str().unwrap();
+    let revised_key = domain::version_object_key(
+        ada_uuid,
+        extra_id.parse().unwrap(),
+        revised_id.parse().unwrap(),
+    );
+    let first_key = domain::version_object_key(
+        ada_uuid,
+        extra_id.parse().unwrap(),
+        first_id.parse().unwrap(),
+    );
+    for path in [
+        format!("/api/resumes/{extra_id}"),
+        format!("/api/resumes/{extra_id}/versions/{revised_id}"),
+    ] {
+        assert_eq!(
+            client
+                .delete(format!("{base}{path}"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            reqwest::StatusCode::UNAUTHORIZED
+        );
+        assert_eq!(
+            client
+                .delete(format!("{base}{path}"))
+                .header("cookie", &grace_cookie)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            reqwest::StatusCode::NOT_FOUND
+        );
+    }
+    assert_eq!(
+        client
+            .delete(format!(
+                "{base}/api/resumes/{resume_id}/versions/{revised_id}"
+            ))
+            .header("cookie", &ada_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        client
+            .delete(format!(
+                "{base}/api/resumes/{extra_id}/versions/{revised_id}"
+            ))
+            .header("cookie", &ada_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NO_CONTENT
+    );
+    assert!(objects.get(&revised_key).await.is_err());
+    objects.get(&first_key).await.unwrap();
+    let detail = store
+        .detail(ada_uuid, extra_id.parse().unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(detail.versions.len(), 1);
+    assert_eq!(
+        client
+            .delete(format!("{base}/api/resumes/{extra_id}"))
+            .header("cookie", &ada_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NO_CONTENT
+    );
+    assert!(objects.get(&first_key).await.is_err());
+    assert!(
+        store
+            .detail(ada_uuid, extra_id.parse().unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
 
     let session_id = me["sessions"][0]["id"].as_str().expect("session");
     let refused = client

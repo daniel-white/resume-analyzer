@@ -416,6 +416,68 @@ impl Store {
         Ok((row.try_get("object_key")?, row.try_get("media_type")?))
     }
 
+    /// Deletes an owned resume or one version, including its results and queued
+    /// work. Locking the resume serializes deletion with version uploads.
+    /// Deleting the last version also removes the empty resume.
+    pub async fn delete_resume(
+        &self,
+        user_id: Uuid,
+        resume_id: Uuid,
+        version_id: Option<Uuid>,
+    ) -> anyhow::Result<Option<Vec<RemovedVersion>>> {
+        let mut tx = self.pool.begin().await?;
+        let owned: Option<Uuid> =
+            sqlx::query_scalar("select id from resumes where id = $1 and user_id = $2 for update")
+                .bind(resume_id)
+                .bind(user_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        if owned.is_none() {
+            return Ok(None);
+        }
+        let rows = sqlx::query(
+            "select id, object_key from versions
+             where resume_id = $1 and ($2::uuid is null or id = $2) for update",
+        )
+        .bind(resume_id)
+        .bind(version_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        if version_id.is_some() && rows.is_empty() {
+            return Ok(None);
+        }
+        let removed = rows
+            .iter()
+            .map(|row| {
+                Ok(RemovedVersion {
+                    resume_id,
+                    version_id: row.try_get("id")?,
+                    object_key: row.try_get("object_key")?,
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        for version in &removed {
+            sqlx::query("delete from callback_keys where run_id in (select id from runs where version_id = $1)")
+                .bind(version.version_id).execute(&mut *tx).await?;
+            sqlx::query("delete from outbox where version_id = $1")
+                .bind(version.version_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("delete from runs where version_id = $1")
+                .bind(version.version_id)
+                .execute(&mut *tx)
+                .await?;
+            sqlx::query("delete from versions where id = $1")
+                .bind(version.version_id)
+                .execute(&mut *tx)
+                .await?;
+        }
+        sqlx::query("delete from resumes where id = $1 and not exists (select 1 from versions where resume_id = $1)")
+            .bind(resume_id).execute(&mut *tx).await?;
+        tx.commit().await?;
+        Ok(Some(removed))
+    }
+
     /// Deletes one user's rows and returns the object keys the caller must
     /// delete. Another user's resumes are left in place.
     pub async fn delete_user(&self, user_id: Uuid) -> anyhow::Result<Vec<RemovedVersion>> {
@@ -776,6 +838,96 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(completed.versions[0].status, ResumeStatus::Complete);
+    }
+
+    #[tokio::test]
+    async fn deleting_versions_is_owned_and_removes_results_and_work() {
+        let store = Ephemeral::start().await.unwrap();
+        let owner = Uuid::new_v4();
+        let resume = Uuid::new_v4();
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        store
+            .create_resume(owner, resume, first, "old.pdf", domain::PDF, "old-key")
+            .await
+            .unwrap();
+        store
+            .add_version(owner, resume, second, "new.pdf", domain::PDF, "new-key")
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        store.save_parse(second, &parse).await.unwrap();
+        store.fanout(second, &["stub"]).await.unwrap();
+        let detail = store.detail(owner, resume).await.unwrap().unwrap();
+        let run_id = detail.versions[0].runs[0].id;
+        store
+            .record_callback(
+                "stub",
+                run_id,
+                "delete-test-key",
+                &parse,
+                &empty_verdict(95, "done"),
+            )
+            .await
+            .unwrap();
+        assert!(
+            store
+                .delete_resume(Uuid::new_v4(), resume, None)
+                .await
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            store
+                .delete_resume(owner, resume, Some(Uuid::new_v4()))
+                .await
+                .unwrap()
+                .is_none()
+        );
+        let removed = store
+            .delete_resume(owner, resume, Some(second))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(removed.len(), 1);
+        assert_eq!(removed[0].object_key, "new-key");
+        let detail = store.detail(owner, resume).await.unwrap().unwrap();
+        assert_eq!(detail.versions.len(), 1);
+        assert_eq!(detail.versions[0].id, first);
+        let remaining: i64 =
+            sqlx::query_scalar("select count(*) from callback_keys where run_id = $1")
+                .bind(run_id)
+                .fetch_one(store.pool())
+                .await
+                .unwrap();
+        assert_eq!(remaining, 0);
+        let removed = store
+            .delete_resume(owner, resume, Some(first))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(removed[0].object_key, "old-key");
+        assert!(store.detail(owner, resume).await.unwrap().is_none());
+        assert!(store.claim().await.unwrap().is_none());
+
+        store
+            .create_resume(owner, resume, first, "old.pdf", domain::PDF, "old-key")
+            .await
+            .unwrap();
+        store
+            .add_version(owner, resume, second, "new.pdf", domain::PDF, "new-key")
+            .await
+            .unwrap();
+        assert_eq!(
+            store
+                .delete_resume(owner, resume, None)
+                .await
+                .unwrap()
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(store.detail(owner, resume).await.unwrap().is_none());
     }
 
     #[tokio::test]

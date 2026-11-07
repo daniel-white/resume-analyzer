@@ -7,6 +7,8 @@ import {
   fetchLibrary,
   fetchTeardown,
   postResume,
+  deleteResume,
+  type DeleteResult,
   type LibraryView,
   type Teardown,
   type UploadResult,
@@ -47,14 +49,14 @@ export const getLibrary = createServerFn({ method: "GET" }).handler(
 );
 
 export const getTeardown = createServerFn({ method: "GET" })
-  .validator((id: string) => {
-    if (!id) throw new Error("missing resume");
-    return id;
+  .validator((data: { id: string; versionId?: string }) => {
+    if (!data.id) throw new Error("missing resume");
+    return data;
   })
   .handler(async ({ data }): Promise<SignedInTeardown | { kind: "missing" }> => {
     try {
       const [view, account] = await Promise.all([
-        fetchTeardown(apiBase(), data, cookie()),
+        fetchTeardown(apiBase(), data.id, cookie(), data.versionId),
         fetchAccount(apiBase(), cookie()),
       ]);
       if (!account) signedOut();
@@ -74,7 +76,22 @@ export const uploadResume = createServerFn({ method: "POST" })
       return { ok: false, message: "Choose a PDF or DOCX." };
     }
     try {
-      return await postResume(apiBase(), file, cookie());
+      const resumeId = data.get("resumeId");
+      return await postResume(apiBase(), file, cookie(), typeof resumeId === "string" ? resumeId : undefined);
+    } catch (error) {
+      if (error instanceof SignedOut) signedOut();
+      throw error;
+    }
+  });
+
+export const removeResume = createServerFn({ method: "POST" })
+  .validator((data: { id: string; versionId?: string }) => {
+    if (!data.id) throw new Error("missing resume");
+    return data;
+  })
+  .handler(async ({ data }): Promise<DeleteResult> => {
+    try {
+      return await deleteResume(apiBase(), data.id, cookie(), data.versionId);
     } catch (error) {
       if (error instanceof SignedOut) signedOut();
       throw error;

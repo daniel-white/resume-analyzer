@@ -144,6 +144,7 @@ body::after {
 }
 
 a:focus-visible,
+select:focus-visible,
 button:focus-visible,
 summary:focus-visible,
 input:focus-visible {
@@ -158,6 +159,26 @@ input:focus-visible {
 .sheet {
   position: relative;
 }
+
+.resume-versions { margin: 1rem 0 1.5rem; padding: 1rem 1.25rem; }
+.version-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 0.75rem; }
+.version-picker { display: grid; gap: 0.3rem; flex: 1 1 15rem; min-width: 0; }
+.version-picker span, .version-note { font-family: var(--font-mono); font-size: 0.75rem; }
+.version-picker select { width: 100%; min-width: 0; }
+.version-actions button, .version-upload, .version-picker select, .version-confirm button {
+  border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.65rem;
+  background: var(--card); color: var(--foreground); font-size: 0.875rem;
+}
+.version-actions button, .version-upload, .version-confirm button { cursor: pointer; }
+.version-actions button, .version-confirm button:first-of-type { color: var(--destructive); }
+.version-upload { position: relative; overflow: hidden; }
+.version-upload input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.version-upload:focus-within { outline: 2px solid var(--foreground); outline-offset: 3px; }
+.resume-versions button:disabled, .resume-versions select:disabled, .version-upload:has(input:disabled) { opacity: 0.55; cursor: wait; }
+.version-note { margin-top: 0.75rem; color: var(--muted-foreground); }
+.version-confirm { margin-top: 1rem; padding-top: 0.75rem; border-top: 1px solid var(--border); }
+.version-confirm p { margin-bottom: 0.75rem; }
+.version-confirm button + button { margin-left: 0.5rem; }
 
 .sheet-face {
   position: relative;

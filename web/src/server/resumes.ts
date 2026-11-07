@@ -177,6 +177,9 @@ export type Teardown =
   | { kind: "missing" }
   | {
       kind: "reading" | "complete";
+      resumeId: string;
+      versionId: string;
+      versions: VersionSummary[];
       filename: string;
       lede: string;
       file: { url: string; mediaType: string };
@@ -329,12 +332,19 @@ export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
   });
 }
 
-export function teardown(detail: ResumeDetail, plugins: Plugin[]): Teardown {
-  const version = detail.versions[0];
+export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: string): Teardown {
+  const version = versionId
+    ? detail.versions.find((item) => item.id === versionId)
+    : detail.versions[0];
   if (!version) return { kind: "missing" };
   const reading = version.status !== "complete";
   return {
     kind: reading ? "reading" : "complete",
+    resumeId: detail.id,
+    versionId: version.id,
+    versions: detail.versions.map(({ id, number, filename, status, created_at }) => ({
+      id, number, filename, status, created_at,
+    })),
     filename: version.filename,
     file: {
       url: `/api/resumes/${encodeURIComponent(detail.id)}/versions/${encodeURIComponent(version.id)}/file`,
@@ -374,31 +384,53 @@ export async function fetchTeardown(
   baseUrl: string,
   id: string,
   cookie: string | undefined,
+  versionId?: string,
 ): Promise<Teardown> {
   const [detail, plugins] = await Promise.all([
     fetchResume(baseUrl, id, cookie),
     fetchPlugins(baseUrl),
   ]);
   if (!detail) return { kind: "missing" };
-  return teardown(detail, plugins);
+  return teardown(detail, plugins, versionId);
 }
 
 export async function postResume(
   baseUrl: string,
   file: File,
   cookie: string | undefined,
+  resumeId?: string,
 ): Promise<UploadResult> {
   if (file.size === 0) {
     return { ok: false, message: "Choose a PDF or DOCX." };
   }
   const body = new FormData();
   body.set("file", file, file.name);
-  const result = await apiFetch(baseUrl, "/api/resumes", cookie, { method: "POST", body });
+  const path = resumeId ? `/api/resumes/${encodeURIComponent(resumeId)}/versions` : "/api/resumes";
+  const result = await apiFetch(baseUrl, path, cookie, { method: "POST", body });
   if (!result.ok) {
     return { ok: false, message: uploadFailure(result.status, result.body) };
   }
   const accepted = (await result.value.json()) as AcceptedUpload;
   return { ok: true, id: accepted.id, version_id: accepted.version_id };
+}
+
+export type DeleteResult = { ok: true } | { ok: false; message: string };
+
+export async function deleteResume(
+  baseUrl: string,
+  id: string,
+  cookie: string | undefined,
+  versionId?: string,
+): Promise<DeleteResult> {
+  const path = `/api/resumes/${encodeURIComponent(id)}`
+    + (versionId ? `/versions/${encodeURIComponent(versionId)}` : "");
+  const result = await apiFetch(baseUrl, path, cookie, { method: "DELETE" });
+  if (!result.ok) {
+    return { ok: false, message: result.status === 404
+      ? "That resume version is no longer here. Refresh and try again."
+      : "Could not delete the resume. Please try again." };
+  }
+  return { ok: true };
 }
 
 async function fetchResumeList(
