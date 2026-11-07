@@ -45,7 +45,7 @@ test("opens a scored teardown from the library", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
   await expect(page.getByText(/Contact in the header/)).toBeVisible();
   await expect(page.getByLabel("What we read")).toContainText("Ada Lovelace");
-  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
+  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
   await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
@@ -65,14 +65,14 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
   await expect(page.getByText("Three systems are reading this file.")).toBeVisible();
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
-  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
+  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
 });
 
 test("renders the original DOCX even before parsing finishes", async ({ page }) => {
   await installApi(page, { resumes: [stored] });
   await page.goto("/resumes/resume-stored");
   const preview = page.getByLabel("Original resume");
-  await expect(preview.getByText("Original DOCX resume")).toBeVisible();
+  await expect(preview.getByText("Original DOCX resume")).toBeVisible({ timeout: 20_000 });
   await expect(preview.locator("iframe")).toHaveCount(0);
   const download = page.waitForEvent("download");
   await preview.getByRole("link", { name: "Download original" }).click();

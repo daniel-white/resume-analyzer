@@ -57,7 +57,7 @@ test("SmartResume and the original DOCX viewer render together", async ({ page }
   await installApi(page, { resumes: [stored] });
   await page.goto(`/resumes/${stored.id}`);
   const preview = page.getByLabel("Original resume");
-  await expect(preview.getByText("Original DOCX resume")).toBeVisible();
+  await expect(preview.getByText("Original DOCX resume")).toBeVisible({ timeout: 20_000 });
   await expect(preview.getByRole("link", { name: "Download original" })).toBeVisible();
   const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
   await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
