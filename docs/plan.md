@@ -53,10 +53,10 @@ web/           TanStack Start application
   src/fns/         server function wrappers
   src/server/      server-only fetch helpers
   src/components/
-deploy/helm/resume-analyzer/
-compose.yaml   Postgres, LocalStack, Mailpit (dependencies only)
-scripts/       worktree creation, the check gate, the demo boot
-docs/          this plan, the frozen contracts, the factory guide
+deploy/helm/resume-analyzer/   chart Minikube installs
+docker-bake.hcl                 API and web image targets
+scripts/                        worktrees, the check gate, bake, cluster
+docs/                           this plan, the frozen contracts, the factory guide
 flake.nix
 justfile
 ```
@@ -268,7 +268,7 @@ about merge conflicts, not about bypassing anyone's safeguards.
 | 3a | `plugins/fleet` | plugins agent | 2 | the four plugins disagree on the designed fixture and agree on the plain one |
 | 3b | `web/ui` | web-ui agent | 1b and the frozen response shapes from 2 | the designed-versus-plain contrast is visible without reading code |
 | 4 | `auth/magic-link` | auth agent | 2 and 1b | a magic link round-trips through Mailpit |
-| 5 | `demo/kind` | demo agent | 3a, 3b, 4 | `just demo` on a kind cluster, plus a three-minute script |
+| 5 | `demo/minikube` | demo agent | 3a, 3b, 4 | `just demo` on Minikube, plus a three-minute script |
 
 Wave 2 is a sequence of commits on one branch, each leaving the gate green, not
 one large commit. The orchestrator merges it once. `auth/passkeys` is
@@ -296,12 +296,26 @@ mid-wave:
 
 | Command | What runs where | Use |
 | --- | --- | --- |
-| `just dev` | compose for Postgres, LocalStack, and Mailpit; `cargo watch` and `pnpm dev` for the app | building |
-| `just demo` | kind plus the Helm chart: API, web, Postgres, LocalStack, Mailpit | what judges see |
+| `just dev` | A `resume-analyzer` Minikube profile runs Postgres, LocalStack, and Mailpit. Envoy Gateway terminates mkcert TLS for `https://app.resume.local` and `https://mail.resume.local`, announced over mDNS at the node IP. Port-forwards let `cargo run` on the host reach the dependencies | building |
+| `just demo` | `docker buildx bake`, `minikube image load`, Helm upgrade with the API and web pods enabled, same hostnames | what judges see |
 
 The Nix flake provides two dev shells, `default` for Rust and `web` for Node,
 because a single shell carrying both toolchains is where native dependencies
 break. `direnv` with `use flake` is the expected entry.
+
+## Follow-ups
+
+Not part of the current wave. Do these after the demo path works, not instead of it.
+
+- [ ] Copy engops' bake versioning. Split `docker-bake.hcl` into a root file
+      plus `images/rust` and `images/nodejs`. Shared variables (`REGISTRY`,
+      `TAG`) and a `_common` target live in the root. `RUST_VERSION` and
+      `NODEJS_VERSION` are declared with no default, so an unset value fails
+      the build instead of pulling a floating tag. The flake devShell exports
+      them from the pinned toolchain (`rustc --version`, `node --version`).
+      Dockerfiles take those as build args. Image tags are
+      `${REGISTRY}/<name>:${TAG}`. Until this lands, the Dockerfiles pin
+      `rust:1.99.1` and `node:22` by hand, matching the flake.
 
 ## Out of scope
 
