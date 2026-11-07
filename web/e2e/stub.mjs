@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { docx, pdf } from "./documents.mjs";
 
 const port = Number(process.env.PLAYWRIGHT_API_PORT ?? 4181);
 
@@ -103,6 +104,18 @@ const server = createServer(async (request, response) => {
         id: created.id,
         version_id: created.versions[0].id,
         status: "uploaded",
+      });
+    }
+
+    const file = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/file$/);
+    if (file && method === "GET") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      const found = scenario.resumes.find((item) => item.id === decodeURIComponent(file[1]));
+      const version = found?.versions.find((item) => item.id === decodeURIComponent(file[2]));
+      if (!version) return sendJson(response, 404, { error: "missing" });
+      return send(response, 200, version.media_type === "application/pdf" ? pdf() : docx(), {
+        "content-type": version.media_type,
+        "cache-control": "private, no-store",
       });
     }
 

@@ -84,7 +84,9 @@ function resume(input: {
         id: `${input.id}-v1`,
         number: 1,
         filename: input.filename,
-        media_type: "application/pdf",
+        media_type: input.filename.endsWith(".docx")
+          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          : "application/pdf",
         status: input.status,
         created_at: "2026-11-07T18:00:00Z",
         parse: input.parse,

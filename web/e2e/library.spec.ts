@@ -45,6 +45,7 @@ test("opens a scored teardown from the library", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
   await expect(page.getByText(/Contact in the header/)).toBeVisible();
   await expect(page.getByLabel("What we read")).toContainText("Ada Lovelace");
+  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
   await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
@@ -64,6 +65,46 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
   await expect(page.getByText("Two systems are reading this file.")).toBeVisible();
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
+  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
+});
+
+test("renders the original DOCX even before parsing finishes", async ({ page }) => {
+  await installApi(page, { resumes: [stored] });
+  await page.goto("/resumes/resume-stored");
+  const preview = page.getByLabel("Original resume");
+  await expect(preview.getByText("Original DOCX resume")).toBeVisible();
+  await expect(preview.locator("iframe")).toHaveCount(0);
+  const download = page.waitForEvent("download");
+  await preview.getByRole("link", { name: "Download original" }).click();
+  expect((await download).suggestedFilename()).toBe("just-added.docx");
+});
+
+test("shows a useful error when the protected file request fails", async ({ page }) => {
+  await installApi(page, { resumes: [stored] });
+  await page.route("**/api/resumes/*/versions/*/file", (route) => route.fulfill({ status: 401 }));
+  await page.goto("/resumes/resume-stored");
+  await expect(page.getByLabel("Original resume").getByRole("alert")).toContainText("Your session has expired");
+});
+
+test("protects file responses on the frontend origin", async ({ page }) => {
+  await installApi(page, { resumes: [stored] });
+  const path = "/api/resumes/resume-stored/versions/resume-stored-v1/file";
+  const original = await page.request.get(path);
+  expect(original.status()).toBe(200);
+  expect(original.headers()["content-type"]).toBe(
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  );
+  expect(original.headers()["cache-control"]).toBe("private, no-store");
+  expect((await original.body()).subarray(0, 2).toString()).toBe("PK");
+
+  const missing = await page.request.get("/api/resumes/missing/versions/resume-stored-v1/file");
+  expect(missing.status()).toBe(404);
+  expect(missing.headers()["cache-control"]).toBe("private, no-store");
+
+  await installApi(page, { signedIn: false, resumes: [stored] });
+  const signedOut = await page.request.get(path);
+  expect(signedOut.status()).toBe(401);
+  expect(signedOut.headers()["cache-control"]).toBe("private, no-store");
 });
 
 test("says when a resume is missing", async ({ page }) => {

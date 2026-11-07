@@ -123,6 +123,41 @@ pub async fn resume_detail(
     }
 }
 
+/// Original bytes, never a public object URL. Unknown and unowned files look alike.
+pub async fn resume_file(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path((resume_id, version_id)): Path<(Uuid, Uuid)>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    let file = match api.store.version_file(user_id, resume_id, version_id).await {
+        Ok(Some(file)) => file,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let bytes = match api.objects.get(&file.object_key).await {
+        Ok(bytes) => bytes,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let filename = default_name(&file.media_type);
+    (
+        [
+            (header::CONTENT_TYPE, file.media_type),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("inline; filename=\"{filename}\""),
+            ),
+            (header::CACHE_CONTROL, "private, no-store".to_owned()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_owned()),
+        ],
+        bytes,
+    )
+        .into_response()
+}
+
 pub async fn plugins(State(api): State<Arc<Api>>) -> Response {
     Json(PluginList {
         plugins: api

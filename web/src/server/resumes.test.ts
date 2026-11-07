@@ -329,6 +329,10 @@ describe("teardown", () => {
     const view = teardown(detail, plugins);
     expect(view.kind).toBe("complete");
     if (view.kind !== "complete") throw new Error("expected complete");
+    expect(view.file).toEqual({
+      url: `/api/resumes/resume-1/versions/${detail.versions[0].id}/file`,
+      mediaType: detail.versions[0].media_type,
+    });
     expect(view.lede).toBe(
       "Contact in the header, skills in a table, two columns. Each system opened the file itself.",
     );

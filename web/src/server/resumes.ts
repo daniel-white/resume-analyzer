@@ -179,6 +179,7 @@ export type Teardown =
       kind: "reading" | "complete";
       filename: string;
       lede: string;
+      file: { url: string; mediaType: string };
       extract: ExtractField[] | null;
       parse?: ParseInput | null;
       cards: VerdictCard[];
@@ -335,6 +336,10 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[]): Teardown {
   return {
     kind: reading ? "reading" : "complete",
     filename: version.filename,
+    file: {
+      url: `/api/resumes/${encodeURIComponent(detail.id)}/versions/${encodeURIComponent(version.id)}/file`,
+      mediaType: version.media_type,
+    },
     lede: reading ? readingLede(plugins.length) : completeLede(version.parse),
     extract: version.parse ? extractFields(version.parse) : null,
     parse: version.parse,

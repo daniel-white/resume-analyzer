@@ -4,4 +4,4 @@ mod objects;
 mod store;
 
 pub use objects::{MemoryObjects, Objects};
-pub use store::{Claimed, RecordOutcome, RemovedVersion, Store};
+pub use store::{Claimed, RecordOutcome, RemovedVersion, Store, VersionFile};

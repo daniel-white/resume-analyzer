@@ -48,6 +48,10 @@ pub fn api_router(api: Arc<Api>) -> Router {
         )
         .route("/api/resumes/{id}", get(api::resume_detail))
         .route("/api/resumes/{id}/versions", post(api::add_version))
+        .route(
+            "/api/resumes/{id}/versions/{version_id}/file",
+            get(api::resume_file),
+        )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
         .route("/api/callbacks/{plugin_id}", post(api::callback))

@@ -31,6 +31,21 @@ fn plain_pdf() -> Vec<u8> {
     b"%PDF-1.4\n(Ada Lovelace) Tj (ada@example.com) Tj\n%%EOF\n".to_vec()
 }
 
+fn plain_docx() -> Vec<u8> {
+    use std::io::Write;
+    let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    archive
+        .start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .expect("document entry");
+    archive
+        .write_all(b"<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body><w:p><w:r><w:t>Ada Lovelace</w:t></w:r></w:p></w:body></w:document>")
+        .expect("document xml");
+    archive.finish().expect("docx").into_inner()
+}
+
 fn multipart(bytes: &[u8]) -> (String, Vec<u8>) {
     let boundary = "account-boundary";
     let mut body = Vec::new();
@@ -195,6 +210,105 @@ async fn login_cookie_can_manage_the_account() {
         .await
         .expect("hidden");
     assert_eq!(hidden.status(), reqwest::StatusCode::NOT_FOUND);
+
+    let file_url = format!("{base}/api/resumes/{resume_id}/versions/{version_id}/file");
+    let anonymous_file = client.get(&file_url).send().await.expect("anonymous file");
+    assert_eq!(anonymous_file.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let hidden_file = client
+        .get(&file_url)
+        .header("cookie", &grace_cookie)
+        .send()
+        .await
+        .expect("hidden file");
+    assert_eq!(hidden_file.status(), reqwest::StatusCode::NOT_FOUND);
+    let original = client
+        .get(&file_url)
+        .header("cookie", &ada_cookie)
+        .send()
+        .await
+        .expect("original file");
+    assert_eq!(original.status(), reqwest::StatusCode::OK);
+    assert_eq!(original.headers()["content-type"], domain::PDF);
+    assert_eq!(original.headers()["cache-control"], "private, no-store");
+    assert_eq!(original.headers()["x-content-type-options"], "nosniff");
+    assert_eq!(
+        original.bytes().await.expect("file bytes").as_ref(),
+        plain_pdf()
+    );
+
+    let wrong_resume = client
+        .get(format!(
+            "{base}/api/resumes/{}/versions/{version_id}/file",
+            uuid::Uuid::new_v4()
+        ))
+        .header("cookie", &ada_cookie)
+        .send()
+        .await
+        .expect("wrong resume");
+    assert_eq!(wrong_resume.status(), reqwest::StatusCode::NOT_FOUND);
+    let missing_version = client
+        .get(format!(
+            "{base}/api/resumes/{resume_id}/versions/{}/file",
+            uuid::Uuid::new_v4()
+        ))
+        .header("cookie", &ada_cookie)
+        .send()
+        .await
+        .expect("missing version");
+    assert_eq!(missing_version.status(), reqwest::StatusCode::NOT_FOUND);
+
+    // A new DOCX version must not change the original PDF's file endpoint.
+    let docx = plain_docx();
+    let (content_type, body) = multipart(&docx);
+    let new_version: serde_json::Value = client
+        .post(format!("{base}/api/resumes/{resume_id}/versions"))
+        .header("cookie", &ada_cookie)
+        .header("content-type", content_type)
+        .body(body)
+        .send()
+        .await
+        .expect("docx upload")
+        .error_for_status()
+        .expect("docx accepted")
+        .json()
+        .await
+        .expect("docx version");
+    let docx_id = new_version["version_id"].as_str().expect("docx id");
+    let docx_url = format!("{base}/api/resumes/{resume_id}/versions/{docx_id}/file");
+    let original_docx = client
+        .get(&docx_url)
+        .header("cookie", &ada_cookie)
+        .send()
+        .await
+        .expect("original docx");
+    assert_eq!(original_docx.status(), reqwest::StatusCode::OK);
+    assert_eq!(original_docx.headers()["content-type"], domain::DOCX);
+    assert_eq!(
+        original_docx.headers()["content-disposition"],
+        "inline; filename=\"resume.docx\""
+    );
+    assert_eq!(
+        original_docx.bytes().await.expect("docx bytes").as_ref(),
+        docx
+    );
+    let old_pdf = client
+        .get(&file_url)
+        .header("cookie", &ada_cookie)
+        .send()
+        .await
+        .expect("old pdf");
+    assert_eq!(old_pdf.headers()["content-type"], domain::PDF);
+    assert_eq!(
+        old_pdf.bytes().await.expect("pdf bytes").as_ref(),
+        plain_pdf()
+    );
+    let hidden_docx = client
+        .get(&docx_url)
+        .header("cookie", &grace_cookie)
+        .send()
+        .await
+        .expect("hidden docx");
+    assert_eq!(hidden_docx.status(), reqwest::StatusCode::NOT_FOUND);
 
     let session_id = me["sessions"][0]["id"].as_str().expect("session");
     let refused = client

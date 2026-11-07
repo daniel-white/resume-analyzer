@@ -38,6 +38,11 @@ pub struct RemovedVersion {
     pub object_key: String,
 }
 
+pub struct VersionFile {
+    pub object_key: String,
+    pub media_type: String,
+}
+
 impl Store {
     pub async fn connect(url: &str) -> anyhow::Result<Self> {
         let pool = PgPoolOptions::new()
@@ -225,6 +230,32 @@ impl Store {
             created_at: row.try_get("created_at")?,
             versions: details,
         }))
+    }
+
+    /// Resolve a file only when both its resume and session owner match.
+    pub async fn version_file(
+        &self,
+        user_id: Uuid,
+        resume_id: Uuid,
+        version_id: Uuid,
+    ) -> anyhow::Result<Option<VersionFile>> {
+        let row = sqlx::query(
+            "select versions.object_key, versions.media_type
+             from versions join resumes on resumes.id = versions.resume_id
+             where resumes.user_id = $1 and resumes.id = $2 and versions.id = $3",
+        )
+        .bind(user_id)
+        .bind(resume_id)
+        .bind(version_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(|row| {
+            Ok(VersionFile {
+                object_key: row.try_get("object_key")?,
+                media_type: row.try_get("media_type")?,
+            })
+        })
+        .transpose()
     }
 
     pub async fn claim(&self) -> anyhow::Result<Option<Claimed>> {
