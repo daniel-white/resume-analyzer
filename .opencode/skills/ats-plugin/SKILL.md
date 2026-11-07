@@ -41,6 +41,7 @@ These are not negotiable inside a plugin branch:
 - Verdict fields are kept, dropped, a score from 0 to 100, a factor list, and the contract's deterministic summary. Factor advice and summary follow the existing templates, not free-form prose or a model call.
 - A table drop on a PDF stays inferred (`LayoutConfidence`). Do not report it as a fact.
 - Tests assert factor labels and signs, never the headline score.
+- The current readable-file calibration starts at 70 (75 for Ash). Keep Python and Rust scoring in parity. Unreadable files do not receive the 20-point readable-file uplift; preserve their low failure scores. Calibration regression tests may assert score arithmetic and bounds, but provider-bias tests must still assert factor labels/signs rather than a headline grade.
 - The legend subtitle says the system is simulated and modeled on publicly described parser behavior.
 
 ## Add one plugin

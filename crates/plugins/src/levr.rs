@@ -9,7 +9,7 @@ pub struct Levr {
 }
 
 impl Levr {
-    pub const BASE: i32 = 50;
+    pub const BASE: i32 = 70;
 
     pub fn new(secret: impl Into<String>) -> Self {
         Self {
@@ -38,7 +38,7 @@ impl Ats for Levr {
     fn read(&self, file: &ResumeFile<'_>) -> VendorRead {
         let (parse, unreadable_file) = crate::extract(file);
         let verdict = if unreadable_file {
-            unreadable_verdict(Self::BASE)
+            unreadable_verdict(Self::BASE - 20)
         } else {
             decide(&parse)
         };

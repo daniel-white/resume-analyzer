@@ -42,8 +42,11 @@ from typing import TypedDict
 PDF = "application/pdf"
 DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 MAX_FILE_BYTES = 5 * 1024 * 1024
-BASE = 50
-ASH_BASE = 55
+# A readable resume starts in a useful range; layout factors still distinguish
+# providers. Do not apply this optimism to files the parser cannot open.
+BASE = 70
+ASH_BASE = 75
+READABLE_BONUS = 20
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 MONTH = re.compile(r"\b(?:0?[1-9]|1[0-2])/(?:19|20)\d{2}\b")
@@ -388,7 +391,7 @@ def decide(provider_id: str, parsed: Read) -> Verdict:
             [],
             ["file"],
             [factor("could not read file", -40, "Upload a PDF or DOCX the parser can open.")],
-            base_for(provider_id),
+            base_for(provider_id) - READABLE_BONUS,
         )
     if provider_id == "greenline":
         return decide_greenline(parsed)
