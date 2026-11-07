@@ -1,0 +1,94 @@
+{{- if .Values.gateway.enabled }}
+# Envoy Gateway controller is installed by scripts/gateway.sh. This
+# chart only describes the Gateway the app attaches to: TLS from the
+# mkcert wildcard, NodePorts 80 and 443, and an HTTP to HTTPS redirect.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: resume-analyzer-proxy
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - name: http-80
+                  port: 80
+                  nodePort: 80
+                - name: https-443
+                  port: 443
+                  nodePort: 443
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: resume-analyzer
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: resume-analyzer-proxy
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: resume-analyzer
+spec:
+  gatewayClassName: resume-analyzer
+  listeners:
+    - name: http
+      hostname: "*.resume.local"
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      hostname: "*.resume.local"
+      port: 443
+      protocol: HTTPS
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: resume-analyzer-tls
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: https-redirect
+spec:
+  parentRefs:
+    - name: resume-analyzer
+      sectionName: http
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            port: 443
+            statusCode: 301
+{{- if and .Values.gateway.tls.cert .Values.gateway.tls.key }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: resume-analyzer-tls
+type: kubernetes.io/tls
+stringData:
+  tls.crt: |
+{{ .Values.gateway.tls.cert | indent 4 }}
+  tls.key: |
+{{ .Values.gateway.tls.key | indent 4 }}
+{{- end }}
+{{- end }}

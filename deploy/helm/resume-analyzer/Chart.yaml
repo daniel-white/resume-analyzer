@@ -1,0 +1,6 @@
+apiVersion: v2
+name: resume-analyzer
+description: API, its dependencies, and the web app once that image exists.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

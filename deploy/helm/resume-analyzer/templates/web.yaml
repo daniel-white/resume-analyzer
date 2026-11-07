@@ -1,0 +1,38 @@
+{{- if .Values.web.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels:
+    app: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: {{ .Values.web.image }}
+          imagePullPolicy: {{ .Values.web.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.web.port }}
+          env:
+            - name: API_URL
+              value: http://api:{{ .Values.api.port }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: web
+  ports:
+    - port: {{ .Values.web.port }}
+      targetPort: {{ .Values.web.port }}
+{{- end }}

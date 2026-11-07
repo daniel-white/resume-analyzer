@@ -1,0 +1,40 @@
+api:
+  # Off so `just dev` can bring the dependencies up without an image.
+  # `just demo` turns it on after the bake.
+  enabled: false
+  image: resume-analyzer/api:dev
+  pullPolicy: Never
+  port: 8080
+
+web:
+  enabled: false
+  image: resume-analyzer/web:dev
+  pullPolicy: Never
+  port: 3000
+
+gateway:
+  enabled: true
+  mdns:
+    enabled: true
+    targetIp: 127.0.0.1
+  tls:
+    cert: ""
+    key: ""
+
+postgres:
+  image: postgres:17-alpine
+  user: resume
+  password: resume
+  database: resume
+
+localstack:
+  image: localstack/localstack:4
+
+mailpit:
+  image: axllent/mailpit:v1.27
+
+s3:
+  bucket: resumes
+  region: us-east-1
+  accessKey: test
+  secretKey: test

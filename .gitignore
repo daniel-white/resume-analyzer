@@ -6,3 +6,5 @@ result-*
 .env
 *.swp
 .DS_Store
+.local-certs/
+.run/

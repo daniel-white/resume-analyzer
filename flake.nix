@@ -15,6 +15,7 @@
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
+        lib = pkgs.lib;
 
         # Pinned so every worktree builds with the same compiler.
         rustToolchain = pkgs.rust-bin.stable."1.99.1".default.override {
@@ -35,9 +36,12 @@
             sqlx-cli
             kubernetes-helm
             kubectl
-            kind
+            minikube
+            mkcert
             awscli2
-          ] ++ buildInputs;
+          ]
+          ++ lib.optionals pkgs.stdenv.isDarwin [ pkgs.vfkit ]
+          ++ buildInputs;
 
           env = {
             RUST_BACKTRACE = "1";

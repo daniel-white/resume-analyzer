@@ -1,0 +1,11 @@
+target
+.worktrees
+.git
+.direnv
+result
+result-*
+web/node_modules
+web/.output
+web/.nitro
+.local-certs
+.run
