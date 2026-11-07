@@ -1,6 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 
-import { BackLink } from "~/components/back-link";
 import { ExtractStrip } from "~/components/extract-strip";
 import { ResumeOverview } from "~/components/resume-overview";
 import { ResumeDetailsSkeleton } from "~/components/resume-loading";
@@ -14,12 +13,13 @@ import { ResumeVersions } from "~/components/resume-versions";
 import { getTeardown } from "~/fns/resumes.functions";
 
 export const Route = createFileRoute("/resumes/$id")({
-  validateSearch: (search: Record<string, unknown>): { version?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { version?: string; provider?: string } => ({
     version: typeof search.version === "string" && search.version ? search.version : undefined,
+    provider: typeof search.provider === "string" && search.provider ? search.provider : undefined,
   }),
-  loaderDeps: ({ search }) => ({ versionId: search.version }),
+  loaderDeps: ({ search }) => ({ versionId: search.version, provider: search.provider }),
   loader: async ({ params, deps }) => {
-    const view = await getTeardown({ data: { id: params.id, versionId: deps.versionId } });
+    const view = await getTeardown({ data: { id: params.id, versionId: deps.versionId, provider: deps.provider } });
     if (view.kind === "missing") throw notFound();
     return view;
   },
@@ -33,11 +33,11 @@ export const Route = createFileRoute("/resumes/$id")({
 function TeardownPage() {
   const view = Route.useLoaderData();
   const { id } = Route.useParams();
+  const { provider } = Route.useSearch();
 
   return (
     <Page wide>
       <SiteHeader email={view.email} />
-      <BackLink />
       <ResumeOverview filename={view.filename} cards={view.cards}
         number={view.versions.find((version) => version.id === view.versionId)!.number} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
@@ -49,7 +49,7 @@ function TeardownPage() {
         </div>
         <section className="analysis-results" aria-label="System results">
           <div className="results-heading"><h2>ATS results</h2><p>Select a system to view extracted content and score details.</p></div>
-          <VerdictGrid cards={view.cards} />
+          <VerdictGrid cards={view.cards} provider={provider} />
           <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
         </section>
       </div>
