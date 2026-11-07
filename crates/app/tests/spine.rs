@@ -368,3 +368,251 @@ async fn upload_reaches_a_callback() {
         .expect("plugins json");
     assert_eq!(plugins["plugins"][0]["id"], "stub");
 }
+
+/// A real Python HTTP handoff after registry growth preserves completed runs.
+#[tokio::test]
+async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() {
+    use domain::{Ats, ResumeDetail, ResumeStatus};
+    use std::collections::HashMap;
+    use std::process::{Child, Command, Stdio};
+
+    struct ProviderProcess(Child);
+    impl Drop for ProviderProcess {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    let database = database().await;
+    let store = storage::Store::connect(&database.url).await.unwrap();
+    store.migrate().await.unwrap();
+    let objects = Arc::new(MemoryObjects::default());
+    let now = auth::OffsetDateTime::now_utc();
+    let issued = auth::request_magic_link(store.pool(), "indy-test@example.com", now)
+        .await
+        .unwrap();
+    let session = auth::verify_magic_link(store.pool(), &issued.token, now)
+        .await
+        .unwrap();
+    let auth_secret = "indy-auth-test-secret";
+    let cookie = format!("session={}", auth::seal_session(auth_secret, session.id));
+    let plugin_secret = "indy-callback-test-secret";
+    let original_plugins: Vec<Arc<dyn Ats>> = vec![Arc::new(plugins::Stub::new(plugin_secret))];
+    let bus = Bus::default();
+    let serve = |plugins: Vec<Arc<dyn Ats>>| {
+        let api = Arc::new(Api {
+            store: store.clone(),
+            objects: objects.clone(),
+            plugins,
+            bus: bus.clone(),
+            mail: mail::Smtp::new("127.0.0.1", 1),
+            auth_secret: auth_secret.into(),
+            app_origin: "http://127.0.0.1:3000".into(),
+            cookie_secure: false,
+        });
+        async move {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let base = format!("http://{}", listener.local_addr().unwrap());
+            let task = tokio::spawn(async move {
+                axum::serve(listener, api_router(api)).await.unwrap();
+            });
+            (base, task)
+        }
+    };
+    let (old_base, old_server) = serve(original_plugins.clone()).await;
+    let old_worker = Worker::new(
+        store.clone(),
+        objects.clone(),
+        original_plugins.clone(),
+        bus.clone(),
+        old_base.clone(),
+    );
+    let old = upload(&old_base, &cookie, "old.pdf", &plain_pdf()).await;
+    old_worker.drain().await.unwrap();
+    let client = reqwest::Client::new();
+    let old_detail: ResumeDetail = client
+        .get(format!(
+            "{old_base}/api/resumes/{}",
+            old["id"].as_str().unwrap()
+        ))
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(old_detail.versions[0].status, ResumeStatus::Complete);
+    let original_run = old_detail.versions[0].runs[0].clone();
+
+    // Leave the previous completed version untouched when reconciling the newest.
+    let second = client
+        .post(format!("{old_base}/api/resumes/{}/versions", old_detail.id))
+        .header("cookie", &cookie)
+        .header("content-type", multipart("new.pdf", &plain_pdf()).0)
+        .body(multipart("new.pdf", &plain_pdf()).1)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(second.status(), reqwest::StatusCode::ACCEPTED);
+    old_worker.drain().await.unwrap();
+    let completed: ResumeDetail = client
+        .get(format!("{old_base}/api/resumes/{}", old_detail.id))
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(completed.versions[0].status, ResumeStatus::Complete);
+    let newest_original_run = completed.versions[0].runs[0].clone();
+
+    let mut active = original_plugins;
+    active.push(Arc::new(plugins::IndyHackersHiring::new(plugin_secret)));
+    let (base, server) = serve(active.clone()).await;
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = listener.local_addr().unwrap().port();
+    drop(listener);
+    let python = std::env::var("PYTHON3").unwrap_or_else(|_| "python3".into());
+    let mut command = Command::new(python);
+    #[cfg(target_os = "macos")]
+    command.env_remove("DEVELOPER_DIR");
+    let mut provider = ProviderProcess(
+        command
+            .current_dir(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .args([
+                "-m",
+                "providers",
+                "indy_hackers_hiring",
+                "--port",
+                &port.to_string(),
+            ])
+            .env("PLUGIN_SECRET", plugin_secret)
+            .env("ATS_DELAY", "0,0")
+            .stdout(Stdio::null())
+            .spawn()
+            .expect("Python provider"),
+    );
+    let endpoint = format!("http://127.0.0.1:{port}");
+    let mut healthy = false;
+    for _ in 0..100 {
+        if let Ok(response) = client.get(format!("{endpoint}/health")).send().await {
+            let body: serde_json::Value = response.json().await.unwrap();
+            assert_eq!(body["id"], "indy_hackers_hiring");
+            healthy = true;
+            break;
+        }
+        assert!(
+            provider.0.try_wait().unwrap().is_none(),
+            "provider exited before health"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(healthy, "provider never became healthy");
+    let worker = Worker::new(store.clone(), objects, active, bus, base.clone())
+        .endpoints(HashMap::from([("indy_hackers_hiring".into(), endpoint)]));
+    let detail_url = format!("{base}/api/resumes/{}", old_detail.id);
+    assert_eq!(
+        client.get(&detail_url).send().await.unwrap().status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+    let other_link = auth::request_magic_link(store.pool(), "other-indy@example.com", now)
+        .await
+        .unwrap();
+    let other = auth::verify_magic_link(store.pool(), &other_link.token, now)
+        .await
+        .unwrap();
+    let other_cookie = format!("session={}", auth::seal_session(auth_secret, other.id));
+    assert_eq!(
+        client
+            .get(&detail_url)
+            .header("cookie", other_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NOT_FOUND
+    );
+    let count: i64 =
+        sqlx::query_scalar("select count(*) from runs where plugin_id = 'indy_hackers_hiring'")
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+    assert_eq!(count, 0);
+    let (left, right) = tokio::join!(
+        client.get(&detail_url).header("cookie", &cookie).send(),
+        client.get(&detail_url).header("cookie", &cookie).send(),
+    );
+    for response in [left.unwrap(), right.unwrap()] {
+        let detail: ResumeDetail = response.json().await.unwrap();
+        assert_eq!(detail.versions[0].runs.len(), 2);
+        assert!(detail.versions[0].runs.contains(&newest_original_run));
+        assert_eq!(detail.versions[1], old_detail.versions[0]);
+        assert_eq!(detail.versions[1].runs[0], original_run);
+    }
+    let repeated: ResumeDetail = client
+        .get(&detail_url)
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    // A concurrent response may read the version status before the other
+    // request commits its fanout. Once both finish, authoritative state is running.
+    assert_eq!(repeated.versions[0].status, ResumeStatus::Running);
+    assert_eq!(repeated.versions[0].runs.len(), 2);
+    let count: i64 = sqlx::query_scalar("select count(*) from outbox where name = 'AtsRunRequested' and payload->>'plugin_id' = 'indy_hackers_hiring'")
+        .fetch_one(store.pool()).await.unwrap();
+    assert_eq!(count, 1);
+
+    let fresh = upload(&base, &cookie, "fresh.docx", &designed_docx()).await;
+    worker.drain().await.unwrap();
+    for resume_id in [
+        old_detail.id.to_string(),
+        fresh["id"].as_str().unwrap().to_owned(),
+    ] {
+        let mut complete = false;
+        for _ in 0..100 {
+            let detail: ResumeDetail = client
+                .get(format!("{base}/api/resumes/{resume_id}"))
+                .header("cookie", &cookie)
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            if detail.versions[0].status == ResumeStatus::Complete {
+                let run = detail.versions[0]
+                    .runs
+                    .iter()
+                    .find(|r| r.plugin_id == "indy_hackers_hiring")
+                    .unwrap();
+                assert!(run.parse.is_some());
+                assert_eq!(
+                    run.verdict
+                        .as_ref()
+                        .unwrap()
+                        .report
+                        .as_ref()
+                        .unwrap()
+                        .engine,
+                    "Compact Intake"
+                );
+                complete = true;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(
+            complete,
+            "resume did not complete through signed Python callback"
+        );
+    }
+    old_server.abort();
+    server.abort();
+}

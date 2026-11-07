@@ -10,14 +10,14 @@ function version(number: number, scores: ComparisonVersion["scores"]): Compariso
 
 describe("comparison rows", () => {
   it("shows each system's logo and the before/after letter grades with numeric scores", () => {
-    const systems = ["greenline", "levr", "workdaye", "ash", "smart_resume"];
+    const systems = ["greenline", "levr", "workdaye", "ash", "smart_resume", "indy_hackers_hiring"];
     const html = renderToStaticMarkup(<ResumeComparison versionId="v2" versions={[
       version(1, systems.map((id) => ({ id, name: id, score: 77 }))),
       version(2, systems.map((id) => ({ id, name: id, score: 93 }))),
     ]} />);
     for (const id of systems) expect(html).toContain(`src="/marks/${id}.png"`);
-    expect(html.match(/aria-label="Grade C\+"/g)).toHaveLength(6);
-    expect(html.match(/aria-label="Grade A"/g)).toHaveLength(6);
+    expect(html.match(/aria-label="Grade C\+"/g)).toHaveLength(systems.length + 1);
+    expect(html.match(/aria-label="Grade A"/g)).toHaveLength(systems.length + 1);
     expect(html).toContain('comparison-numeric-score">77</span>');
     expect(html).toContain('comparison-numeric-score">93</span>');
     expect(html).toContain("Up 16 points");

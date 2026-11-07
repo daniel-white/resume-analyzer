@@ -50,7 +50,7 @@ case "$mode" in
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
 api:
-  providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080,smart_resume=http://smart-resume:8080"
+  providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080,smart_resume=http://smart-resume:8080,indy_hackers_hiring=http://indy-hackers-hiring:8080"
   callbackUrl: http://api:8080
   pluginSecret: spine-stub-secret
 EOF
@@ -76,7 +76,7 @@ echo
 echo "https://mail.resume.local"
 if [[ "$mode" == "demo" ]]; then
   echo "https://app.resume.local"
-  echo "ats providers stay inside the cluster (greenline, levr, workdaye, ash, smart_resume on :8080)"
+  echo "ats providers stay inside the cluster (greenline, levr, workdaye, ash, smart_resume, indy_hackers_hiring on :8080)"
 else
   echo "API is on the host. https://app.resume.local serves it only in demo mode."
 fi
@@ -102,6 +102,7 @@ if [[ "$mode" == "deps" ]]; then
   forward workdaye svc/workdaye 8103:8080
   forward ash svc/ash 8104:8080
   forward smart_resume svc/smart-resume 8105:8080
+  forward indy_hackers_hiring svc/indy-hackers-hiring 8106:8080
   echo "port-forwards: postgres 54329, localstack 4566, mailpit 1025 and 8025"
-  echo "provider port-forwards (not routed): greenline 8101, levr 8102, workdaye 8103, ash 8104, smart_resume 8105"
+  echo "provider port-forwards (not routed): greenline 8101, levr 8102, workdaye 8103, ash 8104, smart_resume 8105, indy_hackers_hiring 8106"
 fi

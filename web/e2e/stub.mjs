@@ -20,6 +20,11 @@ const plugins = [
     name: "SmartResume",
     subtitle: "Keeps table text and headers, loses text boxes. Simulated, modeled on publicly described parser behavior.",
   },
+  {
+    id: "indy_hackers_hiring",
+    name: "IndyHackersHiring",
+    subtitle: "Tolerates tables and text boxes, loses columns and images. Simulated, modeled on publicly described parser behavior.",
+  },
 ];
 
 const scenarios = new Map();
