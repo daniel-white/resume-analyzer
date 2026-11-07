@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { isRedirect, useNavigate } from "@tanstack/react-router";
 import { useState, type ChangeEvent } from "react";
 
 import { uploadResume } from "~/fns/resumes.functions";
@@ -26,7 +26,11 @@ export function DropZone({ copy }: { copy: DropCopy }) {
         return;
       }
       await navigate({ to: "/resumes/$id", params: { id: result.id } });
-    } catch {
+    } catch (error) {
+      if (isRedirect(error)) {
+        await navigate({ to: "/login" });
+        return;
+      }
       setError("That file did not store.");
       setBusy(false);
     }

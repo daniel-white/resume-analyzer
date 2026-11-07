@@ -14,12 +14,12 @@ export const Route = createFileRoute("/")({
 });
 
 function LibraryPage() {
-  const { rows, drop } = Route.useLoaderData();
+  const { rows, drop, email } = Route.useLoaderData();
   const reading = rows.some((row) => row.status !== "scored");
 
   return (
     <Page>
-      <SiteHeader />
+      <SiteHeader email={email} />
       <RefreshWhileReading active={reading} />
       <DropZone copy={drop} />
       {rows.length === 0 ? <EmptyNote /> : null}

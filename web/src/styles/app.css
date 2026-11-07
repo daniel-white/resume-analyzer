@@ -50,6 +50,29 @@ a {
   font-size: 14px;
 }
 
+.who {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.who button,
+.sign button.text,
+.sign a {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.who button:disabled {
+  cursor: default;
+}
+
 .top {
   display: flex;
   justify-content: space-between;
@@ -322,4 +345,77 @@ a {
 
 .missing p {
   margin: 16px 0 0;
+}
+
+.sign {
+  margin-top: 56px;
+  max-width: 28rem;
+}
+
+.sign h1 {
+  font-weight: 500;
+  font-size: 34px;
+  margin: 0 0 8px;
+  letter-spacing: -0.02em;
+}
+
+.sign p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.sign label {
+  display: block;
+  margin-top: 28px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sign input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sign input:focus {
+  outline: 1px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.sign .error {
+  color: var(--low);
+  margin-top: 12px;
+}
+
+.sign button[type="submit"] {
+  margin-top: 20px;
+  padding: 12px 18px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.sign button[type="submit"]:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.sign button.text,
+.sign a {
+  display: inline-block;
+  margin-top: 20px;
+  font-size: 16px;
 }

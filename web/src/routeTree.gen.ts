@@ -10,12 +10,24 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LoginVerifyRouteImport } from './routes/login.verify'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthRouteImport } from './routes/health'
 import { Route as ResumesIdRouteImport } from './routes/resumes/$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginVerifyRoute = LoginVerifyRouteImport.update({
+  id: '/login/verify',
+  path: '/login/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HealthRoute = HealthRouteImport.update({
@@ -31,30 +43,38 @@ const ResumesIdRoute = ResumesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login/verify': typeof LoginVerifyRoute
+  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login/verify': typeof LoginVerifyRoute
+  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/login/verify': typeof LoginVerifyRoute
+  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/health' | '/resumes/$id'
+  fullPaths: '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/health' | '/resumes/$id'
-  id: '__root__' | '/' | '/health' | '/resumes/$id'
+  to: '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
+  id: '__root__' | '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  LoginVerifyRoute: typeof LoginVerifyRoute
+  LoginRoute: typeof LoginRoute
   HealthRoute: typeof HealthRoute
   ResumesIdRoute: typeof ResumesIdRoute
 }
@@ -66,6 +86,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login/verify': {
+      id: '/login/verify'
+      path: '/login/verify'
+      fullPath: '/login/verify'
+      preLoaderRoute: typeof LoginVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/health': {
@@ -87,6 +121,8 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  LoginVerifyRoute: LoginVerifyRoute,
+  LoginRoute: LoginRoute,
   HealthRoute: HealthRoute,
   ResumesIdRoute: ResumesIdRoute,
 }

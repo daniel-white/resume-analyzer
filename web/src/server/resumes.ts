@@ -1,3 +1,5 @@
+import { apiFetch } from "./session";
+
 export type ResumeStatus = "uploaded" | "parsed" | "running" | "complete";
 export type RunStatus = "requested" | "complete";
 export type DateStyle = "mm-yyyy" | "other" | "absent";
@@ -334,17 +336,20 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[]): Teardown {
 
 export function uploadFailure(status: number, body: string): string {
   const text = body.trim();
-  if (text && text.length <= 200) return text;
-  if (status === 413) return "That file is over five megabytes.";
+  if (text && text.length <= 200 && !text.startsWith("{")) return text;
   if (status === 415) return "That file is neither a PDF nor a DOCX.";
+  if (status === 413) return "That file is over five megabytes.";
   return "That file did not store.";
 }
 
-export async function fetchLibrary(baseUrl: string): Promise<LibraryView> {
-  const list = await fetchResumeList(baseUrl);
+export async function fetchLibrary(
+  baseUrl: string,
+  cookie: string | undefined,
+): Promise<LibraryView> {
+  const list = await fetchResumeList(baseUrl, cookie);
   const rows = await Promise.all(
     list.map(async (summary) => {
-      const detail = await fetchResume(baseUrl, summary.id);
+      const detail = await fetchResume(baseUrl, summary.id, cookie);
       const version = detail?.versions.find((item) => item.id === summary.latest.id);
       return libraryRow(summary, version?.runs ?? []);
     }),
@@ -352,56 +357,64 @@ export async function fetchLibrary(baseUrl: string): Promise<LibraryView> {
   return libraryView(rows);
 }
 
-export async function fetchTeardown(baseUrl: string, id: string): Promise<Teardown> {
+export async function fetchTeardown(
+  baseUrl: string,
+  id: string,
+  cookie: string | undefined,
+): Promise<Teardown> {
   const [detail, plugins] = await Promise.all([
-    fetchResume(baseUrl, id),
+    fetchResume(baseUrl, id, cookie),
     fetchPlugins(baseUrl),
   ]);
   if (!detail) return { kind: "missing" };
   return teardown(detail, plugins);
 }
 
-export async function postResume(baseUrl: string, file: File): Promise<UploadResult> {
+export async function postResume(
+  baseUrl: string,
+  file: File,
+  cookie: string | undefined,
+): Promise<UploadResult> {
   if (file.size === 0) {
     return { ok: false, message: "Choose a PDF or DOCX." };
   }
   const body = new FormData();
   body.set("file", file, file.name);
-  const response = await fetch(new URL("/api/resumes", baseUrl), {
-    method: "POST",
-    body,
-  });
-  if (!response.ok) {
-    return { ok: false, message: uploadFailure(response.status, await response.text()) };
+  const result = await apiFetch(baseUrl, "/api/resumes", cookie, { method: "POST", body });
+  if (!result.ok) {
+    return { ok: false, message: uploadFailure(result.status, result.body) };
   }
-  const accepted = (await response.json()) as AcceptedUpload;
+  const accepted = (await result.value.json()) as AcceptedUpload;
   return { ok: true, id: accepted.id, version_id: accepted.version_id };
 }
 
-async function fetchResumeList(baseUrl: string): Promise<ResumeSummary[]> {
-  const response = await fetch(new URL("/api/resumes", baseUrl));
-  if (!response.ok) {
-    throw new Error(`resumes returned ${response.status}`);
-  }
-  const body = (await response.json()) as { resumes: ResumeSummary[] };
+async function fetchResumeList(
+  baseUrl: string,
+  cookie: string | undefined,
+): Promise<ResumeSummary[]> {
+  const result = await apiFetch(baseUrl, "/api/resumes", cookie);
+  if (!result.ok) throw new Error(`resumes returned ${result.status}`);
+  const body = (await result.value.json()) as { resumes: ResumeSummary[] };
   return body.resumes;
 }
 
-async function fetchResume(baseUrl: string, id: string): Promise<ResumeDetail | null> {
-  const response = await fetch(new URL(`/api/resumes/${id}`, baseUrl));
-  if (response.status === 404) return null;
-  if (!response.ok) {
-    throw new Error(`resume ${id} returned ${response.status}`);
+async function fetchResume(
+  baseUrl: string,
+  id: string,
+  cookie: string | undefined,
+): Promise<ResumeDetail | null> {
+  const result = await apiFetch(baseUrl, `/api/resumes/${id}`, cookie);
+  if (!result.ok) {
+    if (result.status === 404) return null;
+    throw new Error(`resume ${id} returned ${result.status}`);
   }
-  return (await response.json()) as ResumeDetail;
+  return (await result.value.json()) as ResumeDetail;
 }
 
 async function fetchPlugins(baseUrl: string): Promise<Plugin[]> {
-  const response = await fetch(new URL("/api/plugins", baseUrl));
-  if (!response.ok) {
-    throw new Error(`plugins returned ${response.status}`);
-  }
-  const body = (await response.json()) as { plugins: Plugin[] };
+  const result = await apiFetch(baseUrl, "/api/plugins", undefined);
+  if (!result.ok) throw new Error(`plugins returned ${result.status}`);
+  const body = (await result.value.json()) as { plugins: Plugin[] };
   return body.plugins;
 }
 

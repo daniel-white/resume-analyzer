@@ -26,7 +26,7 @@ function TeardownPage() {
 
   return (
     <Page wide>
-      <SiteHeader />
+      <SiteHeader email={view.email} />
       <BackLink />
       <RefreshWhileReading active={view.kind === "reading"} />
       <FileHeading filename={view.filename} />

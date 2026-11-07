@@ -1,11 +1,12 @@
 import { BackLink } from "./back-link";
 import { Page } from "./page";
-import { SiteHeader } from "./site-header";
 
 export function NotFound() {
   return (
     <Page wide>
-      <SiteHeader />
+      <header className="top">
+        <div className="wordmark">Resume analyzer</div>
+      </header>
       <BackLink />
       <div className="missing">
         <h1>That resume is not here.</h1>
