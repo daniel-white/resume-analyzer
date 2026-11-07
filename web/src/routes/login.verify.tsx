@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 
 import { Page } from "~/components/page";
+import { PublicHeader } from "~/components/public-header";
 import { verifyLink } from "~/fns/auth.functions";
 
 type VerifySearch = {
@@ -24,9 +25,7 @@ export const Route = createFileRoute("/login/verify")({
 function SigningIn() {
   return (
     <Page>
-      <header className="top">
-        <div className="wordmark">Resume analyzer</div>
-      </header>
+      <PublicHeader />
       <div className="sign">
         <h1>Signing you in</h1>
         <p>One moment.</p>
@@ -41,9 +40,7 @@ function VerifyPage() {
 
   return (
     <Page>
-      <header className="top">
-        <div className="wordmark">Resume analyzer</div>
-      </header>
+      <PublicHeader />
       <div className="sign">
         <h1>That link did not work</h1>
         <p>{message}</p>

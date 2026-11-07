@@ -2,6 +2,8 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 
 import { Page } from "~/components/page";
+import { PublicHeader } from "~/components/public-header";
+import { ArrowRight, Mail, ShieldCheck } from "lucide-react";
 import { getAccount, sendMagicLink } from "~/fns/auth.functions";
 
 export const Route = createFileRoute("/login/")({
@@ -40,13 +42,13 @@ function LoginPage() {
 
   return (
     <Page>
-      <header className="top">
-        <div className="wordmark">The Other Read</div>
-      </header>
+      <PublicHeader />
+      <div className="auth-intro"><p className="eyebrow">ONE LINK. A DIFFERENT PERSPECTIVE.</p><h2>Your next chapter<br />starts <em>here.</em></h2><p>See the other side of your resume. Keep your results together.<br />Make your next version count.</p></div>
       {sent ? (
-        <div className="sign">
+        <div className="sign" role="status">
+          <span className="sign-icon"><Mail size={26} aria-hidden="true" /></span>
           <h1>Check your email</h1>
-          <p>A sign-in link is on its way. It expires in fifteen minutes.</p>
+          <p>A sign-in link is on its way to <strong>{email}</strong>. It expires in fifteen minutes.</p>
           <button
             type="button"
             className="text"
@@ -60,6 +62,7 @@ function LoginPage() {
         </div>
       ) : (
         <form className="sign" onSubmit={onSubmit}>
+          <span className="sign-icon"><Mail size={26} aria-hidden="true" /></span>
           <h1>Sign in</h1>
           <p>We’ll email you a link. No password.</p>
           <label>
@@ -69,6 +72,8 @@ function LoginPage() {
               name="email"
               autoComplete="email"
               required
+              placeholder="you@example.com"
+              disabled={busy}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />
@@ -80,7 +85,9 @@ function LoginPage() {
           ) : null}
           <button type="submit" disabled={busy}>
             {busy ? "Sending" : "Email me a link"}
+            <ArrowRight size={18} aria-hidden="true" />
           </button>
+          <p className="sign-note"><ShieldCheck size={15} aria-hidden="true" /> No password. Just a secure email link.</p>
         </form>
       )}
     </Page>

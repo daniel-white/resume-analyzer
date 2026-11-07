@@ -24,6 +24,7 @@ function LibraryPage() {
     <Page>
       <SiteHeader email={email} />
       <div className="library-heading">
+        <p className="eyebrow">YOUR NEXT CHAPTER, IN PROGRESS</p>
         <h1>Your resumes</h1>
         <p>{rows.length === 0 ? "Upload a resume to view ATS scores and parsing results." : "Manage your resumes, versions, and ATS results."}</p>
       </div>

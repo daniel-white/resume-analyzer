@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import { getHealth } from "~/fns/health.functions";
 import { summarize } from "~/server/health";
+import { Page } from "~/components/page";
+import { PublicHeader } from "~/components/public-header";
 
 export const Route = createFileRoute("/health")({
   loader: () => getHealth(),
@@ -11,12 +13,14 @@ export const Route = createFileRoute("/health")({
 function HealthPage() {
   const health = Route.useLoaderData();
   return (
-    <main className="wrap">
-      <p className="who">Dependency check</p>
-      <div className="filehead">
-        <h1>Resume analyzer</h1>
+    <Page>
+      <PublicHeader />
+      <div className="library-heading">
+        <p className="eyebrow">BEHIND THE OTHER READ</p>
+        <h1>Dependency check</h1>
+        <p>A quick look at the services that keep your next read running.</p>
       </div>
-      <p className="check">{summarize(health)}</p>
-    </main>
+      <p className="health-summary sheet-face">{summarize(health)}</p>
+    </Page>
   );
 }

@@ -1,15 +1,15 @@
 import { BackLink } from "./back-link";
 import { Page } from "./page";
+import { PublicHeader } from "./public-header";
 
 export function NotFound() {
   return (
     <Page wide>
-      <header className="top">
-        <div className="wordmark">Resume analyzer</div>
-      </header>
+      <PublicHeader />
       <BackLink />
       <div className="missing">
         <h1>That resume is not here.</h1>
+        <p>It may have been removed, or the link may be incomplete. Head back to your resumes for another read.</p>
       </div>
     </Page>
   );

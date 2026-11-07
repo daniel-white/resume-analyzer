@@ -11,7 +11,7 @@ test("sends a magic link and offers another email", async ({ page }) => {
   await page.getByRole("button", { name: "Email me a link" }).click();
 
   await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
-  await expect(page.getByText("A sign-in link is on its way.")).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("A sign-in link is on its way to ada@example.com.");
 
   await page.getByRole("button", { name: "Use a different email" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
