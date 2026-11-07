@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # deps:  dependencies + gateway + hostnames, API still runs on the host.
-# demo:  also load the baked images and run the API (and web, if built)
-#        inside the cluster.
+# demo:  bake the API and the compiled web app, load them, and serve both
+#        on https://app.resume.local. /api stays on Rust; / is the web pod.
 # The ATS stubs are a separate chart. ClusterIP only, never a gateway route.
 set -euo pipefail
 
@@ -36,13 +36,10 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    "$root/scripts/bake.sh" api
+    "$root/scripts/bake.sh" --load api web
     minikube image load --profile "$profile" resume-analyzer/api:dev
-    if docker image inspect resume-analyzer/web:dev >/dev/null 2>&1; then
-      minikube image load --profile "$profile" resume-analyzer/web:dev
-      args+=(--set web.enabled=true)
-    fi
-    args+=(--set api.enabled=true)
+    minikube image load --profile "$profile" resume-analyzer/web:dev
+    args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
 api:
@@ -59,6 +56,14 @@ EOF
 esac
 
 helm "${args[@]}"
+
+# The local demo tags are reused. Helm alone will not replace pods when
+# only the image contents changed.
+if [[ "$mode" == "demo" ]]; then
+  kubectl rollout restart deployment/api deployment/web
+  kubectl rollout status deployment/api --timeout=5m
+  kubectl rollout status deployment/web --timeout=5m
+fi
 
 echo
 echo "https://mail.resume.local"

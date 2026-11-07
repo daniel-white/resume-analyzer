@@ -6,7 +6,8 @@ dev:
     ./scripts/up.sh deps
     ATS_PROVIDERS="greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104" CALLBACK_URL="http://host.minikube.internal:8080" cargo run -p app
 
-# Bake the API image, load it, and run it in the cluster.
+# Bake the API and the compiled web app, load them, and serve both
+# from https://app.resume.local.
 demo:
     ./scripts/up.sh demo
 

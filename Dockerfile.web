@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 
+# The compiled web app. `just demo` loads this image and the chart
+# routes https://app.resume.local/ at it. /api stays on the Rust pod.
 FROM node:22-bookworm AS build
 WORKDIR /src
 # Tool installation does not depend on application manifests.

@@ -13,6 +13,8 @@ api:
   pluginSecret: "spine-stub-secret"
 
 web:
+  # Off for `just dev`. `just demo` bakes the image and turns this on,
+  # so https://app.resume.local/ is the compiled web app.
   enabled: false
   image: resume-analyzer/web:dev
   pullPolicy: Never

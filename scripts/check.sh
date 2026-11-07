@@ -9,6 +9,7 @@ cd "$root"
 run_rust=0
 run_web=0
 run_factory=0
+run_demo=0
 
 base=""
 if git rev-parse --verify --quiet main >/dev/null; then
@@ -35,10 +36,14 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
   if printf '%s\n' "$files" | grep -Eq '^(scripts/(factory(_test)?\.sh|check\.sh)|factory/|\.opencode/skills/ats-plugin/)'; then
     run_factory=1
   fi
+  if printf '%s\n' "$files" | grep -Eq '^(Dockerfile(\.web)?$|docker-bake\.hcl$|deploy/|scripts/(up|demo_test)\.sh$)'; then
+    run_demo=1
+  fi
 else
   run_rust=1
   run_web=1
   run_factory=1
+  run_demo=1
 fi
 
 if [[ ! -f Cargo.toml ]]; then
@@ -50,8 +55,11 @@ fi
 if [[ ! -f scripts/factory_test.sh ]]; then
   run_factory=0
 fi
+if [[ ! -f scripts/demo_test.sh ]]; then
+  run_demo=0
+fi
 
-if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_factory" == 0 ]]; then
+if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_factory" == 0 && "$run_demo" == 0 ]]; then
   echo "check: nothing to build"
   exit 0
 fi
@@ -80,4 +88,9 @@ fi
 if [[ "$run_factory" == 1 ]]; then
   echo "check: factory"
   bash scripts/factory_test.sh
+fi
+
+if [[ "$run_demo" == 1 ]]; then
+  echo "check: demo"
+  bash scripts/demo_test.sh
 fi

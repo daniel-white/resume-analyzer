@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build images with docker buildx bake. Pass a target or group name
-# (`api`, `web`, `all`); the default group is the API only.
+# (`api`, `web`, `all`). The default group is the API only. `just demo`
+# bakes `api` and `web` and routes both through app.resume.local.
 set -euo pipefail
 
 root=$(git rev-parse --show-toplevel)
