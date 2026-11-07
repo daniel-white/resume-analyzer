@@ -37,6 +37,11 @@ assert(targets.api.tags.includes("resume-analyzer/api:dev"));
 '
 grep -Fq '"$root/scripts/bake.sh" --load api web' scripts/up.sh
 grep -Fq 'args+=(--set api.enabled=true --set web.enabled=true)' scripts/up.sh
+grep -Fq 'COPY web/src ./src' Dockerfile.web
+if grep -Fq 'COPY web/ ./' Dockerfile.web; then
+  echo "demo: do not copy local generated web state into the image" >&2
+  exit 1
+fi
 if grep -q 'image inspect resume-analyzer/web' scripts/up.sh; then
   echo "demo: web must be built, not conditionally reused" >&2
   exit 1
