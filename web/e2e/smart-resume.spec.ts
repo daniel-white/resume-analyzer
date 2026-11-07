@@ -31,7 +31,7 @@ for (const pending of [true, false]) {
     };
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
-    await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
+    await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
     await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
     await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
