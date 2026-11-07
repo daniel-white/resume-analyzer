@@ -28,7 +28,7 @@ export function SiteHeader({ email }: { email: string }) {
 
   return (
     <header className="site-navigation">
-      <Link to="/" className="brand"><span className="brand-mark"><BookOpen size={21} aria-hidden="true" /></span><span className="wordmark">The Other Read<span className="brand-caption">A second look at your resume</span></span></Link>
+      <Link to="/" className="brand"><span className="brand-mark"><BookOpen size={21} aria-hidden="true" /></span><span className="wordmark">The Other Read<span className="brand-caption">Resume analysis</span></span></Link>
       <nav aria-label="Main navigation">
         <Link to="/" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Files size={16} aria-hidden="true" /> Your resumes</Link>
       </nav>

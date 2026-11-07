@@ -69,9 +69,9 @@ export function DropZone({ copy }: { copy: DropCopy }) {
         disabled={busy}
       />
       <span className={`drop-icon ${copy.tone === "empty" ? "first-upload" : ""}`} aria-hidden="true">{busy ? <LoaderCircle className="busy-icon" size={30} /> : <FileText size={30} strokeWidth={1.4} />}</span>
-      <h2>{busy ? "Storing the file" : copy.title}</h2>
-      {copy.hint ? <p>{copy.hint}</p> : null}
-      <span className="upload-callout">{busy ? "Starting your independent reads…" : <><Upload size={16} aria-hidden="true" />Choose a resume</>}</span>
+      <h2>{busy ? "Uploading resume…" : copy.tone === "empty" ? "Upload your first resume" : "Upload a resume"}</h2>
+      <p>Drag and drop a file here or choose one below.</p>
+      <span className="upload-callout">{busy ? "Starting analysis…" : <><Upload size={16} aria-hidden="true" />Choose file</>}</span>
       <span className="upload-formats">PDF or DOCX · Up to 5 MB</span>
       {busy ? <span className="sr-only" role="status">Storing your resume. Please wait.</span> : null}
       {error ? (

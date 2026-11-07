@@ -37,7 +37,7 @@ test("follows a magic link into the library", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByText("ada@example.com")).toBeVisible();
-  await expect(page.getByText("Nothing stored yet.")).toBeVisible();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
 });
 
 test("explains a link that did not sign in", async ({ page }) => {

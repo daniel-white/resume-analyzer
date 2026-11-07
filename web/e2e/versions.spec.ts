@@ -24,6 +24,8 @@ test("selects version-specific results and preserves selection on reload", async
   await expect(page.getByRole("heading", { name: "older.pdf" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Download original" })).toHaveAttribute("download", "older.pdf");
   await expect(greenline.getByLabel("Grade A", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("A");
+  await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("Excellent");
   await page.reload();
   await expect(page.getByLabel("Version", { exact: true })).toHaveValue("older-version");
   await expect(greenline.getByLabel("Grade A", { exact: true })).toBeVisible();
@@ -38,7 +40,7 @@ test("uploads a new version of the same resume and can return to old results", a
   });
   await expect(page).toHaveURL(new RegExp(`/resumes/${designed.id}\\?version=`));
   await expect(page.getByRole("heading", { name: "revised.pdf" })).toBeVisible();
-  await expect(page.getByRole("status").filter({ hasText: "New version stored." })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "New version uploaded." })).toBeVisible();
   await expect(page.getByLabel("Version", { exact: true }).locator("option")).toHaveCount(2);
   await expect(page.getByLabel("Pending").first()).toBeVisible();
   await page.getByLabel("Version", { exact: true }).selectOption(designed.versions[0].id);
@@ -68,10 +70,11 @@ test("deletes all versions and returns to the library", async ({ page }) => {
   await installApi(page, { resumes: [versioned] });
   await page.goto(`/resumes/${designed.id}`);
   await ready(page);
-  await page.getByRole("button", { name: "Delete all versions" }).click();
+  await page.getByRole("button", { name: "More delete options" }).click();
+  await page.getByRole("menuitem", { name: "Delete all versions" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("Nothing stored yet.")).toBeVisible();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
 });
 
 test("deleting the last version removes the resume", async ({ page }) => {
@@ -82,7 +85,26 @@ test("deleting the last version removes the resume", async ({ page }) => {
   await expect(page.getByRole("alertdialog")).toContainText("last version");
   await page.getByRole("button", { name: "Confirm deletion" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("Nothing stored yet.")).toBeVisible();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
+});
+
+test("deletes all versions from a library row without opening the resume", async ({ page }) => {
+  await installApi(page, { resumes: [versioned] });
+  await page.goto("/");
+  await ready(page);
+  const trigger = page.getByRole("button", { name: `Delete ${designed.versions[0].filename}`, exact: true });
+  await trigger.click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("alertdialog")).toContainText("all its versions");
+  await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(trigger).toBeFocused();
+  await expect(page.getByRole("link", { name: new RegExp(designed.versions[0].filename) })).toBeVisible();
+  await trigger.click();
+  await page.getByRole("button", { name: "Delete all versions", exact: true }).click();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
 });
 
 test("a missing version does not show another version's results", async ({ page }) => {
@@ -104,11 +126,12 @@ test("uses the native customizable picker and dismisses confirmation with Escape
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/version=older-version/);
-  await page.getByRole("button", { name: "Delete all versions" }).click();
+  await page.getByRole("button", { name: "More delete options" }).click();
+  await page.getByRole("menuitem", { name: "Delete all versions" }).click();
   await expect(page.getByRole("alertdialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByRole("alertdialog")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Delete all versions" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "More delete options" })).toBeFocused();
 });
 
 test("keeps the detail page and confirmation within a mobile viewport", async ({ page }, testInfo) => {
@@ -116,7 +139,11 @@ test("keeps the detail page and confirmation within a mobile viewport", async ({
   await installApi(page, { resumes: [versioned] });
   await page.goto(`/resumes/${designed.id}`);
   await ready(page);
-  await expect(page.getByLabel("Analysis overview")).toContainText("Score range");
+  await expect(page.getByLabel("Analysis overview")).toContainText("Grade range");
+  await expect(page.getByLabel("Analysis overview")).toContainText("F–C-");
+  await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("F");
+  await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("Needs work");
+  await expect(page.getByRole("menuitem", { name: "Delete all versions" })).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("resume-details-mobile.png"), fullPage: true, caret: "initial" });
   await page.getByRole("button", { name: "Delete this version" }).click();

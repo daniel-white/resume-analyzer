@@ -17,7 +17,7 @@ test("lists a scored resume and a file still being read", async ({ page }) => {
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Drop a PDF or DOCX" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
   await expect(page.getByText("ada@example.com")).toBeVisible();
   await expect(page.getByRole("link", { name: /ada-designed\.pdf/ })).toBeVisible();
   await expect(page.getByText("2 reads")).toBeVisible();
@@ -30,14 +30,14 @@ test("shows an empty library until a file is stored", async ({ page }, testInfo)
 
   await page.goto("/");
 
-  await expect(page.getByText("Nothing stored yet.")).toBeVisible();
+  await expect(page.getByText("No resumes yet.")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-  await expect(page.getByRole("heading", { name: "A little clarity before you apply." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("empty-library-desktop.png"), fullPage: true, caret: "initial" });
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("empty-library-mobile.png"), fullPage: true, caret: "initial" });
-  await expect(page.getByText("Each system reads the file itself. Five megabytes.")).toBeVisible();
+  await expect(page.getByText("PDF or DOCX · Up to 5 MB")).toBeVisible();
 });
 
 test("accepts a dropped resume from the empty library", async ({ page }) => {
@@ -63,8 +63,8 @@ test("opens a scored teardown from the library", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/resumes\/resume-designed$/);
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
-  await expect(page.getByText(/Contact in the header/)).toBeVisible();
-  await expect(page.getByLabel("What we read")).toContainText("Ada Lovelace");
+  await expect(page.getByLabel("Resume details", { exact: true })).toContainText("contact in the header");
+  await expect(page.getByLabel("Resume details", { exact: true })).toContainText("Ada Lovelace");
   await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
@@ -82,7 +82,7 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
   await page.goto("/resumes/resume-reading");
 
   await expect(page.getByRole("heading", { name: "workshop.pdf" })).toBeVisible();
-  await expect(page.getByText("Three systems are reading this file.")).toBeVisible();
+  await expect(page.getByText("Analysis in progress", { exact: true })).toBeVisible();
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
   await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
@@ -142,7 +142,7 @@ test("uploads a file and lands on its teardown", async ({ page }) => {
 
   await page.goto("/");
   await ready(page);
-  await expect(page.getByRole("heading", { name: "Drop another file" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
   await expect(page.getByRole("link", { name: /just-added\.docx/ })).toContainText(
     "Stored. Waiting for the first read.",
   );
@@ -154,7 +154,7 @@ test("uploads a file and lands on its teardown", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/resumes\/resume-uploaded$/);
   await expect(page.getByRole("heading", { name: "dropped.pdf" })).toBeVisible();
-  await expect(page.getByText("Three systems are reading this file.")).toBeVisible();
+  await expect(page.getByText("Analysis in progress", { exact: true })).toBeVisible();
 });
 
 test("signs out and returns to the login page", async ({ page }) => {

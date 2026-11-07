@@ -2,10 +2,12 @@ import { Link } from "@tanstack/react-router";
 
 import type { LibraryRow } from "~/server/resumes";
 import { letterGrade, scoreTone } from "./score";
+import { DeleteResume } from "./delete-resume";
 
 export function ResumeRow({ row }: { row: LibraryRow }) {
   return (
-    <Link to="/resumes/$id" params={{ id: row.id }} className="file file-row sheet-face">
+    <div className="library-row sheet-face">
+      <Link to="/resumes/$id" params={{ id: row.id }} className="file file-row">
       <b>{row.filename}</b>
       {row.status === "scored" ? (
         <span>
@@ -18,6 +20,8 @@ export function ResumeRow({ row }: { row: LibraryRow }) {
       ) : (
         <span>{row.label}</span>
       )}
-    </Link>
+      </Link>
+      <DeleteResume id={row.id} filename={row.filename} />
+    </div>
   );
 }

@@ -17,20 +17,27 @@ export function letterGrade(score: number): string {
 }
 
 export function scoreTone(score: number): string {
-  if (score >= 77) return "text-score-high";
+  if (score >= 80) return "text-score-high";
   if (score >= 60) return "text-score-mid";
   return "text-score-low";
 }
 
 export function goodWork(score: number): boolean {
-  return score >= 77;
+  return score >= 80;
+}
+
+export function medianScore(scores: number[]): number | null {
+  if (scores.length === 0) return null;
+  const sorted = [...scores].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
 export function ScoreStamp({ value }: { value: number }) {
   const good = goodWork(value);
   return (
     <span className={good ? "ink-stamp ink-stamp-good" : "ink-stamp ink-stamp-work"}>
-      {good ? "Good work" : "Needs work"}
+      {value >= 90 ? "Excellent" : good ? "Good work" : "Needs work"}
     </span>
   );
 }

@@ -20,9 +20,8 @@ function LibraryPage() {
     <Page>
       <SiteHeader email={email} />
       <div className="library-heading">
-        <p className="eyebrow">Your working collection</p>
         <h1>Your resumes</h1>
-        <p>{rows.length === 0 ? "Every good revision starts with a second look." : "Keep your versions together. See what each system sees."}</p>
+        <p>{rows.length === 0 ? "Upload a resume to view ATS scores and parsing results." : "Manage your resumes, versions, and ATS results."}</p>
       </div>
       {rows.filter((row) => row.status !== "scored").map((row) => (
         <LiveAnalysis key={row.id} resumeId={row.id} active />

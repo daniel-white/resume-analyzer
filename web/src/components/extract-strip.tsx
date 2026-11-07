@@ -3,9 +3,9 @@ import { ScanText } from "lucide-react";
 
 export function ExtractStrip({ fields }: { fields: ExtractField[] }) {
   return (
-    <section className="card extract" aria-label="What we read">
-      <h2 className="label flex items-center gap-2"><ScanText size={20} aria-hidden="true" /> What we read</h2>
-      <p className="note">Check this is your resume. The systems below open the file themselves.</p>
+    <section className="card extract" aria-label="Resume details">
+      <h2 className="label flex items-center gap-2"><ScanText size={20} aria-hidden="true" /> Resume details</h2>
+      <p className="note">Extracted from your file. Each ATS system analyzes the original separately.</p>
       <dl className="facts">
         {fields.map((field) => (
           <div key={field.label}>

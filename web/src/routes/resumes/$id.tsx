@@ -38,19 +38,19 @@ function TeardownPage() {
     <Page wide>
       <SiteHeader email={view.email} />
       <BackLink />
-      <ResumeOverview filename={view.filename} lede={view.lede} cards={view.cards}
+      <ResumeOverview filename={view.filename} cards={view.cards}
         number={view.versions.find((version) => version.id === view.versionId)!.number} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
       <LiveAnalysis key={view.versionId} resumeId={id} active={view.kind === "reading"} />
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}
-      <div className="desk-split mt-8">
+      <div className="desk-split resume-content">
         <div className="desk-resume">
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />
         </div>
         <section className="analysis-results" aria-label="System results">
-          <div className="results-heading"><h2>Through their eyes</h2><p>Open a read to see what stayed, what was missed, and why.</p></div>
+          <div className="results-heading"><h2>ATS results</h2><p>Select a system to view extracted content and score details.</p></div>
           <VerdictGrid cards={view.cards} />
-          <p className="results-footnote">Simulated ATS reads, not a hiring prediction. Each system reads the original independently.</p>
+          <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
         </section>
       </div>
     </Page>
