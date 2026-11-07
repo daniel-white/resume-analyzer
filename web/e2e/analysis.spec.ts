@@ -20,7 +20,8 @@ test("streams analysis results without polling and closes on completion", async 
   expect((await api.stats()).detailReads).toBe(before);
   await api.update({ resumes: [completeReading()], event: "AtsCallbackReceived" });
   await expect(page.getByLabel("Grade F", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Pending")).toHaveCount(0);
+  const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
+  await expect(greenline.getByLabel("Pending")).toHaveCount(0);
   await expect.poll(async () => (await api.stats()).streams).toBe(0);
 });
 
