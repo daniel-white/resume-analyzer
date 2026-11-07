@@ -56,7 +56,9 @@ web/           TanStack Start application
 deploy/helm/resume-analyzer/   chart Minikube installs
 docker-bake.hcl                 API and web image targets
 scripts/                        worktrees, the check gate, bake, cluster
-docs/                           this plan, the frozen contracts, the factory guide
+docs/                           plan.md, contracts.md, factory.md
+factory/waves.tsv               catalog of waves the factory acts on
+.opencode/skills/ats-plugin/    procedure for adding a simulated ATS
 flake.nix
 justfile
 ```
@@ -209,6 +211,12 @@ No change lands on `main` directly. Each change is a branch checked out in
 merged only when `scripts/check.sh` exits 0. Agents do not share a worktree, and
 only the orchestrating session merges.
 
+The actor is `scripts/factory.sh`, described in `docs/factory.md`. It opens the
+worktree, runs the wave, feeds a red gate back into the same worktree, and is
+the only thing that merges. A new simulated ATS is `factory.sh act plugin <id>`,
+which follows `.opencode/skills/ats-plugin/SKILL.md`. That skill is a procedure,
+not an agent definition. No agent profile is committed.
+
 `scripts/check.sh` is the single definition of green:
 
 ```text
@@ -216,6 +224,7 @@ cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 pnpm typecheck and pnpm test, in web/
+scripts/factory_test.sh, when the factory, its catalog, or the ATS plugin skill changed
 ```
 
 A worktree that touches neither `crates/` nor `web/` skips the half it does not

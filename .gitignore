@@ -8,6 +8,7 @@ result-*
 .DS_Store
 .local-certs/
 .run/
+.factory/
 
 web/node_modules
 web/.output
