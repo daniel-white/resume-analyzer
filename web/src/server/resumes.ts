@@ -149,6 +149,7 @@ export type ExtractField = {
 export type FactorLine = {
   label: string;
   delta: string;
+  advice?: string;
 };
 
 export type VerdictCard =
@@ -168,6 +169,8 @@ export type VerdictCard =
       kept: string[];
       missed: string[];
       factors: FactorLine[];
+      summary?: string;
+      parse?: ParseInput | null;
     };
 
 export type Teardown =
@@ -177,6 +180,7 @@ export type Teardown =
       filename: string;
       lede: string;
       extract: ExtractField[] | null;
+      parse?: ParseInput | null;
       cards: VerdictCard[];
     };
 
@@ -316,7 +320,10 @@ export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
       factors: verdict.factors.map((factor) => ({
         label: factor.label,
         delta: formatDelta(factor.delta),
+        advice: factor.advice,
       })),
+      summary: verdict.summary,
+      parse: runs.find((run) => run.plugin_id === plugin.id)?.parse ?? null,
     };
   });
 }
@@ -330,7 +337,8 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[]): Teardown {
     filename: version.filename,
     lede: reading ? readingLede(plugins.length) : completeLede(version.parse),
     extract: version.parse ? extractFields(version.parse) : null,
-    cards: pluginCards(plugins, reading ? [] : version.runs),
+    parse: version.parse,
+    cards: pluginCards(plugins, version.runs),
   };
 }
 

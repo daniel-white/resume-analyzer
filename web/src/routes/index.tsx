@@ -20,12 +20,15 @@ function LibraryPage() {
   return (
     <Page>
       <SiteHeader email={email} />
+      <h1 className="mt-8 text-[clamp(1.75rem,3vw,2.4rem)] font-medium">Your resumes</h1>
       <RefreshWhileReading active={reading} />
       <DropZone copy={drop} />
       {rows.length === 0 ? <EmptyNote /> : null}
-      {rows.map((row) => (
-        <ResumeRow key={row.id} row={row} />
-      ))}
+      <div className="files">
+        {rows.map((row) => (
+          <ResumeRow key={row.id} row={row} />
+        ))}
+      </div>
     </Page>
   );
 }

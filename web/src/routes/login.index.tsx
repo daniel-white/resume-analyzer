@@ -40,7 +40,7 @@ function LoginPage() {
   return (
     <Page>
       <header className="top">
-        <div className="wordmark">Resume analyzer</div>
+        <div className="wordmark">The Other Read</div>
       </header>
       {sent ? (
         <div className="sign">

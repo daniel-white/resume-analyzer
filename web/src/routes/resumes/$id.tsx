@@ -7,6 +7,7 @@ import { Lede } from "~/components/lede";
 import { NotFound } from "~/components/not-found";
 import { Page } from "~/components/page";
 import { RefreshWhileReading } from "~/components/refresh-while-reading";
+import { ResumeExtract } from "~/components/resume-extract";
 import { SiteHeader } from "~/components/site-header";
 import { VerdictGrid } from "~/components/verdict-grid";
 import { getTeardown } from "~/fns/resumes.functions";
@@ -32,7 +33,10 @@ function TeardownPage() {
       <FileHeading filename={view.filename} />
       <Lede>{view.lede}</Lede>
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}
-      <VerdictGrid cards={view.cards} />
+      <div className={view.parse ? "desk-split mt-8" : "mt-8"}>
+        {view.parse ? <div className="desk-resume"><ResumeExtract parse={view.parse} /></div> : null}
+        <VerdictGrid cards={view.cards} />
+      </div>
     </Page>
   );
 }

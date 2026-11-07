@@ -1,4 +1,4 @@
-import { useNavigate, useRouter } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { signOut } from "~/fns/auth.functions";
@@ -23,7 +23,10 @@ export function SiteHeader({ email }: { email: string }) {
 
   return (
     <header className="top">
-      <div className="wordmark">Resume analyzer</div>
+      <div className="flex min-w-0 items-baseline gap-4">
+        <Link to="/" className="wordmark">The Other Read</Link>
+        <Link to="/" className="text-sm text-[#d5deee]">Your resumes</Link>
+      </div>
       <div className="who">
         <span>{email}</span>
         <button type="button" onClick={onSignOut} disabled={busy}>

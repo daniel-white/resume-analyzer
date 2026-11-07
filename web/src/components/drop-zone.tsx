@@ -37,7 +37,7 @@ export function DropZone({ copy }: { copy: DropCopy }) {
   }
 
   return (
-    <label className={tone ? `drop ${tone}` : "drop"} aria-busy={busy}>
+    <label className={`sheet-face drop ${tone}`} aria-busy={busy}>
       <input
         type="file"
         name="file"

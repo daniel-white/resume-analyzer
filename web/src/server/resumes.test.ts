@@ -244,13 +244,29 @@ describe("drop copy", () => {
 });
 
 describe("teardown", () => {
+  it("preserves backend summaries, advice, and each provider's independent extract", () => {
+    const providerRun = { ...run("greenline", 35), parse: parse({ name: null, email: null }) };
+    const cards = pluginCards(plugins, [providerRun]);
+    expect(cards[0]).toMatchObject({
+      id: "greenline",
+      pending: false,
+      summary: "Score 35 of 100.",
+      parse: providerRun.parse,
+      factors: [
+        { label: "contact in header", delta: "-25", advice: "Move the email into the body." },
+        { label: "standard headings", delta: "+10", advice: "Keep the standard headings." },
+      ],
+    });
+    expect(cards[1]).toMatchObject({ id: "levr", pending: true });
+  });
+
   const designed = parse({
     columns: 2,
     contact_in_header: true,
     has_tables: true,
   });
 
-  it("hides scores until the latest version is complete", () => {
+  it("shows completed callbacks while other providers are still reading the latest version", () => {
     const detail: ResumeDetail = {
       id: "resume-1",
       title: "ada-designed.pdf",
@@ -273,7 +289,9 @@ describe("teardown", () => {
       "2 columns, contact in the header, skills in a table",
       "Experience, Skills",
     ]);
-    expect(view.cards.every((card) => card.pending)).toBe(true);
+    expect(view.cards[0]).toMatchObject({ pending: false, score: 35 });
+    expect(view.cards.slice(1).every((card) => card.pending)).toBe(true);
+    expect(view.parse).toEqual(designed);
     expect(view.cards.map((card) => card.name)).toEqual([
       "Greenline",
       "Levr",

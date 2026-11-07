@@ -12,6 +12,7 @@ RUN --mount=type=cache,id=resume-analyzer-pnpm,target=/pnpm/store,sharing=locked
 # Copy only build inputs, not local test reports or generated Vite/Nitro
 # state that can alter asset discovery between the client and SSR builds.
 COPY web/src ./src
+COPY web/public ./public
 COPY web/vite.config.ts web/tsconfig.json ./
 COPY scripts/web-assets.mjs ./web-assets.mjs
 RUN pnpm build && node web-assets.mjs .output

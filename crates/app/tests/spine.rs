@@ -202,6 +202,20 @@ async fn one_callback(
     assert!(version["runs"][0]["parse"].is_object());
     assert_eq!(version["runs"][0]["verdict"]["score"], score);
     assert_eq!(version["runs"][0]["verdict"]["summary"], summary);
+    // These are the fields consumed by the restored frontend. The app's
+    // verification extract and each provider's own extract stay independent.
+    assert!(version["parse"]["profile"]["sections"].is_array());
+    assert!(version["parse"]["layout"]["columns"].is_number());
+    let verdict = &version["runs"][0]["verdict"];
+    assert!(verdict["kept"].is_array());
+    assert!(verdict["dropped"].is_array());
+    let factors = verdict["factors"].as_array().expect("frontend factors");
+    assert!(!factors.is_empty());
+    for factor in factors {
+        assert!(factor["label"].is_string());
+        assert!(factor["delta"].is_i64());
+        assert!(!factor["advice"].as_str().expect("factor advice").is_empty());
+    }
 }
 
 #[tokio::test]

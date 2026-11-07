@@ -21,7 +21,7 @@ test("lists a scored resume and a file still being read", async ({ page }) => {
   await expect(page.getByText("ada@example.com")).toBeVisible();
   await expect(page.getByRole("link", { name: /ada-designed\.pdf/ })).toBeVisible();
   await expect(page.getByText("2 reads")).toBeVisible();
-  await expect(page.getByText(/35.70/)).toBeVisible();
+  await expect(page.getByText("F–C-")).toBeVisible();
   await expect(page.getByRole("link", { name: /workshop\.pdf/ })).toContainText("Reading");
 });
 
@@ -47,7 +47,8 @@ test("opens a scored teardown from the library", async ({ page }) => {
   await expect(page.getByLabel("What we read")).toContainText("Ada Lovelace");
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
-  await expect(greenline.getByText("35", { exact: true })).toBeVisible();
+  await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
+  await greenline.locator("summary").click();
   await expect(greenline.getByText("header contact")).toBeVisible();
   await expect(greenline.getByText("contact in header", { exact: true })).toBeVisible();
   await expect(greenline.getByText("-25", { exact: true })).toBeVisible();
