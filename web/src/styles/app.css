@@ -287,6 +287,11 @@ input:focus-visible {
 .resume-viewer :focus-visible { outline-color: #244f42; }
 /* Keep PDF text/annotation layers below the sticky toolbar while scrolling. */
 .resume-viewer .rdv-pdf-document { isolation: isolate; }
+/* The heading already provides Download original for both PDF and DOCX. */
+.resume-viewer .rdv-pdf-controls #pdf-download,
+.resume-viewer .rdv-pdf-controls button[title="Download"],
+.resume-viewer .rdv-toolbar-group:has(> #pdf-download:only-child),
+.resume-viewer .rdv-toolbar-group:has(> #pdf-download:only-child) + .rdv-toolbar-divider { display: none; }
 .pending-read { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.4rem; color: var(--muted-foreground); font-size: 0.75rem; }
 .document-loading { padding: 0.85rem; background: #f3f4f6; }
 .loading-caption { display: flex; gap: 0.5rem; align-items: center; font-family: var(--font-mono); font-size: 0.75rem; }

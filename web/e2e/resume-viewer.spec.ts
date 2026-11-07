@@ -1,13 +1,44 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi } from "./api";
+import { designed, installApi, stored } from "./api";
+
+for (const [format, resume] of [["PDF", designed], ["DOCX", stored]] as const) {
+  test(`${format} preview only offers the heading download link`, async ({ page }) => {
+    await installApi(page, { resumes: [resume] });
+    await page.goto(`/resumes/${resume.id}`);
+
+    const viewer = page.getByLabel("Original resume");
+    await expect(viewer.getByText(`Original ${format} resume`)).toBeVisible({ timeout: 20_000 });
+    await expect(viewer.getByRole("button", { name: "Zoom in", exact: true })).toBeVisible();
+    await expect(viewer.getByRole("button", { name: /download/i })).toHaveCount(0);
+    // Exercise asynchronously inserted links in both renderer trees.
+    await viewer.locator("#react-doc-viewer").evaluate((element) => {
+      const link = document.createElement("a");
+      link.href = "https://example.com/portfolio";
+      link.textContent = "Portfolio";
+      element.appendChild(link);
+    });
+    const portfolio = viewer.getByRole("link", { name: "Portfolio" });
+    await expect(portfolio).toHaveAttribute("target", "_blank");
+    await expect(portfolio).toHaveAttribute("rel", "noopener noreferrer");
+    if (format === "PDF") {
+      const documentLink = viewer.locator('.annotationLayer a[href="https://example.com/resume"]');
+      await expect(documentLink).toHaveAttribute("target", "_blank");
+      await expect(documentLink).toHaveAttribute("rel", "noopener noreferrer");
+    }
+    await expect(viewer.getByRole("link", { name: "Download original" })).toBeVisible();
+    const download = page.waitForEvent("download");
+    await viewer.getByRole("link", { name: "Download original" }).click();
+    expect((await download).suggestedFilename()).toBe(resume.versions[0].filename);
+  });
+}
 
 test("PDF toolbar remains clickable after scrolling the document", async ({ page }) => {
   await installApi(page, { resumes: [designed] });
   await page.goto(`/resumes/${designed.id}`);
 
   const viewer = page.getByLabel("Original resume");
-  await expect(viewer.getByText("Original PDF resume")).toBeVisible();
+  await expect(viewer.getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
   const zoomIn = viewer.getByRole("button", { name: "Zoom in", exact: true });
   await zoomIn.click();
   await zoomIn.click();
