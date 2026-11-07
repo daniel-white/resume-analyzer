@@ -1,4 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useState, type ReactNode } from "react";
+import { Download, FileText } from "lucide-react";
+import { DocumentSkeleton } from "./resume-loading";
 
 // The renderer uses browser APIs, so import it only after the file loads on the client.
 const ResumeDocument = lazy(() => import("./resume-document"));
@@ -64,17 +66,17 @@ export function ResumeViewer({
 
   return (
     <section className="resume-viewer overflow-hidden rounded-xl border border-black/10 bg-white text-black" aria-label="Original resume">
-      <div className="flex items-center justify-between gap-3 border-b border-black/10 p-3 text-sm">
-        <h2 className="font-medium">Original file</h2>
-        <a href={uri ?? file.url} download={filename}>Download original</a>
+      <div className="viewer-heading">
+        <h2><FileText size={17} aria-hidden="true" /> Original file</h2>
+        <a href={uri ?? file.url} download={filename}><Download size={15} aria-hidden="true" /> Download original</a>
       </div>
       {error ? <p role="alert" className="p-4">{error}</p> : uri ? (
         <PreviewBoundary>
-          <Suspense fallback={<p role="status" className="p-4">Loading preview…</p>}>
+          <Suspense fallback={<DocumentSkeleton />}>
             <ResumeDocument uri={uri} filename={filename} mediaType={file.mediaType} />
           </Suspense>
         </PreviewBoundary>
-      ) : <p role="status" className="p-4">Loading original file…</p>}
+      ) : <DocumentSkeleton label="Loading original file…" />}
     </section>
   );
 }

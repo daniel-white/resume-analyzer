@@ -38,6 +38,7 @@ test("uploads a new version of the same resume and can return to old results", a
   });
   await expect(page).toHaveURL(new RegExp(`/resumes/${designed.id}\\?version=`));
   await expect(page.getByRole("heading", { name: "revised.pdf" })).toBeVisible();
+  await expect(page.getByRole("status").filter({ hasText: "New version stored." })).toBeVisible();
   await expect(page.getByLabel("Version", { exact: true }).locator("option")).toHaveCount(2);
   await expect(page.getByLabel("Pending").first()).toBeVisible();
   await page.getByLabel("Version", { exact: true }).selectOption(designed.versions[0].id);
@@ -51,7 +52,9 @@ test("cancels deletion, then deletes only the selected version", async ({ page }
   await ready(page);
   await page.getByRole("button", { name: "Delete this version" }).click();
   await expect(page.getByRole("alertdialog")).toContainText("older.pdf");
+  await expect(page.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Delete this version" })).toBeFocused();
   await expect(page.getByLabel("Version", { exact: true }).locator("option")).toHaveCount(2);
   await page.getByRole("button", { name: "Delete this version" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
@@ -87,4 +90,53 @@ test("a missing version does not show another version's results", async ({ page 
   await page.goto(`/resumes/${designed.id}?version=deleted-version`);
   await expect(page.getByRole("heading", { name: "That resume is not here." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Greenline" })).toHaveCount(0);
+});
+
+test("uses the native customizable picker and dismisses confirmation with Escape", async ({ page }) => {
+  await installApi(page, { resumes: [versioned] });
+  await page.goto(`/resumes/${designed.id}`);
+  await ready(page);
+  const picker = page.getByLabel("Version", { exact: true });
+  await expect(page.getByText("Loading original file…", { exact: true })).toHaveCount(0);
+  await expect(picker).toHaveCSS("appearance", "base-select");
+  await picker.click();
+  await expect(picker).toHaveJSProperty("value", "latest-version");
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/version=older-version/);
+  await page.getByRole("button", { name: "Delete all versions" }).click();
+  await expect(page.getByRole("alertdialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Delete all versions" })).toBeFocused();
+});
+
+test("keeps the detail page and confirmation within a mobile viewport", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installApi(page, { resumes: [versioned] });
+  await page.goto(`/resumes/${designed.id}`);
+  await ready(page);
+  await expect(page.getByLabel("Analysis overview")).toContainText("Score range");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("resume-details-mobile.png"), fullPage: true, caret: "initial" });
+  await page.getByRole("button", { name: "Delete this version" }).click();
+  const bounds = await page.getByRole("alertdialog").boundingBox();
+  expect(bounds!.x).toBeGreaterThanOrEqual(0);
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("confirmation-mobile.png"), caret: "initial" });
+});
+
+test("shows a document skeleton while the original file is loading", async ({ page }) => {
+  await installApi(page, { resumes: [designed] });
+  let release!: () => void;
+  const hold = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/resumes/*/versions/*/file", async (route) => {
+    await hold;
+    await route.continue();
+  });
+  await page.goto(`/resumes/${designed.id}`);
+  await expect(page.getByRole("status").filter({ hasText: "Loading original file…" })).toBeVisible();
+  await expect(page.locator(".skeleton-document")).toBeVisible();
+  release();
+  await expect(page.getByText("Loading original file…", { exact: true })).toHaveCount(0);
 });

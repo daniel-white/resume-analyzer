@@ -3,6 +3,7 @@ import { Score, ScoreStamp } from "~/components/score";
 import { Sheet } from "~/components/sheet";
 import type { ParseInput, Verdict } from "~/server/resumes";
 import { cn } from "~/lib/utils";
+import { LoaderCircle } from "lucide-react";
 
 type CardVerdict = Pick<Verdict, "score" | "kept" | "dropped" | "factors"> & {
   summary?: string;
@@ -50,7 +51,7 @@ export function PluginCard({
           <span className="min-w-0">
             <h2 className="block text-lg font-medium">{plugin.name}</h2>
             <span className="block text-xs text-muted-foreground">{plugin.bias}</span>
-            {reading ? <span className="text-muted-foreground" aria-label="Pending">Reading the file</span> : null}
+            {reading ? <span className="pending-read" aria-label="Pending"><LoaderCircle className="busy-icon" size={13} aria-hidden="true" />Reading the file</span> : null}
           </span>
           {reading || verdict === null ? null : (
             <span className="read-marks">

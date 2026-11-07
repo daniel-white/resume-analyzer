@@ -1,5 +1,7 @@
 import { isRedirect, useNavigate, useRouter } from "@tanstack/react-router";
-import { useId, useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent } from "react";
+import { AlertDialog } from "radix-ui";
+import { AlertTriangle, CheckCircle2, FileClock, LoaderCircle, Trash2, Upload, X } from "lucide-react";
 
 import { removeResume, uploadResume } from "~/fns/resumes.functions";
 import type { VersionSummary } from "~/server/resumes";
@@ -12,9 +14,12 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
   const navigate = useNavigate();
   const router = useRouter();
   const inputId = useId();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"select" | "upload" | "delete" | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"version" | "all" | null>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const openerRef = useRef<HTMLButtonElement | null>(null);
   const selected = versions.find((version) => version.id === versionId)!;
 
   async function handleError(error: unknown, message: string) {
@@ -23,7 +28,8 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
   }
 
   async function selectVersion(id: string) {
-    setBusy(true);
+    setBusy("select");
+    setNotice(null);
     setError(null);
     setConfirm(null);
     try {
@@ -31,7 +37,7 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
     } catch (error) {
       await handleError(error, "Could not load that version. Please try again.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -39,7 +45,8 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file || busy) return;
-    setBusy(true);
+    setBusy("upload");
+    setNotice(null);
     setError(null);
     setConfirm(null);
     try {
@@ -49,16 +56,18 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
       const result = await uploadResume({ data });
       if (!result.ok) { setError(result.message); return; }
       await navigate({ to: "/resumes/$id", params: { id: resumeId }, search: { version: result.version_id } });
+      setNotice("New version stored. Your previous versions and results are safe.");
     } catch (error) {
       await handleError(error, "That file did not store. Please try again.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function remove() {
     if (!confirm || busy) return;
-    setBusy(true);
+    setBusy("delete");
+    setNotice(null);
     setError(null);
     try {
       const result = await removeResume({ data: {
@@ -71,21 +80,22 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
       } else {
         const remaining = versions.find((version) => version.id !== versionId)!;
         await navigate({ to: "/resumes/$id", params: { id: resumeId }, search: { version: remaining.id }, replace: true });
+        setNotice(`Version ${selected.number} deleted. Your other versions are safe.`);
       }
       await router.invalidate();
     } catch (error) {
       await handleError(error, "Could not delete the resume. Please try again.");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   return (
-    <section className="sheet-face resume-versions" aria-label="Resume versions" aria-busy={busy}>
+    <section className="sheet-face resume-versions" aria-label="Resume versions" aria-busy={!!busy}>
       <div className="version-actions">
         <label className="version-picker">
-          <span>Version</span>
-          <select aria-label="Version" value={versionId} disabled={busy} onChange={(event) => void selectVersion(event.target.value)}>
+          <span className="version-label"><FileClock size={14} aria-hidden="true" /> Version history</span>
+          <select className="polished-select" aria-label="Version" value={versionId} disabled={!!busy} onChange={(event) => void selectVersion(event.target.value)}>
             {versions.map((version, index) => (
               <option key={version.id} value={version.id}>
                 v{version.number}{index === 0 ? " · Latest" : ""} — {version.filename}
@@ -94,26 +104,41 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
           </select>
         </label>
         <label className="version-upload" htmlFor={inputId}>
-          Upload new version
+          <Upload size={16} aria-hidden="true" /> Upload new version
           <input id={inputId} type="file" aria-label="Upload new version"
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            disabled={busy} onChange={upload} />
+            disabled={!!busy} onChange={upload} />
         </label>
-        <button type="button" disabled={busy} onClick={() => setConfirm("version")}>Delete this version</button>
-        <button type="button" disabled={busy} onClick={() => setConfirm("all")}>Delete all versions</button>
+        <div className="version-danger-actions">
+          <button type="button" disabled={!!busy} onClick={(event) => { openerRef.current = event.currentTarget; setError(null); setConfirm("version"); }}><Trash2 size={15} aria-hidden="true" /> Delete this version</button>
+          <button type="button" disabled={!!busy} onClick={(event) => { openerRef.current = event.currentTarget; setError(null); setConfirm("all"); }}>Delete all versions</button>
+        </div>
       </div>
       <p className="version-note">{versions.length} {versions.length === 1 ? "version" : "versions"} stored. PDF or DOCX, up to five megabytes.</p>
-      {busy ? <p role="status">Working…</p> : null}
-      {confirm ? (
-        <div className="version-confirm" role="alertdialog" aria-label="Confirm deletion" aria-describedby={`${inputId}-confirmation`}>
-          <p id={`${inputId}-confirmation`}>{confirm === "all"
-            ? "Delete this resume, all its versions, and their results? This cannot be undone."
-            : `Delete v${selected.number} (${selected.filename}) and its results? ${versions.length === 1 ? "This is the last version, so the resume will also be removed. " : ""}This cannot be undone.`}</p>
-          <button type="button" disabled={busy} onClick={() => void remove()}>Confirm deletion</button>
-          <button type="button" disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
-        </div>
-      ) : null}
-      {error ? <p className="error" role="alert">{error}</p> : null}
+      {busy ? <p className="version-feedback" role="status"><LoaderCircle className="busy-icon" size={16} aria-hidden="true" />{busy === "upload" ? "Storing your new version…" : busy === "delete" ? "Deleting…" : "Opening this version…"}</p> : null}
+      {notice ? <p className="version-feedback success" role="status"><CheckCircle2 size={16} aria-hidden="true" />{notice}</p> : null}
+      <AlertDialog.Root open={confirm !== null} onOpenChange={(open) => { if (!open && !busy) { setConfirm(null); setError(null); } }}>
+        <AlertDialog.Portal>
+          <AlertDialog.Overlay className="confirmation-overlay" />
+          <AlertDialog.Content className="confirmation-dialog"
+            onOpenAutoFocus={(event) => { event.preventDefault(); cancelRef.current?.focus(); }}
+            onCloseAutoFocus={(event) => { event.preventDefault(); openerRef.current?.focus(); }}
+            onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
+            <span className="confirmation-icon"><AlertTriangle aria-hidden="true" /></span>
+            <AlertDialog.Title className="confirmation-title">{confirm === "all" ? "Delete every version?" : `Delete version ${selected.number}?`}</AlertDialog.Title>
+            <AlertDialog.Description className="confirmation-description">{confirm === "all"
+             ? "Delete this resume, all its versions, and their results? This cannot be undone."
+            : `Delete v${selected.number} (${selected.filename}) and its results? ${versions.length === 1 ? "This is the last version, so the resume will also be removed. " : "Your other versions will not be affected. "}This cannot be undone.`}</AlertDialog.Description>
+            {error ? <p className="error" role="alert">{error}</p> : null}
+            <div className="confirmation-actions">
+              <AlertDialog.Cancel ref={cancelRef} disabled={!!busy}>Cancel</AlertDialog.Cancel>
+              <button className="confirm-delete" type="button" disabled={!!busy} onClick={() => void remove()}><Trash2 size={16} aria-hidden="true" />{busy === "delete" ? "Deleting…" : "Confirm deletion"}</button>
+            </div>
+            <AlertDialog.Cancel className="confirmation-close" aria-label="Close confirmation" disabled={!!busy}><X size={18} aria-hidden="true" /></AlertDialog.Cancel>
+          </AlertDialog.Content>
+        </AlertDialog.Portal>
+      </AlertDialog.Root>
+      {error && !confirm ? <p className="error version-feedback" role="alert"><AlertTriangle size={16} aria-hidden="true" />{error}</p> : null}
     </section>
   );
 }

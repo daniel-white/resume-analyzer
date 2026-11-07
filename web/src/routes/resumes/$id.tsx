@@ -2,8 +2,8 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 
 import { BackLink } from "~/components/back-link";
 import { ExtractStrip } from "~/components/extract-strip";
-import { FileHeading } from "~/components/file-heading";
-import { Lede } from "~/components/lede";
+import { ResumeOverview } from "~/components/resume-overview";
+import { ResumeDetailsSkeleton } from "~/components/resume-loading";
 import { NotFound } from "~/components/not-found";
 import { Page } from "~/components/page";
 import { LiveAnalysis } from "~/components/live-analysis";
@@ -24,6 +24,9 @@ export const Route = createFileRoute("/resumes/$id")({
     return view;
   },
   component: TeardownPage,
+  pendingComponent: ResumeDetailsSkeleton,
+  pendingMs: 200,
+  pendingMinMs: 300,
   notFoundComponent: NotFound,
 });
 
@@ -35,16 +38,20 @@ function TeardownPage() {
     <Page wide>
       <SiteHeader email={view.email} />
       <BackLink />
+      <ResumeOverview filename={view.filename} lede={view.lede} cards={view.cards}
+        number={view.versions.find((version) => version.id === view.versionId)!.number} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
       <LiveAnalysis key={view.versionId} resumeId={id} active={view.kind === "reading"} />
-      <FileHeading filename={view.filename} />
-      <Lede>{view.lede}</Lede>
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}
       <div className="desk-split mt-8">
         <div className="desk-resume">
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />
         </div>
-        <VerdictGrid cards={view.cards} />
+        <section className="analysis-results" aria-label="System results">
+          <div className="results-heading"><h2>Through their eyes</h2><p>Open a read to see what stayed, what was missed, and why.</p></div>
+          <VerdictGrid cards={view.cards} />
+          <p className="results-footnote">Simulated ATS reads, not a hiring prediction. Each system reads the original independently.</p>
+        </section>
       </div>
     </Page>
   );

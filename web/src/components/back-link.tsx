@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
+import { ArrowLeft } from "lucide-react";
 
 export function BackLink() {
   return (
     <div className="back">
-      <Link to="/">Your resumes</Link>
+      <Link to="/"><ArrowLeft size={15} aria-hidden="true" /> Your resumes</Link>
     </div>
   );
 }

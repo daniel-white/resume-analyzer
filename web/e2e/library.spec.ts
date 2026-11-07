@@ -25,13 +25,33 @@ test("lists a scored resume and a file still being read", async ({ page }) => {
   await expect(page.getByRole("link", { name: /workshop\.pdf/ })).toContainText("Reading");
 });
 
-test("shows an empty library until a file is stored", async ({ page }) => {
+test("shows an empty library until a file is stored", async ({ page }, testInfo) => {
   await installApi(page, { resumes: [] });
 
   await page.goto("/");
 
   await expect(page.getByText("Nothing stored yet.")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: "A little clarity before you apply." })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("empty-library-desktop.png"), fullPage: true, caret: "initial" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: testInfo.outputPath("empty-library-mobile.png"), fullPage: true, caret: "initial" });
   await expect(page.getByText("Each system reads the file itself. Five megabytes.")).toBeVisible();
+});
+
+test("accepts a dropped resume from the empty library", async ({ page }) => {
+  await installApi(page, { resumes: [] });
+  await page.goto("/");
+  await ready(page);
+  const files = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File(["%PDF-1.4 dropped"], "dropped.pdf", { type: "application/pdf" }));
+    return transfer;
+  });
+  await page.locator(".drop").dispatchEvent("drop", { dataTransfer: files });
+  await expect(page.getByRole("heading", { name: "dropped.pdf" })).toBeVisible();
+  await files.dispose();
 });
 
 test("opens a scored teardown from the library", async ({ page }) => {
@@ -142,7 +162,8 @@ test("signs out and returns to the login page", async ({ page }) => {
 
   await page.goto("/");
   await ready(page);
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
