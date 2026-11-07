@@ -15,10 +15,29 @@ assert(route.includes("value: /api\n") && route.includes("name: api\n"));
 assert(route.includes("value: /\n") && route.includes("name: web\n"));
 assert(route.indexOf("value: /api\n") < route.indexOf("value: /\n"));
 const web = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: web\n"));
+const api = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: api\n"));
+assert(api?.includes("smart_resume=http://smart-resume:8080"));
 assert(web?.includes("image: resume-analyzer/web:dev"));
 assert(web.includes("value: http://api:8080"));
 assert(web.includes('value: "3000"'));
 assert(web.includes("readinessProbe:") && web.includes("path: /health"));
+JS
+
+providers=$(helm template ats-providers deploy/helm/ats-providers)
+RENDER="$providers" node --input-type=module <<'JS'
+import assert from "node:assert/strict";
+const documents = process.env.RENDER.split("\n---");
+const service = documents.find(doc => doc.includes("kind: Service") && doc.includes("  name: smart-resume\n"));
+const deployment = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: smart-resume\n"));
+assert(service?.includes("type: ClusterIP"));
+assert(service.includes("app: smart-resume"));
+assert(deployment?.includes('- "smart_resume"'));
+assert(deployment.includes("name: PLUGIN_SECRET"));
+assert.equal(documents.filter(doc => doc.includes("kind: Service")).length, 5);
+assert(!providersHasRoute(documents));
+function providersHasRoute(docs) {
+  return docs.some(doc => /kind: (HTTPRoute|Ingress|Gateway)\b/.test(doc));
+}
 JS
 
 deps=$(helm template resume-analyzer deploy/helm/resume-analyzer)

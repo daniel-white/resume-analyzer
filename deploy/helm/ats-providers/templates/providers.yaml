@@ -2,19 +2,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ . }}
+  name: {{ . | replace "_" "-" }}
   labels:
-    app: {{ . }}
+    app: {{ . | replace "_" "-" }}
     app.kubernetes.io/name: ats-providers
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ . }}
+      app: {{ . | replace "_" "-" }}
   template:
     metadata:
       labels:
-        app: {{ . }}
+        app: {{ . | replace "_" "-" }}
         app.kubernetes.io/name: ats-providers
     spec:
       automountServiceAccountToken: false
@@ -45,14 +45,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ . }}
+  name: {{ . | replace "_" "-" }}
   labels:
-    app: {{ . }}
+    app: {{ . | replace "_" "-" }}
     app.kubernetes.io/name: ats-providers
 spec:
   type: ClusterIP
   selector:
-    app: {{ . }}
+    app: {{ . | replace "_" "-" }}
   ports:
     - name: http
       port: {{ $.Values.port }}

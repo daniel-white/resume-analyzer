@@ -4,7 +4,7 @@
 # Dependencies, gateway, and https://app.resume.local. Then the API on the host.
 dev:
     ./scripts/up.sh deps
-    ATS_PROVIDERS="greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104" CALLBACK_URL="http://host.minikube.internal:8080" cargo run -p app
+    ATS_PROVIDERS="greenline=http://127.0.0.1:8101,levr=http://127.0.0.1:8102,workdaye=http://127.0.0.1:8103,ash=http://127.0.0.1:8104,smart_resume=http://127.0.0.1:8105" CALLBACK_URL="http://host.minikube.internal:8080" cargo run -p app
 
 # Bake the API and the compiled web app, load them, and serve both
 # from https://app.resume.local.
@@ -26,7 +26,7 @@ check:
 factory *args:
     ./scripts/factory.sh {{args}}
 
-# Private ATS stubs on 127.0.0.1:8101-8104. Not routed.
+# Private ATS stubs on 127.0.0.1:8101-8105. Not routed.
 # The API uses these ports unless ATS_PROVIDERS is set. ATS_PROVIDERS=stub
 # keeps the compiled stub.
 providers:

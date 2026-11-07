@@ -62,7 +62,7 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
   await page.goto("/resumes/resume-reading");
 
   await expect(page.getByRole("heading", { name: "workshop.pdf" })).toBeVisible();
-  await expect(page.getByText("Two systems are reading this file.")).toBeVisible();
+  await expect(page.getByText("Three systems are reading this file.")).toBeVisible();
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
   await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
@@ -134,7 +134,7 @@ test("uploads a file and lands on its teardown", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/resumes\/resume-uploaded$/);
   await expect(page.getByRole("heading", { name: "dropped.pdf" })).toBeVisible();
-  await expect(page.getByText("Two systems are reading this file.")).toBeVisible();
+  await expect(page.getByText("Three systems are reading this file.")).toBeVisible();
 });
 
 test("signs out and returns to the login page", async ({ page }) => {

@@ -15,6 +15,11 @@ const plugins = [
     name: "Levr",
     subtitle: "Skills match only as exact tokens.",
   },
+  {
+    id: "smart_resume",
+    name: "SmartResume",
+    subtitle: "Keeps table text and headers, loses text boxes. Simulated, modeled on publicly described parser behavior.",
+  },
 ];
 
 const scenarios = new Map();
