@@ -254,7 +254,7 @@ input:focus-visible {
 .overview-stats { display: grid; grid-template-columns: auto 1fr 1fr; gap: 0.5rem 1.25rem; flex: none; border-left: 1px solid #fffdf830; padding-left: 1.25rem; }
 .overall-rating { grid-row: span 2; border-right: 1px solid #fffdf830; padding-right: 1rem; }
 .overall-rating-value { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
-.overall-rating-value .ink-stamp { width: 3.5rem; height: 3.5rem; font-size: 0.55rem; background: #ffffff; }
+.overall-rating-value .ink-stamp { --stamp-size: 3.5rem; background: #ffffff; }
 .overall-rating-note { display: block; color: #d5deee; font-size: 0.65rem; margin-top: 0.5rem; }
 .stat-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; color: #d5deee; font-family: var(--font-mono); }
 .stat-label svg { width: 13px; height: 13px; }
@@ -454,15 +454,17 @@ details[open] > .fold-summary .fold-chevron {
 }
 
 .ink-stamp {
+  --stamp-size: 4.15rem;
   display: grid;
-  width: 4.15rem;
-  height: 4.15rem;
+  flex: none;
+  width: var(--stamp-size);
+  height: var(--stamp-size);
   place-items: center;
   margin-top: 0;
   padding: 0.4rem;
   border: 2px solid currentColor;
   border-radius: 50%;
-  font-size: 0.68rem;
+  font-size: calc(var(--stamp-size) * 0.14);
   line-height: 1.05;
   letter-spacing: 0.04em;
   text-align: center;
@@ -502,9 +504,7 @@ details[open] > .fold-summary .fold-chevron {
 
 @media (max-width: 520px) {
   .ink-stamp {
-    width: 3.5rem;
-    height: 3.5rem;
-    font-size: 0.64rem;
+    --stamp-size: 3.5rem;
   }
 }
 
@@ -707,7 +707,7 @@ select {
 .row-overall { display: flex; align-items: center; gap: 0.75rem; flex: none; }
 .row-grade-label { display: block; font-size: 0.65rem; color: var(--muted-foreground); }
 .row-overall strong { display: block; font-size: 1.5rem; font-weight: 500; line-height: 1.2; margin-top: 0.2rem; }
-.row-overall .ink-stamp { width: 3rem; height: 3rem; font-size: 0.5rem; }
+.row-overall .ink-stamp { --stamp-size: 3rem; }
 @media (max-width: 520px) { .library-row .file-row { align-items: flex-start; gap: 0.75rem; } }
 .row-delete { display: grid; place-items: center; width: 40px; height: 40px; flex: none; margin-right: 0.65rem; border-radius: 7px; color: #8f2d2d; cursor: pointer; }
 .row-delete:hover { background: #8f2d2d0d; }
