@@ -397,7 +397,7 @@ impl Store {
         }
         if inserted {
             sqlx::query(
-                "update versions set status = 'running' where id = $1 and status = 'parsed'",
+                "update versions set status = 'running' where id = $1 and status in ('parsed', 'complete')",
             )
             .bind(version_id)
             .execute(&mut *tx)
@@ -697,6 +697,85 @@ mod tests {
             summary: summary.to_owned(),
             factors: vec![],
         }
+    }
+
+    #[tokio::test]
+    async fn concurrent_fanout_adds_a_new_plugin_once_after_completion() {
+        let store = Ephemeral::start().await.unwrap();
+        let resume_id = Uuid::new_v4();
+        let version_id = Uuid::new_v4();
+        store
+            .create_resume(
+                domain::DEMO_USER_ID,
+                resume_id,
+                version_id,
+                "a.pdf",
+                domain::PDF,
+                "a",
+            )
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        store.save_parse(version_id, &parse).await.unwrap();
+        store.fanout(version_id, &["greenline"]).await.unwrap();
+        let before = store
+            .detail(domain::DEMO_USER_ID, resume_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let original = before.versions[0].runs[0].id;
+        let verdict = empty_verdict(65, "original result");
+        store
+            .record_callback(
+                "greenline",
+                original,
+                &original.to_string(),
+                &parse,
+                &verdict,
+            )
+            .await
+            .unwrap();
+        let (left, right) = tokio::join!(
+            store.fanout(version_id, &["greenline", "smart_resume"]),
+            store.fanout(version_id, &["greenline", "smart_resume"]),
+        );
+        left.unwrap();
+        right.unwrap();
+        let detail = store
+            .detail(domain::DEMO_USER_ID, resume_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let version = &detail.versions[0];
+        assert_eq!(version.status, ResumeStatus::Running);
+        assert_eq!(version.runs.len(), 2);
+        let kept = version.runs.iter().find(|run| run.id == original).unwrap();
+        assert_eq!(kept.verdict.as_ref().unwrap().summary, "original result");
+        let new = version
+            .runs
+            .iter()
+            .find(|run| run.plugin_id == "smart_resume")
+            .unwrap();
+        assert_eq!(new.status, RunStatus::Requested);
+        let count: i64 = sqlx::query_scalar("select count(*) from outbox where version_id = $1 and name = 'AtsRunRequested' and payload->>'plugin_id' = 'smart_resume'")
+            .bind(version_id).fetch_one(store.pool()).await.unwrap();
+        assert_eq!(count, 1);
+        store
+            .record_callback(
+                "smart_resume",
+                new.id,
+                &new.id.to_string(),
+                &parse,
+                &verdict,
+            )
+            .await
+            .unwrap();
+        let completed = store
+            .detail(domain::DEMO_USER_ID, resume_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(completed.versions[0].status, ResumeStatus::Complete);
     }
 
     #[tokio::test]

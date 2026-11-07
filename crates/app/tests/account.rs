@@ -211,6 +211,76 @@ async fn login_cookie_can_manage_the_account() {
         .expect("hidden");
     assert_eq!(hidden.status(), reqwest::StatusCode::NOT_FOUND);
 
+    // This resume predates the current registry. An unowned detail request
+    // must not enqueue work, and repeated owner visits add the new plugin once.
+    let version_uuid = uuid::Uuid::parse_str(version_id).expect("version uuid");
+    let parse = domain::ParseInput::empty(domain::LayoutConfidence::Inferred);
+    store.save_parse(version_uuid, &parse).await.expect("parse");
+    store
+        .fanout(version_uuid, &["legacy"])
+        .await
+        .expect("legacy run");
+    let before = store
+        .detail(ada_uuid, uuid::Uuid::parse_str(resume_id).unwrap())
+        .await
+        .unwrap()
+        .unwrap();
+    let legacy_id = before.versions[0].runs[0].id;
+    let verdict = domain::Verdict {
+        kept: vec![],
+        dropped: vec![],
+        score: 50,
+        summary: "Score 50 of 100.".into(),
+        factors: vec![],
+    };
+    store
+        .record_callback(
+            "legacy",
+            legacy_id,
+            &legacy_id.to_string(),
+            &parse,
+            &verdict,
+        )
+        .await
+        .expect("legacy callback");
+    let hidden = client
+        .get(format!("{base}/api/resumes/{resume_id}"))
+        .header("cookie", &grace_cookie)
+        .send()
+        .await
+        .expect("hidden completed resume");
+    assert_eq!(hidden.status(), reqwest::StatusCode::NOT_FOUND);
+    let count: i64 = sqlx::query_scalar("select count(*) from runs where version_id = $1")
+        .bind(version_uuid)
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(count, 1);
+    for _ in 0..2 {
+        let detail: serde_json::Value = client
+            .get(format!("{base}/api/resumes/{resume_id}"))
+            .header("cookie", &ada_cookie)
+            .send()
+            .await
+            .expect("owner detail")
+            .error_for_status()
+            .expect("detail ok")
+            .json()
+            .await
+            .expect("detail json");
+        assert_eq!(detail["versions"][0]["status"], "running");
+        assert_eq!(detail["versions"][0]["runs"].as_array().unwrap().len(), 2);
+    }
+    let requested: i64 = sqlx::query_scalar("select count(*) from outbox where version_id = $1 and name = 'AtsRunRequested' and payload->>'plugin_id' = 'stub'")
+        .bind(version_uuid).fetch_one(store.pool()).await.unwrap();
+    assert_eq!(requested, 1);
+    let legacy: serde_json::Value = sqlx::query_scalar("select verdict from runs where id = $1")
+        .bind(legacy_id)
+        .fetch_one(store.pool())
+        .await
+        .unwrap();
+    assert_eq!(legacy["score"], 50);
+
     let file_url = format!("{base}/api/resumes/{resume_id}/versions/{version_id}/file");
     let anonymous_file = client.get(&file_url).send().await.expect("anonymous file");
     assert_eq!(anonymous_file.status(), reqwest::StatusCode::UNAUTHORIZED);

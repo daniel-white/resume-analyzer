@@ -117,7 +117,29 @@ pub async fn resume_detail(
         Err(status) => return status.into_response(),
     };
     match api.store.detail(user_id, id).await {
-        Ok(Some(detail)) => Json(detail).into_response(),
+        Ok(Some(detail)) => {
+            // The legend can grow after this resume was completed. Queue only
+            // missing runs on the displayed version; fanout preserves existing
+            // results and atomically writes each run with its outbox event.
+            if let Some(version) = detail.versions.first()
+                && version.parse.is_some()
+                && api
+                    .plugins
+                    .iter()
+                    .any(|plugin| !version.runs.iter().any(|run| run.plugin_id == plugin.id()))
+            {
+                let ids: Vec<&str> = api.plugins.iter().map(|plugin| plugin.id()).collect();
+                if api.store.fanout(version.id, &ids).await.is_err() {
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+                return match api.store.detail(user_id, id).await {
+                    Ok(Some(detail)) => Json(detail).into_response(),
+                    Ok(None) => StatusCode::NOT_FOUND.into_response(),
+                    Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                };
+            }
+            Json(detail).into_response()
+        }
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }

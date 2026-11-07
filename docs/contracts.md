@@ -101,6 +101,13 @@ It posts the signed callback to that URL. The worker does not store the
 in-process return value. An empty verification parse still fans out. Nothing
 waits for the user to approve it. A new version does not rerun the previous one.
 
+When the registry gains a plugin, an authenticated detail visit reconciles the
+newest parsed version with the active registry. Missing runs and their
+`AtsRunRequested` events are created atomically and only once. Existing results
+and older versions are preserved. A completed version returns to `running`
+until the newly requested callbacks arrive; a missing run is not proof that a
+provider is already reading the file.
+
 ## Callback
 
 ```text

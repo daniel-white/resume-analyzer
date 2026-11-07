@@ -67,6 +67,28 @@ If the bias needs a layout signal that is not on `ParseInput`, stop and name the
 5. For existing demo/cluster startup, add the id to `deploy/helm/ats-providers/values.yaml` and inspect the API chart's endpoint list and startup scripts for matching wiring. Use the existing provider image and secret injection; do not deploy or expose a service merely to add it.
 6. Check `python3 -m providers --help`, start the new provider on its chosen private port, and verify `/health` returns its id. Exercise a raw-file job against a local callback receiver and verify the body, signature, and retry idempotency. Run the existing Rust registration/fleet tests and `helm template` when chart wiring changes. Stop any test servers you started.
 
+## Existing resumes after a registry change
+
+Every addition or repair must check a resume completed before the new plugin
+was registered, not just a fresh upload. The active legend must not display a
+missing run as indefinitely “Reading” without queued work. Main reconciles
+missing active-plugin runs on an authenticated detail visit for the newest
+parsed version, using the existing transactional `Store::fanout` and worker
+outbox. Preserve completed results and older versions; never fabricate a
+verdict or bypass the signed callback. A completed version must return to
+`running` when a new run is queued so polling continues until its callback.
+
+Add regression coverage for repeated/concurrent reconciliation (one run and
+one request event per version/plugin), preservation of existing verdicts, and
+unauthorized/unowned visits enqueueing nothing. Verify a pre-existing resume
+reaches completion as well as a new upload. If repairing a live demo, inspect
+stored runs and request events first: no run means registry reconciliation,
+not a hung provider. Queue only the missing run through the normal outbox,
+and verify its signed callback; do not delete or rerun completed runs. Deploy
+or alter live data only when the user has authorized that repair. For narrow
+factory scopes, report missing API/storage support rather than changing those
+paths without authorization.
+
 ## Generate the fake logo
 
 1. Inspect the existing images in `web/public/marks` for dimensions and visual style. Use the image-generation tool to create one original mark for the confirmed fictional display name. Prompt for a simple, distinctive ATS-company symbol, readable at small card size, matching the existing palette/background treatment, with no real vendor branding or resume data. Use sibling marks as style references if useful, not as designs to copy.
