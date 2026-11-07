@@ -30,7 +30,7 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
   if printf '%s\n' "$files" | grep -Eq '^(crates/|Cargo\.(toml|lock)$)'; then
     run_rust=1
   fi
-  if printf '%s\n' "$files" | grep -Eq '^web/'; then
+  if printf '%s\n' "$files" | grep -Eq '^(web/|Dockerfile\.web$|scripts/web-assets\.mjs$)'; then
     run_web=1
   fi
   if printf '%s\n' "$files" | grep -Eq '^(scripts/(factory(_test)?\.sh|check\.sh)|factory/|\.opencode/skills/ats-plugin/)'; then
@@ -77,6 +77,10 @@ if [[ "$run_web" == 1 ]]; then
     cd web
     pnpm typecheck
     pnpm test
+    pnpm build
+    if [[ -f ../scripts/web-assets.mjs ]]; then
+      node ../scripts/web-assets.mjs .output
+    fi
     if [[ -f playwright.config.ts ]]; then
       echo "check: web playwright"
       pnpm exec playwright install chromium

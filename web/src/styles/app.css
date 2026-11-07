@@ -1,4 +1,6 @@
-@import "tailwindcss";
+/* Scan only app sources: generated SSR files must not change the CSS hash
+   between the client and server builds. */
+@import "tailwindcss" source("../");
 
 :root {
   --paper: #f3efe6;
