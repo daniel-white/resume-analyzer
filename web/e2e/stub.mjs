@@ -42,8 +42,34 @@ const server = createServer(async (request, response) => {
         resumes: body.resumes ?? [],
         magicLinkStatus: body.magicLinkStatus ?? 202,
         verifyStatus: body.verifyStatus ?? 200,
+        streams: new Set(),
+        connections: 0,
+        detailReads: 0,
       });
       return sendJson(response, 201, { id });
+    }
+
+    const control = pathname.match(/^\/__seed\/([^/]+)$/);
+    if (control) {
+      const seeded = scenarios.get(control[1]);
+      if (!seeded) return send(response, 404, "");
+      if (method === "GET") {
+        return sendJson(response, 200, {
+          connections: seeded.connections,
+          streams: seeded.streams.size,
+          detailReads: seeded.detailReads,
+        });
+      }
+      if (method === "POST") {
+        const body = await readJson(request);
+        if (body.resumes) seeded.resumes = body.resumes;
+        if (body.onConnectResumes) seeded.onConnectResumes = body.onConnectResumes;
+        for (const stream of seeded.streams) {
+          if (body.event) stream.write(`event: ${body.event}\ndata: {}\n\n`);
+          if (body.disconnect) stream.end();
+        }
+        return send(response, 204, "");
+      }
     }
 
     if (pathname === "/api/plugins" && method === "GET") {
@@ -124,11 +150,30 @@ const server = createServer(async (request, response) => {
       });
     }
 
+    const events = pathname.match(/^\/api\/resumes\/([^/]+)\/events$/);
+    if (events && method === "GET") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      if (!scenario.resumes.some((item) => item.id === decodeURIComponent(events[1]))) {
+        return sendJson(response, 404, { error: "missing" });
+      }
+      response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "private, no-store" });
+      if (scenario.onConnectResumes) {
+        scenario.resumes = scenario.onConnectResumes;
+        delete scenario.onConnectResumes;
+      }
+      response.write(": connected\n\n");
+      scenario.connections++;
+      scenario.streams.add(response);
+      response.on("close", () => scenario.streams.delete(response));
+      return;
+    }
+
     const detail = pathname.match(/^\/api\/resumes\/([^/]+)$/);
     if (detail && method === "GET") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
       const found = scenario.resumes.find((item) => item.id === decodeURIComponent(detail[1]));
       if (!found) return sendJson(response, 404, { error: "missing" });
+      scenario.detailReads++;
       return sendJson(response, 200, found);
     }
 
