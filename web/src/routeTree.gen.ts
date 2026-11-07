@@ -10,9 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as LoginVerifyRouteImport } from './routes/login.verify'
-import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LoginVerifyRouteImport } from './routes/login.verify'
 import { Route as ResumesIdRouteImport } from './routes/resumes/$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -20,9 +20,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LoginVerifyRoute = LoginVerifyRouteImport.update({
-  id: '/login/verify',
-  path: '/login/verify',
+const HealthRoute = HealthRouteImport.update({
+  id: '/health',
+  path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -30,10 +30,10 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const HealthRoute = HealthRouteImport.update({
-  id: '/health',
-  path: '/health',
-  getParentRoute: () => rootRouteImport,
+const LoginVerifyRoute = LoginVerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => LoginRoute,
 } as any)
 const ResumesIdRoute = ResumesIdRouteImport.update({
   id: '/resumes/$id',
@@ -43,39 +43,38 @@ const ResumesIdRoute = ResumesIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/login/verify': typeof LoginVerifyRoute
-  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
+  '/login': typeof LoginRouteWithChildren
+  '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/login/verify': typeof LoginVerifyRoute
-  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
+  '/login': typeof LoginRouteWithChildren
+  '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/login/verify': typeof LoginVerifyRoute
-  '/login': typeof LoginRoute
   '/health': typeof HealthRoute
+  '/login': typeof LoginRouteWithChildren
+  '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
+  fullPaths: '/' | '/health' | '/login' | '/login/verify' | '/resumes/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
-  id: '__root__' | '/' | '/login/verify' | '/login' | '/health' | '/resumes/$id'
+  to: '/' | '/health' | '/login' | '/login/verify' | '/resumes/$id'
+  id: '__root__' | '/' | '/health' | '/login' | '/login/verify' | '/resumes/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  LoginVerifyRoute: typeof LoginVerifyRoute
-  LoginRoute: typeof LoginRoute
   HealthRoute: typeof HealthRoute
+  LoginRoute: typeof LoginRouteWithChildren
   ResumesIdRoute: typeof ResumesIdRoute
 }
 
@@ -88,11 +87,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/login/verify': {
-      id: '/login/verify'
-      path: '/login/verify'
-      fullPath: '/login/verify'
-      preLoaderRoute: typeof LoginVerifyRouteImport
+    '/health': {
+      id: '/health'
+      path: '/health'
+      fullPath: '/health'
+      preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -102,12 +101,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/health': {
-      id: '/health'
-      path: '/health'
-      fullPath: '/health'
-      preLoaderRoute: typeof HealthRouteImport
-      parentRoute: typeof rootRouteImport
+    '/login/verify': {
+      id: '/login/verify'
+      path: '/verify'
+      fullPath: '/login/verify'
+      preLoaderRoute: typeof LoginVerifyRouteImport
+      parentRoute: typeof LoginRoute
     }
     '/resumes/$id': {
       id: '/resumes/$id'
@@ -119,11 +118,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface LoginRouteChildren {
+  LoginVerifyRoute: typeof LoginVerifyRoute
+}
+
+const LoginRouteChildren: LoginRouteChildren = {
+  LoginVerifyRoute: LoginVerifyRoute,
+}
+
+const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  LoginVerifyRoute: LoginVerifyRoute,
-  LoginRoute: LoginRoute,
   HealthRoute: HealthRoute,
+  LoginRoute: LoginRouteWithChildren,
   ResumesIdRoute: ResumesIdRoute,
 }
 export const routeTree = rootRouteImport
