@@ -835,6 +835,7 @@ mod tests {
             score,
             summary: summary.to_owned(),
             factors: vec![],
+            report: None,
         }
     }
 

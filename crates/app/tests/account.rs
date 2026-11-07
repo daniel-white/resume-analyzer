@@ -232,6 +232,17 @@ async fn login_cookie_can_manage_the_account() {
         score: 50,
         summary: "Score 50 of 100.".into(),
         factors: vec![],
+        report: Some(domain::ProviderReport {
+            engine: "Plaintext Classic".into(),
+            engine_version: "3.8.2".into(),
+            reference: "LEGACY-REPORT".into(),
+            outcome: domain::ReportOutcome::Parsed,
+            contact_fields: 2,
+            sections_detected: 0,
+            bullets_detected: 0,
+            layout_confidence: domain::LayoutConfidence::Inferred,
+            notes: vec!["Simulated parser report.".into()],
+        }),
     };
     store
         .record_callback(
@@ -270,6 +281,16 @@ async fn login_cookie_can_manage_the_account() {
             .expect("detail json");
         assert_eq!(detail["versions"][0]["status"], "running");
         assert_eq!(detail["versions"][0]["runs"].as_array().unwrap().len(), 2);
+        let legacy_run = detail["versions"][0]["runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|run| run["plugin_id"] == "legacy")
+            .unwrap();
+        assert_eq!(
+            legacy_run["verdict"]["report"],
+            serde_json::to_value(&verdict.report).unwrap()
+        );
     }
     let requested: i64 = sqlx::query_scalar("select count(*) from outbox where version_id = $1 and name = 'AtsRunRequested' and payload->>'plugin_id' = 'stub'")
         .bind(version_uuid).fetch_one(store.pool()).await.unwrap();

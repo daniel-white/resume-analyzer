@@ -43,12 +43,25 @@ export type Factor = {
   advice: string;
 };
 
+export type ProviderReport = {
+  engine: string;
+  engine_version: string;
+  reference: string;
+  outcome: "parsed" | "parsed_with_warnings" | "unreadable";
+  contact_fields: number;
+  sections_detected: number;
+  bullets_detected: number;
+  layout_confidence: LayoutConfidence;
+  notes: string[];
+};
+
 export type Verdict = {
   kept: string[];
   dropped: string[];
   score: number;
   summary: string;
   factors: Factor[];
+  report?: ProviderReport | null;
 };
 
 export type VersionSummary = {
@@ -176,6 +189,7 @@ export type VerdictCard =
       factors: FactorLine[];
       summary?: string;
       parse?: ParseInput | null;
+      report?: ProviderReport | null;
     };
 
 export type Teardown =
@@ -333,6 +347,7 @@ export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
         advice: factor.advice,
       })),
       summary: verdict.summary,
+      report: verdict.report,
       parse: runs.find((run) => run.plugin_id === plugin.id)?.parse ?? null,
     };
   });

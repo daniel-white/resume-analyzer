@@ -216,6 +216,7 @@ impl Marks {
             kept: self.kept,
             dropped: self.dropped,
             factors: self.factors,
+            report: None,
         }
     }
 }

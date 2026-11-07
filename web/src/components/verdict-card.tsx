@@ -14,6 +14,7 @@ export function VerdictCardView({ card, initiallySelected = false }: { card: Ver
           kept: card.kept,
           dropped: card.missed,
           summary: card.summary,
+          report: card.report,
           factors: card.factors.map((factor) => ({ ...factor, delta: Number(factor.delta), advice: factor.advice ?? "" })),
         }}
         reading={card.pending}

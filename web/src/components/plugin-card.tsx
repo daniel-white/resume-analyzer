@@ -7,6 +7,7 @@ import { LoaderCircle } from "lucide-react";
 
 type CardVerdict = Pick<Verdict, "score" | "kept" | "dropped" | "factors"> & {
   summary?: string;
+  report?: Verdict["report"];
 };
 
 const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume"]);
@@ -92,6 +93,7 @@ export function PluginCard({
               Why
             </h3>
             <FactorList factors={verdict.factors} />
+            {verdict.report ? <ProviderReportView report={verdict.report} /> : null}
             {parse ? (
               <section className="mt-4 border-t pt-3" aria-label={`${plugin.name} extract`}>
                 <h3 className="text-xs uppercase text-muted-foreground">This system's extract</h3>
@@ -108,5 +110,35 @@ export function PluginCard({
         )}
       </details>
     </Sheet>
+  );
+}
+
+export function ProviderReportView({ report }: { report: NonNullable<Verdict["report"]> }) {
+  const outcome = {
+    parsed: "Parsed",
+    parsed_with_warnings: "Parsed with warnings",
+    unreadable: "Could not read file",
+  }[report.outcome];
+  return (
+    <section className="mt-4 border-t pt-3" aria-label="Simulated parser report">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-xs uppercase text-muted-foreground">Simulated parser report</h3>
+        <span className="text-xs font-medium">{outcome}</span>
+      </div>
+      <p className="mt-2 text-sm">{report.engine} <span className="font-mono text-xs text-muted-foreground">v{report.engine_version}</span></p>
+      <p className="mt-1 break-all font-mono text-xs text-muted-foreground">Report {report.reference}</p>
+      {report.outcome !== "unreadable" ? (
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div><dt className="text-muted-foreground">Contact fields detected</dt><dd className="mt-0.5 font-mono">{report.contact_fields} / 3</dd></div>
+          <div><dt className="text-muted-foreground">Section headings detected</dt><dd className="mt-0.5 font-mono">{report.sections_detected}</dd></div>
+          <div><dt className="text-muted-foreground">Bullets detected</dt><dd className="mt-0.5 font-mono">{report.bullets_detected}</dd></div>
+          <div><dt className="text-muted-foreground">Layout evidence</dt><dd className="mt-0.5">{report.layout_confidence === "structural" ? "DOCX markup" : "PDF inference"}</dd></div>
+        </dl>
+      ) : null}
+      <ul className="mt-3 flex flex-col gap-1.5 text-xs text-muted-foreground">
+        {report.notes.map((note, index) => <li key={index}>{note}</li>)}
+      </ul>
+      <p className="mt-3 text-xs text-muted-foreground">Fictional engine metadata. Detection counts are not a guarantee that fields survived scoring.</p>
+    </section>
   );
 }

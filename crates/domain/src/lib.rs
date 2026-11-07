@@ -234,6 +234,30 @@ pub struct Verdict {
     /// Template of the factor advice, changes first. Not a model call.
     pub summary: String,
     pub factors: Vec<Factor>,
+    /// Optional simulated provider diagnostics. Older stored verdicts omit this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report: Option<ProviderReport>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProviderReport {
+    pub engine: String,
+    pub engine_version: String,
+    pub reference: String,
+    pub outcome: ReportOutcome,
+    pub contact_fields: u32,
+    pub sections_detected: u32,
+    pub bullets_detected: u32,
+    pub layout_confidence: LayoutConfidence,
+    pub notes: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReportOutcome {
+    Parsed,
+    ParsedWithWarnings,
+    Unreadable,
 }
 
 /// `clamp(base + sum(delta), 0, 100)`. Plugins pick the base.

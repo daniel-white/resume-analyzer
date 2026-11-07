@@ -94,12 +94,28 @@ class Factor(TypedDict):
     advice: str
 
 
-class Verdict(TypedDict):
+class ProviderReport(TypedDict):
+    engine: str
+    engine_version: str
+    reference: str
+    outcome: str
+    contact_fields: int
+    sections_detected: int
+    bullets_detected: int
+    layout_confidence: str
+    notes: list[str]
+
+
+class VerdictFields(TypedDict):
     kept: list[str]
     dropped: list[str]
     score: int
     summary: str
     factors: list[Factor]
+
+
+class Verdict(VerdictFields, total=False):
+    report: ProviderReport
 
 
 class CallbackBody(TypedDict):
@@ -638,11 +654,59 @@ def pause(item: Provider, run_id: str) -> float:
     return total
 
 
+def provider_report(item: Provider, run_id: str, parsed: Read, result: Verdict) -> ProviderReport:
+    """Fictional engine identity, with diagnostics grounded in this file's read.
+
+    Counts describe detection, not survival. Never invent candidate data or
+    claim a PDF layout inference is a structural fact. References survive retries.
+    """
+    engines = {
+        "greenline": ("Plaintext Classic", "3.8.2", "Standard heading recognition; header contact is excluded from scoring."),
+        "levr": ("TokenMatch", "2.14.0", "Exact-token skill matching; bullet density contributes to scoring."),
+        "workdaye": ("Strict Intake", "5.2.1", "Body contact and MM/YYYY dates required; complex layout is penalized."),
+        "ash": ("StructureFlow", "4.6.0", "Structure-tolerant scoring with skill normalization; images are excluded."),
+        "smart_resume": ("CellReader", "1.9.3", "Table-cell text is supported; text boxes are excluded from scoring."),
+    }
+    engine, version, policy = engines[item.id]
+    notes = []
+    if parsed.unreadable:
+        notes.append("File could not be opened; no extraction metrics are available.")
+    else:
+        notes.append(policy)
+        if parsed.layout_confidence == "inferred":
+            notes.append("PDF inspection is limited to embedded text; layout signals are inferred, not verified.")
+        else:
+            notes.append("Layout signals detected from DOCX markup.")
+        if not parsed.sections:
+            notes.append("No styled section headings detected; this does not mean the resume has no sections.")
+        notes.extend(f"Scoring warning: {factor['label']}." for factor in result["factors"] if factor["delta"] < 0)
+    reference = hashlib.sha256(f"{item.id}:{run_id.lower()}".encode()).hexdigest()[:12].upper()
+    return ProviderReport(
+        engine=engine,
+        engine_version=version,
+        reference=f"{item.id.upper()}-{reference}",
+        outcome="unreadable" if parsed.unreadable else (
+            "parsed_with_warnings" if any(f["delta"] < 0 for f in result["factors"]) else "parsed"
+        ),
+        contact_fields=sum(value is not None for value in (parsed.name, parsed.email, parsed.phone)),
+        sections_detected=len(parsed.sections),
+        bullets_detected=parsed.bullet_count,
+        layout_confidence=parsed.layout_confidence,
+        notes=notes,
+    )
+
+
+def delivered_verdict(item: Provider, run_id: str, parsed: Read) -> Verdict:
+    result = demo_decide(item.id, run_id, parsed)
+    result["report"] = provider_report(item, run_id, parsed, result)
+    return result
+
+
 def deliver(item: Provider, job: Job, parsed: Read) -> None:
     body: CallbackBody = {
         "run_id": job.run_id,
         "parse": as_parse(parsed),
-        "verdict": demo_decide(item.id, job.run_id, parsed),
+        "verdict": delivered_verdict(item, job.run_id, parsed),
     }
     raw = json.dumps(body, separators=(",", ":")).encode()
     key = secret()

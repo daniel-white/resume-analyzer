@@ -291,3 +291,39 @@ what to keep. `summary` is the score, then the negative advice, then the
 positive advice. It is that template, not a model call. The score is
 `clamp(base + sum(delta), 0, 100)`. Each plugin chooses its own base. The stub
 uses 50.
+
+### Simulated provider report (optional)
+
+Python providers attach `verdict.report` to the signed callback. Rust stores
+and returns it unchanged with the verdict, including in callback events. Old
+results and the compiled stand-in omit this field; the UI must not fabricate it.
+
+```json
+{
+  "engine": "Plaintext Classic",
+  "engine_version": "3.8.2",
+  "reference": "GREENLINE-38F60C123ABC",
+  "outcome": "parsed_with_warnings",
+  "contact_fields": 2,
+  "sections_detected": 1,
+  "bullets_detected": 3,
+  "layout_confidence": "structural",
+  "notes": ["Layout signals detected from DOCX markup."]
+}
+```
+
+Engine identity/version and report references are fictional, not vendor claims.
+The reference is deterministic per provider/run, so retries keep identical body
+bytes. `outcome` is `parsed`, `parsed_with_warnings` (negative score factors), or
+`unreadable`. Counts describe the provider's raw-file detection, not field
+survival or verified candidate data. Unreadable reports show no extraction
+metrics in the UI. PDF notes disclose the limited embedded-text inspection and
+inferred layout evidence. Reports do not change score math or factor templates.
+
+The cross-runtime signature/serialization check is opt-in because the Rust-only
+toolchain does not include Python:
+
+```sh
+PYTHON=python3 cargo test -p domain --test python_report -- --ignored
+python3 -m unittest discover -s providers -p 'test_*.py'
+```

@@ -55,6 +55,32 @@ class DemoTests(unittest.TestCase):
             for run_id in ("first", "second"):
                 self.assertEqual(stub.demo_decide(provider.id, run_id, parsed), stub.decide(provider.id, parsed))
 
+    def test_reports_are_distinct_stable_and_grounded_in_the_read(self):
+        parsed = stub.read_file(stub.DOCX, fixture(True))
+        engines = set()
+        for item in stub.FLEET:
+            result = stub.delivered_verdict(item, "run", parsed)
+            self.assertEqual(result, stub.delivered_verdict(item, "RUN", parsed))
+            report = result["report"]
+            engines.add(report["engine"])
+            self.assertNotEqual(report["reference"], stub.delivered_verdict(item, "new", parsed)["report"]["reference"])
+            self.assertEqual(report["contact_fields"], 2)
+            self.assertEqual(report["sections_detected"], len(parsed.sections))
+            self.assertEqual(report["bullets_detected"], parsed.bullet_count)
+            self.assertEqual(report["layout_confidence"], "structural")
+            self.assertEqual(report["outcome"], "parsed_with_warnings" if result["dropped"] else "parsed")
+            self.assertEqual({k: v for k, v in result.items() if k != "report"}, stub.demo_decide(item.id, "run", parsed))
+        self.assertEqual(len(engines), len(stub.FLEET))
+
+    def test_failed_reports_and_pdf_limitations_are_explicit(self):
+        for item in stub.FLEET:
+            report = stub.delivered_verdict(item, "run", stub.read_file(stub.DOCX, b"bad"))["report"]
+            self.assertEqual(report["outcome"], "unreadable")
+            self.assertEqual((report["contact_fields"], report["sections_detected"], report["bullets_detected"]), (0, 0, 0))
+            report = stub.delivered_verdict(item, "run", stub.read_file(stub.PDF, b"%PDF-1.4"))["report"]
+            self.assertEqual(report["layout_confidence"], "inferred")
+            self.assertTrue(any("limited to embedded text" in note for note in report["notes"]))
+
 
 if __name__ == "__main__":
     unittest.main()
