@@ -33,13 +33,14 @@ export async function requestMagicLink(
   baseUrl: string,
   email: string,
   cookie?: string,
+  returnTo?: string,
 ): Promise<MagicLinkResult> {
   const trimmed = email.trim();
   if (!trimmed) return { ok: false, message: "Enter your email." };
   const response = await fetch(new URL("/api/auth/magic-link", baseUrl), {
     method: "POST",
     headers: jsonHeaders(cookie),
-    body: JSON.stringify({ email: trimmed }),
+    body: JSON.stringify({ email: trimmed, return_to: returnTo }),
   });
   if (response.status === 202) return { ok: true };
   return { ok: false, message: magicLinkMessage(response.status, await response.text()) };

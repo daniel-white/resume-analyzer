@@ -43,6 +43,15 @@ pub struct VersionFile {
     pub media_type: String,
 }
 
+pub struct AnalysisBatch {
+    pub resume_id: Uuid,
+    pub version_id: Uuid,
+    pub email: String,
+    pub filename: String,
+    pub number: i32,
+    pub runs: Vec<(Uuid, String, Verdict)>,
+}
+
 impl Store {
     pub async fn connect(url: &str) -> anyhow::Result<Self> {
         let pool = PgPoolOptions::new()
@@ -55,6 +64,73 @@ impl Store {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    /// Claim a version once the oldest pending result's batching window expires.
+    /// Include all its ready results, including arrivals inside that window.
+    pub async fn claim_analysis_batch(&self) -> anyhow::Result<Option<AnalysisBatch>> {
+        let mut tx = self.pool.begin().await?;
+        let row = sqlx::query(
+            "select versions.id, resumes.id as resume_id, users.email, versions.filename, versions.number
+             from versions
+             join resumes on resumes.id = versions.resume_id
+             join users on users.id = resumes.user_id
+             where (versions.notification_lease_until is null or versions.notification_lease_until < now())
+               and exists (select 1 from runs where runs.version_id = versions.id
+                 and notification_due_at <= now() and notified_at is null)
+             order by versions.created_at
+             for update of versions skip locked limit 1",
+        )
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let version_id: Uuid = row.try_get("id")?;
+        sqlx::query("update versions set notification_lease_until = now() + interval '60 seconds' where id = $1")
+            .bind(version_id).execute(&mut *tx).await?;
+        let runs = sqlx::query("select id, plugin_id, verdict from runs where version_id = $1 and notification_due_at is not null and notified_at is null order by plugin_id")
+            .bind(version_id).fetch_all(&mut *tx).await?;
+        let batch = AnalysisBatch {
+            resume_id: row.try_get("resume_id")?,
+            version_id,
+            email: row.try_get("email")?,
+            filename: row.try_get("filename")?,
+            number: row.try_get("number")?,
+            runs: runs
+                .iter()
+                .map(|row| {
+                    Ok((
+                        row.try_get("id")?,
+                        row.try_get("plugin_id")?,
+                        row.try_get::<Json<Verdict>, _>("verdict")?.0,
+                    ))
+                })
+                .collect::<anyhow::Result<_>>()?,
+        };
+        tx.commit().await?;
+        Ok(Some(batch))
+    }
+
+    pub async fn finish_analysis_batch(
+        &self,
+        batch: &AnalysisBatch,
+        sent: bool,
+    ) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        if sent {
+            let ids: Vec<Uuid> = batch.runs.iter().map(|(id, _, _)| *id).collect();
+            sqlx::query("update runs set notified_at = now() where id = any($1)")
+                .bind(ids)
+                .execute(&mut *tx)
+                .await?;
+        }
+        sqlx::query("update versions set notification_lease_until = null where id = $1")
+            .bind(batch.version_id)
+            .execute(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(())
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
@@ -570,7 +646,8 @@ impl Store {
             return Ok(RecordOutcome::Replay);
         }
         let row = sqlx::query(
-            "update runs set status = 'complete', parse = $3, verdict = $4
+            "update runs set status = 'complete', parse = $3, verdict = $4,
+                 notification_due_at = now() + interval '8 seconds'
              where id = $1 and plugin_id = $2 and status = 'requested'
              returning version_id",
         )
@@ -759,6 +836,100 @@ mod tests {
             summary: summary.to_owned(),
             factors: vec![],
         }
+    }
+
+    #[tokio::test]
+    async fn analysis_batches_wait_group_retry_and_do_not_repeat() {
+        let store = Ephemeral::start().await.unwrap();
+        let user = Uuid::new_v4();
+        sqlx::query("insert into users (id, email) values ($1, 'owner@example.com')")
+            .bind(user)
+            .execute(store.pool())
+            .await
+            .unwrap();
+        let resume = Uuid::new_v4();
+        let version = Uuid::new_v4();
+        store
+            .create_resume(user, resume, version, "resume.pdf", domain::PDF, "file")
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        store.save_parse(version, &parse).await.unwrap();
+        store
+            .fanout(version, &["greenline", "levr", "ash"])
+            .await
+            .unwrap();
+        let detail = store.detail(user, resume).await.unwrap().unwrap();
+        let runs = &detail.versions[0].runs;
+        for run in runs.iter().filter(|run| run.plugin_id != "ash") {
+            store
+                .record_callback(
+                    &run.plugin_id,
+                    run.id,
+                    &run.id.to_string(),
+                    &parse,
+                    &empty_verdict(85, "done"),
+                )
+                .await
+                .unwrap();
+        }
+        assert!(store.claim_analysis_batch().await.unwrap().is_none());
+        sqlx::query("update runs set notification_due_at = now() - interval '1 second' where plugin_id = 'greenline'")
+            .execute(store.pool()).await.unwrap();
+        let batch = store.claim_analysis_batch().await.unwrap().unwrap();
+        assert_eq!(batch.email, "owner@example.com");
+        assert_eq!(batch.resume_id, resume);
+        assert_eq!(batch.version_id, version);
+        assert_eq!(
+            batch.runs.len(),
+            2,
+            "include nearby results even if their own window hasn't elapsed"
+        );
+        assert!(
+            store.claim_analysis_batch().await.unwrap().is_none(),
+            "leased by one sender"
+        );
+        store.finish_analysis_batch(&batch, false).await.unwrap();
+        let retry = store.claim_analysis_batch().await.unwrap().unwrap();
+        assert_eq!(retry.runs.len(), 2);
+        store.finish_analysis_batch(&retry, true).await.unwrap();
+        let greenline = runs
+            .iter()
+            .find(|run| run.plugin_id == "greenline")
+            .unwrap();
+        assert!(matches!(
+            store
+                .record_callback(
+                    "greenline",
+                    greenline.id,
+                    "another-key",
+                    &parse,
+                    &empty_verdict(85, "done")
+                )
+                .await
+                .unwrap(),
+            RecordOutcome::Replay
+        ));
+        assert!(store.claim_analysis_batch().await.unwrap().is_none());
+        let ash = runs.iter().find(|run| run.plugin_id == "ash").unwrap();
+        store
+            .record_callback(
+                "ash",
+                ash.id,
+                &ash.id.to_string(),
+                &parse,
+                &empty_verdict(90, "later"),
+            )
+            .await
+            .unwrap();
+        sqlx::query("update runs set notification_due_at = now() - interval '1 second' where plugin_id = 'ash'")
+            .execute(store.pool()).await.unwrap();
+        let later = store.claim_analysis_batch().await.unwrap().unwrap();
+        assert_eq!(later.runs.len(), 1);
+        assert_eq!(later.runs[0].1, "ash");
+        store.finish_analysis_batch(&later, false).await.unwrap();
+        store.delete_resume(user, resume, None).await.unwrap();
+        assert!(store.claim_analysis_batch().await.unwrap().is_none());
     }
 
     #[tokio::test]

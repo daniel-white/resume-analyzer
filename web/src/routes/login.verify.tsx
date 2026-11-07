@@ -11,10 +11,10 @@ export const Route = createFileRoute("/login/verify")({
   validateSearch: (search: Record<string, unknown>): VerifySearch => ({
     token: typeof search.token === "string" ? search.token : undefined,
   }),
-  loaderDeps: ({ search }) => ({ token: search.token ?? "" }),
+  loaderDeps: ({ search }) => ({ token: search.token ?? "", returnTo: search.returnTo }),
   loader: async ({ deps }) => {
     if (!deps.token) return { message: "That link did not sign you in." };
-    const result = await verifyLink({ data: deps.token });
+    const result = await verifyLink({ data: deps });
     return { message: result.message };
   },
   pendingComponent: SigningIn,
@@ -37,6 +37,7 @@ function SigningIn() {
 
 function VerifyPage() {
   const { message } = Route.useLoaderData();
+  const { returnTo } = Route.useSearch();
 
   return (
     <Page>
@@ -46,7 +47,7 @@ function VerifyPage() {
       <div className="sign">
         <h1>That link did not work</h1>
         <p>{message}</p>
-        <Link to="/login">Ask for another link</Link>
+        <Link to="/login" search={{ returnTo }}>Ask for another link</Link>
       </div>
     </Page>
   );

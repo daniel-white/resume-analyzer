@@ -64,3 +64,14 @@ test("SmartResume and the original DOCX viewer render together", async ({ page }
   await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
   await expect(card.getByLabel("Pending")).toBeVisible();
 });
+
+test("an email deep link opens the selected provider on the selected version", async ({ page }) => {
+  await installApi(page, { resumes: [designed] });
+  await page.goto(`/resumes/${designed.id}?version=${designed.versions[0].id}&provider=greenline`);
+  const selected = page.getByRole("article", { name: "Greenline", exact: true });
+  await expect(selected.locator("details")).toHaveAttribute("open", "");
+  await expect(selected.getByRole("heading", { name: "Why", exact: true })).toBeVisible();
+  await expect(page.getByRole("article", { name: "Levr", exact: true }).locator("details")).not.toHaveAttribute("open");
+  await page.reload();
+  await expect(selected.locator("details")).toHaveAttribute("open", "");
+});

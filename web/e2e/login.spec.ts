@@ -59,3 +59,20 @@ test("rejects a verify visit with no token", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "That link did not work" })).toBeVisible();
   await expect(page.getByText("That link did not sign you in.")).toBeVisible();
 });
+
+test("preserves an analysis email destination through sign-in", async ({ page }) => {
+  await installApi(page, { signedIn: false, resumes: [] });
+  const id = "12345678-1234-1234-1234-123456789abc";
+  const destination = `/resumes/${id}?version=${id}&provider=greenline`;
+  await page.goto(destination);
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  expect(new URL(page.url()).searchParams.get("returnTo")).toBe(destination);
+  await page.goto(`/login/verify?token=fresh-token&returnTo=${encodeURIComponent(destination)}`);
+  await expect(page).toHaveURL(new RegExp(`/resumes/${id}\\?version=${id}&provider=greenline$`));
+});
+
+test("does not follow an external post-login destination", async ({ page }) => {
+  await installApi(page, { signedIn: false, resumes: [] });
+  await page.goto("/login/verify?token=fresh-token&returnTo=https%3A%2F%2Fevil.example");
+  await expect(page).toHaveURL(/\/$/);
+});

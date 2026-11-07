@@ -136,6 +136,21 @@ does not store the in-process return value. Only this callback is stored.
 | 401 | Signature or skew failed. |
 | 404 | Unknown plugin, or the run does not belong to it. |
 
+### Analysis notifications
+
+A newly recorded callback also marks its run for email delivery in the same
+transaction. After an eight-second batching window, a separate worker sends
+all pending completed runs for that resume version to the account owner's email.
+It does not wait for still-running providers and does not block live events.
+SMTP failures remain pending; successful runs are not emailed again on callback
+replay. Existing results are not backfilled when this feature is deployed.
+
+Each result links to `/resumes/{resume_id}?version={version_id}&provider={plugin_id}`
+on `APP_ORIGIN`. The page selects that version and expands the provider card.
+Signed-out visitors retain this destination through magic-link login.
+`POST /api/auth/magic-link` accepts optional `return_to` alongside `email`;
+only local resume-detail paths are accepted, never external redirect URLs.
+
 ## HTTP
 
 ```text

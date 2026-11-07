@@ -14,6 +14,7 @@ import {
   type UploadResult,
 } from "../server/resumes";
 import { SignedOut } from "../server/session";
+import { resumeReturnTo } from "../lib/return-to";
 
 export type { LibraryView, Teardown, UploadResult };
 
@@ -28,8 +29,8 @@ function cookie(): string | undefined {
   return getRequestHeader("cookie");
 }
 
-function signedOut(): never {
-  throw redirect({ to: "/login" });
+function signedOut(returnTo?: string): never {
+  throw redirect({ to: "/login", search: { returnTo: resumeReturnTo(returnTo) } });
 }
 
 export const getLibrary = createServerFn({ method: "GET" }).handler(
@@ -49,21 +50,25 @@ export const getLibrary = createServerFn({ method: "GET" }).handler(
 );
 
 export const getTeardown = createServerFn({ method: "GET" })
-  .validator((data: { id: string; versionId?: string }) => {
+  .validator((data: { id: string; versionId?: string; provider?: string }) => {
     if (!data.id) throw new Error("missing resume");
     return data;
   })
   .handler(async ({ data }): Promise<SignedInTeardown | { kind: "missing" }> => {
+    const search = new URLSearchParams();
+    if (data.versionId) search.set("version", data.versionId);
+    if (data.provider) search.set("provider", data.provider);
+    const returnTo = `/resumes/${data.id}${search.size ? `?${search}` : ""}`;
     try {
       const [view, account] = await Promise.all([
         fetchTeardown(apiBase(), data.id, cookie(), data.versionId),
         fetchAccount(apiBase(), cookie()),
       ]);
-      if (!account) signedOut();
+      if (!account) signedOut(returnTo);
       if (view.kind === "missing") return view;
       return { ...view, email: account.email };
     } catch (error) {
-      if (error instanceof SignedOut) signedOut();
+      if (error instanceof SignedOut) signedOut(returnTo);
       throw error;
     }
   });

@@ -131,8 +131,11 @@ pub async fn serve() {
         .map(|url| url.trim().trim_end_matches('/').to_owned())
         .filter(|url| !url.is_empty())
         .unwrap_or_else(|| callback_url(address));
-    let worker =
-        Arc::new(Worker::new(store, objects, plugins, bus, callback).endpoints(fleet.endpoints));
+    let worker = Arc::new(
+        Worker::new(store, objects, plugins, bus, callback)
+            .endpoints(fleet.endpoints)
+            .notifications(api.mail.clone(), &config.app_origin),
+    );
     worker.spawn();
     let health = HealthState { config, s3 };
     eprintln!("listening on {address}");

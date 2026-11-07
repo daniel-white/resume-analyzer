@@ -11,6 +11,7 @@ import {
   type MagicLinkResult,
 } from "../server/auth";
 import { SignedOut } from "../server/session";
+import { resumeReturnTo } from "../lib/return-to";
 
 export type { Account, MagicLinkResult };
 
@@ -39,19 +40,19 @@ export const getAccount = createServerFn({ method: "GET" }).handler(
 );
 
 export const sendMagicLink = createServerFn({ method: "POST" })
-  .validator((email: string) => email)
+  .validator((data: { email: string; returnTo?: string }) => ({ email: data.email, returnTo: resumeReturnTo(data.returnTo) }))
   .handler(async ({ data }): Promise<MagicLinkResult> =>
-    requestMagicLink(apiBase(), data, cookie()),
+    requestMagicLink(apiBase(), data.email, cookie(), data.returnTo),
   );
 
 export const verifyLink = createServerFn({ method: "POST" })
-  .validator((token: string) => token)
+  .validator((data: { token: string; returnTo?: string }) => ({ token: data.token, returnTo: resumeReturnTo(data.returnTo) }))
   .handler(async ({ data }): Promise<{ ok: false; message: string }> => {
-    const result = await verifyMagicLink(apiBase(), data, cookie());
+    const result = await verifyMagicLink(apiBase(), data.token, cookie());
     if (!result.ok) return result;
     copySetCookie(result.setCookie);
     throw redirect({
-      to: "/",
+      href: data.returnTo ?? "/",
       headers: { "set-cookie": result.setCookie },
     });
   });

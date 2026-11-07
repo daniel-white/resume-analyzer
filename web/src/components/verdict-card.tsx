@@ -3,8 +3,8 @@ import { useState } from "react";
 
 import { PluginCard } from "./plugin-card";
 
-export function VerdictCardView({ card }: { card: VerdictCard }) {
-  const [selected, setSelected] = useState(false);
+export function VerdictCardView({ card, initiallySelected = false }: { card: VerdictCard; initiallySelected?: boolean }) {
+  const [selected, setSelected] = useState(initiallySelected);
   return (
     <article aria-label={card.name}>
       <PluginCard

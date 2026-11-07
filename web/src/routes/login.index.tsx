@@ -5,14 +5,15 @@ import { Page } from "~/components/page";
 import { getAccount, sendMagicLink } from "~/fns/auth.functions";
 
 export const Route = createFileRoute("/login/")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ search }) => {
     const account = await getAccount();
-    if (account) throw redirect({ to: "/" });
+    if (account) throw redirect({ href: search.returnTo ?? "/" });
   },
   component: LoginPage,
 });
 
 function LoginPage() {
+  const { returnTo } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,7 +25,7 @@ function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await sendMagicLink({ data: email });
+      const result = await sendMagicLink({ data: { email, returnTo } });
       if (!result.ok) {
         setError(result.message);
         setBusy(false);

@@ -16,6 +16,7 @@ use crate::api::Api;
 #[derive(Deserialize)]
 struct EmailBody {
     email: String,
+    return_to: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -71,12 +72,27 @@ async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailB
         }
     };
     let origin = api.app_origin.trim_end_matches('/');
-    let url = format!("{origin}/login/verify?token={}", issued.token);
-    if let Err(err) = api.mail.send_magic_link(&issued.email, &url).await {
+    let mut url = match reqwest::Url::parse(&format!("{origin}/login/verify")) {
+        Ok(url) => url,
+        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "unavailable"),
+    };
+    url.query_pairs_mut().append_pair("token", &issued.token);
+    if let Some(return_to) = body.return_to.filter(|path| valid_return_to(path)) {
+        url.query_pairs_mut().append_pair("returnTo", &return_to);
+    }
+    if let Err(err) = api.mail.send_magic_link(&issued.email, url.as_str()).await {
         eprintln!("magic link mail: {err}");
         return error(StatusCode::BAD_GATEWAY, "mail");
     }
     StatusCode::ACCEPTED.into_response()
+}
+
+fn valid_return_to(path: &str) -> bool {
+    let Some(id) = path.strip_prefix("/resumes/") else {
+        return false;
+    };
+    let id = id.split('?').next().unwrap_or_default();
+    auth::Uuid::parse_str(id).is_ok() && !path.contains(['\\', '\r', '\n', '#'])
 }
 
 async fn verify_magic_link(State(api): State<Arc<Api>>, Json(body): Json<TokenBody>) -> Response {
@@ -249,4 +265,26 @@ fn with_cookie(mut response: Response, cookie: HeaderValue) -> Response {
 
 fn error(status: StatusCode, code: &'static str) -> Response {
     (status, Json(serde_json::json!({ "error": code }))).into_response()
+}
+
+#[cfg(test)]
+mod return_to_tests {
+    use super::valid_return_to;
+
+    #[test]
+    fn accepts_only_local_resume_destinations() {
+        let id = "12345678-1234-1234-1234-123456789abc";
+        assert!(valid_return_to(&format!(
+            "/resumes/{id}?version={id}&provider=greenline"
+        )));
+        for path in [
+            "https://evil.example",
+            "//evil.example",
+            "/login",
+            "/resumes/not-an-id",
+        ] {
+            assert!(!valid_return_to(path));
+        }
+        assert!(!valid_return_to(&format!("/resumes/{id}\\evil")));
+    }
 }

@@ -1,12 +1,23 @@
 """Per-run demo variation preserves parser biases and callback determinism."""
 
 import unittest
+from unittest.mock import patch
 
 from providers import stub
 from providers.test_smart_resume import fixture
 
 
 class DemoTests(unittest.TestCase):
+    def test_demo_delays_are_longer_and_can_be_overridden(self):
+        with patch.dict(stub.os.environ, {"ATS_DELAY": ""}):
+            for provider in stub.FLEET:
+                low, high = stub.delay_band(provider)
+                self.assertGreaterEqual(low, 10)
+                self.assertLessEqual(high, 30)
+                self.assertGreater(high, low)
+        with patch.dict(stub.os.environ, {"ATS_DELAY": "0,0"}):
+            self.assertEqual(stub.delay_band(stub.FLEET[0]), (0, 0))
+
     def test_retries_are_identical_and_new_runs_vary_for_every_provider(self):
         for designed in (False, True):
             parsed = stub.read_file(stub.DOCX, fixture(designed))

@@ -23,6 +23,7 @@ pub struct Worker {
     bus: Bus,
     self_url: String,
     client: reqwest::Client,
+    notifications: Option<(mail::Smtp, String)>,
 }
 
 impl Worker {
@@ -41,12 +42,18 @@ impl Worker {
             bus,
             self_url: self_url.into(),
             client: reqwest::Client::new(),
+            notifications: None,
         }
     }
 
     /// Python provider urls, keyed by plugin id. Empty keeps the in-process stub.
     pub fn endpoints(mut self, endpoints: HashMap<String, String>) -> Self {
         self.endpoints = endpoints;
+        self
+    }
+
+    pub fn notifications(mut self, smtp: mail::Smtp, app_origin: impl Into<String>) -> Self {
+        self.notifications = Some((smtp, app_origin.into()));
         self
     }
 
@@ -58,6 +65,19 @@ impl Worker {
     }
 
     pub fn spawn(self: Arc<Self>) {
+        if self.notifications.is_some() {
+            let worker = self.clone();
+            tokio::spawn(async move {
+                loop {
+                    match worker.send_analysis_batch().await {
+                        Ok(true) => continue,
+                        Ok(false) => {}
+                        Err(err) => eprintln!("analysis mail: {err:#}"),
+                    }
+                    tokio::time::sleep(Duration::from_secs(2)).await;
+                }
+            });
+        }
         tokio::spawn(async move {
             loop {
                 match self.step().await {
@@ -103,6 +123,48 @@ impl Worker {
             EventName::AtsRunRequested => self.requested(event).await,
             EventName::AtsCallbackReceived => Ok(()),
         }
+    }
+
+    /// Mail runs separately so its batching window and retries never delay SSE.
+    pub async fn send_analysis_batch(&self) -> anyhow::Result<bool> {
+        let Some((smtp, origin)) = &self.notifications else {
+            return Ok(false);
+        };
+        let Some(batch) = self.store.claim_analysis_batch().await? else {
+            return Ok(false);
+        };
+        let result = async {
+            let mut results = Vec::new();
+            for (_, plugin_id, verdict) in &batch.runs {
+                let provider = self
+                    .plugins
+                    .iter()
+                    .find(|plugin| plugin.id() == plugin_id)
+                    .map(|plugin| plugin.name())
+                    .unwrap_or(plugin_id);
+                let mut url = reqwest::Url::parse(origin)?;
+                url.set_path(&format!("/resumes/{}", batch.resume_id));
+                url.set_query(None);
+                url.set_fragment(None);
+                url.query_pairs_mut()
+                    .append_pair("version", &batch.version_id.to_string())
+                    .append_pair("provider", plugin_id);
+                results.push(mail::AnalysisResult {
+                    provider: provider.to_owned(),
+                    score: verdict.score,
+                    url: url.into(),
+                });
+            }
+            smtp.send_analysis_done(&batch.email, &batch.filename, batch.number, &results)
+                .await?;
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+        self.store
+            .finish_analysis_batch(&batch, result.is_ok())
+            .await?;
+        result?;
+        Ok(true)
     }
 
     async fn uploaded(&self, event: &EventRecord) -> anyhow::Result<()> {

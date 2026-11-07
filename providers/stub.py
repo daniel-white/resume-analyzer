@@ -142,11 +142,11 @@ class Job:
 
 
 FLEET = (
-    Provider("greenline", "Greenline", 8101, (0.30, 1.10)),
-    Provider("levr", "Levr", 8102, (0.55, 1.50)),
-    Provider("workdaye", "Workdaye", 8103, (0.40, 1.90)),
-    Provider("ash", "Ash", 8104, (0.80, 2.20)),
-    Provider("smart_resume", "SmartResume", 8105, (0.60, 1.70)),
+    Provider("greenline", "Greenline", 8101, (10.0, 14.0)),
+    Provider("levr", "Levr", 8102, (14.0, 18.0)),
+    Provider("workdaye", "Workdaye", 8103, (22.0, 26.0)),
+    Provider("ash", "Ash", 8104, (26.0, 30.0)),
+    Provider("smart_resume", "SmartResume", 8105, (18.0, 22.0)),
 )
 
 

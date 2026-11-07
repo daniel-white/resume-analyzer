@@ -13,6 +13,53 @@ use testcontainers_modules::testcontainers::runners::AsyncRunner;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, ZipWriter};
 
+/// Small SMTP sink verifies actual delivery without another external service.
+async fn smtp_sink() -> (u16, tokio::sync::mpsc::Receiver<String>) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let (sender, receiver) = tokio::sync::mpsc::channel(8);
+    tokio::spawn(async move {
+        loop {
+            let (socket, _) = listener.accept().await.unwrap();
+            let sender = sender.clone();
+            tokio::spawn(async move {
+                let (read, mut write) = socket.into_split();
+                let mut lines = BufReader::new(read).lines();
+                write.write_all(b"220 localhost SMTP\r\n").await.unwrap();
+                let mut data = false;
+                let mut body = String::new();
+                while let Some(line) = lines.next_line().await.unwrap() {
+                    if data {
+                        if line != "." {
+                            body.push_str(&line);
+                            body.push('\n');
+                            continue;
+                        }
+                        sender.send(std::mem::take(&mut body)).await.unwrap();
+                        data = false;
+                        write.write_all(b"250 accepted\r\n").await.unwrap();
+                    } else if line.starts_with("EHLO") {
+                        write
+                            .write_all(b"250-localhost\r\n250 8BITMIME\r\n")
+                            .await
+                            .unwrap();
+                    } else if line == "DATA" {
+                        data = true;
+                        write.write_all(b"354 send data\r\n").await.unwrap();
+                    } else if line == "QUIT" {
+                        write.write_all(b"221 bye\r\n").await.unwrap();
+                        break;
+                    } else {
+                        write.write_all(b"250 ok\r\n").await.unwrap();
+                    }
+                }
+            });
+        }
+    });
+    (port, receiver)
+}
+
 struct Database {
     url: String,
     _container: testcontainers_modules::testcontainers::ContainerAsync<Postgres>,
@@ -256,7 +303,11 @@ async fn upload_reaches_a_callback() {
     tokio::spawn(async move {
         axum::serve(listener, app).await.expect("serve");
     });
-    let worker = Worker::new(store, objects, plugins, bus, base.clone());
+    let (smtp_port, mut mail) = smtp_sink().await;
+    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone()).notifications(
+        mail::Smtp::new("127.0.0.1", smtp_port),
+        "http://127.0.0.1:3000",
+    );
 
     one_callback(
         &base,
@@ -269,6 +320,34 @@ async fn upload_reaches_a_callback() {
     )
     .await;
     one_callback(&base, &cookie, &worker, "plain.pdf", PDF, &plain_pdf(), 65).await;
+
+    assert!(
+        !worker.send_analysis_batch().await.unwrap(),
+        "batch window hasn't elapsed"
+    );
+    sqlx::query("update runs set notification_due_at = now() - interval '1 second'")
+        .execute(store.pool())
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        assert!(worker.send_analysis_batch().await.unwrap());
+        let message = tokio::time::timeout(std::time::Duration::from_secs(5), mail.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        // Long deep links use MIME quoted-printable: unfold its soft line breaks
+        // and encoded equals signs before asserting the user-visible URL.
+        let message = message.replace("=\n", "").replace("=3D", "=");
+        assert!(message.contains("To: ada@example.com"));
+        assert!(message.contains("Your resume analysis results are ready"));
+        assert!(message.contains("http://127.0.0.1:3000/resumes/"));
+        assert!(message.contains("?version="));
+        assert!(message.contains("&provider=stub"));
+    }
+    assert!(
+        !worker.send_analysis_batch().await.unwrap(),
+        "sent results don't repeat"
+    );
 
     let listed: serde_json::Value = reqwest::Client::new()
         .get(format!("{base}/api/resumes"))
