@@ -13,6 +13,63 @@ const versioned = {
   versions: [{ ...designed.versions[0], id: "latest-version", number: 2 }, older],
 };
 
+test("comparison is optional and only compares forward in time", async ({ page }, testInfo) => {
+  const third = { ...older, id: "third-version", number: 3, filename: "third.pdf",
+    runs: older.runs.map((run) => ({ ...run, verdict: run.verdict ? { ...run.verdict, score: 95 } : null })) };
+  await installApi(page, { resumes: [{ ...versioned, versions: [third, ...versioned.versions] }] });
+  await page.goto(`/resumes/${designed.id}?version=latest-version`);
+  await ready(page);
+  const comparison = page.getByRole("region", { name: "Compare versions", exact: true });
+  await expect(comparison.getByText("Compare versions", { exact: true })).toBeVisible();
+  await expect(comparison.getByRole("table")).not.toBeVisible();
+  await comparison.locator("summary").click();
+  await expect(comparison.getByLabel("From version")).toHaveValue("older-version");
+  await expect(comparison.getByLabel("To version")).toHaveValue("latest-version");
+  await expect(comparison.getByLabel("From version").locator("option[value='third-version']")).toHaveCount(0);
+  await expect(comparison.getByLabel("To version").locator("option[value='older-version']")).toHaveCount(0);
+  await expect(comparison.getByRole("status")).toContainText("Down 42.5 points");
+  await expect(comparison.getByRole("status")).toContainText("not a setback");
+  await expect(comparison.getByRole("row", { name: /Greenline/ })).toContainText("Down 60 points");
+  await comparison.getByLabel("From version").selectOption("latest-version");
+  await expect(comparison.getByLabel("To version")).toHaveValue("third-version");
+  await expect(comparison.getByRole("status")).toContainText("Up 42.5 points");
+  await expect(comparison.getByRole("status")).toContainText("Nice progress");
+  await comparison.getByLabel("From version").selectOption("older-version");
+  await expect(comparison.getByRole("status")).toContainText("Unchanged");
+  await expect(comparison.getByRole("status")).toContainText("holding steady");
+  await comparison.screenshot({ path: testInfo.outputPath("version-comparison.png") });
+  await comparison.locator("summary").click();
+  await expect(comparison.getByRole("table")).not.toBeVisible();
+  await page.reload();
+  await expect(comparison.getByRole("table")).not.toBeVisible();
+  await page.getByLabel("Version", { exact: true }).selectOption("older-version");
+  await comparison.locator("summary").click();
+  await expect(comparison.getByLabel("From version")).toHaveValue("older-version");
+  await expect(comparison.getByLabel("To version")).toHaveValue("latest-version");
+});
+
+test("pending comparison results are not counted as a score drop", async ({ page }) => {
+  const pending = { ...designed.versions[0], id: "pending-version", number: 2, status: "running" as const, runs: [] };
+  const api = await installApi(page, { resumes: [{ ...versioned, versions: [pending, older] }] });
+  await page.goto(`/resumes/${designed.id}`);
+  await ready(page);
+  const comparison = page.getByRole("region", { name: "Compare versions", exact: true });
+  await comparison.locator("summary").click();
+  await expect(comparison.getByRole("status")).toContainText("Based on 0 systems");
+  await expect(comparison.getByRole("status")).toContainText("Keep going");
+  await expect(comparison.getByRole("row", { name: /Greenline/ })).toContainText("Awaiting results");
+  await expect.poll(async () => (await api.stats()).streams).toBe(1);
+  await api.update({ resumes: [versioned], event: "AtsCallbackReceived" });
+  await expect(comparison.getByRole("status")).toContainText("Down 42.5 points");
+});
+
+test("one version offers an encouraging comparison empty state", async ({ page }) => {
+  await installApi(page, { resumes: [designed] });
+  await page.goto(`/resumes/${designed.id}`);
+  await page.getByRole("region", { name: "Compare versions", exact: true }).locator("summary").click();
+  await expect(page.getByRole("region", { name: "Compare versions", exact: true })).toContainText("great starting point");
+});
+
 test("selects version-specific results and preserves selection on reload", async ({ page }) => {
   await installApi(page, { resumes: [versioned] });
   await page.goto(`/resumes/${designed.id}`);
@@ -144,6 +201,10 @@ test("keeps the detail page and confirmation within a mobile viewport", async ({
   await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("F");
   await expect(page.getByLabel("Overall rating", { exact: true })).toContainText("Needs work");
   await expect(page.getByRole("menuitem", { name: "Delete all versions" })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  const comparison = page.getByRole("region", { name: "Compare versions", exact: true });
+  await comparison.locator("summary").click();
+  await expect(comparison.getByRole("table")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("resume-details-mobile.png"), fullPage: true, caret: "initial" });
   await page.getByRole("button", { name: "Delete this version" }).click();

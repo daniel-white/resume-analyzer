@@ -10,6 +10,7 @@ import { ResumeViewer } from "~/components/resume-viewer";
 import { SiteHeader } from "~/components/site-header";
 import { VerdictGrid } from "~/components/verdict-grid";
 import { ResumeVersions } from "~/components/resume-versions";
+import { ResumeComparison } from "~/components/resume-comparison";
 import { getTeardown } from "~/fns/resumes.functions";
 
 export const Route = createFileRoute("/resumes/$id")({
@@ -41,7 +42,8 @@ function TeardownPage() {
       <ResumeOverview filename={view.filename} cards={view.cards}
         number={view.versions.find((version) => version.id === view.versionId)!.number} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
-      <LiveAnalysis key={view.versionId} resumeId={id} active={view.kind === "reading"} />
+      <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
+      <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}
       <div className="desk-split resume-content">
         <div className="desk-resume">

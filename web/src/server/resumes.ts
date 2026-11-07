@@ -59,6 +59,10 @@ export type VersionSummary = {
   created_at: string;
 };
 
+export type ComparisonVersion = VersionSummary & {
+  scores: { id: string; name: string; score: number | null }[];
+};
+
 export type ResumeSummary = {
   id: string;
   title: string;
@@ -181,6 +185,7 @@ export type Teardown =
       resumeId: string;
       versionId: string;
       versions: VersionSummary[];
+      comparisonVersions: ComparisonVersion[];
       filename: string;
       lede: string;
       file: { url: string; mediaType: string };
@@ -345,6 +350,13 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     versionId: version.id,
     versions: detail.versions.map(({ id, number, filename, status, created_at }) => ({
       id, number, filename, status, created_at,
+    })),
+    comparisonVersions: detail.versions.map((item) => ({
+      id: item.id, number: item.number, filename: item.filename,
+      status: item.status, created_at: item.created_at,
+      scores: pluginCards(plugins, item.runs).map((card) => ({
+        id: card.id, name: card.name, score: card.pending ? null : card.score,
+      })),
     })),
     filename: version.filename,
     file: {
