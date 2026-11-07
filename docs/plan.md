@@ -23,9 +23,17 @@ scores high across the fleet.
   behavior. No trademarked names or logos.
 - Plugins do not return a verdict into the worker. They POST a signed callback,
   the same path a real integration would use later.
-- DOCX and PDF are both first-class. Both produce the same `ParseInput`, and
-  PDF layout signals carry a confidence marker because table detection from
-  positioned text is inferred rather than structural.
+- DOCX and PDF are both first-class. The app reads the file once, up front, so
+  the user can check that the name, contact, and sections are really there.
+  That verification parse is not what the vendors score. Each plugin then reads
+  the stored bytes itself and emits its own `ParseInput`. The shape is shared;
+  the reads are not. A DOCX read is `structural` because the markup names
+  tables, text boxes, and headers. A PDF read is `inferred` because those
+  signals are guessed from positioned text.
+- A resume belongs to one user and keeps every upload as a version. The object
+  key is `users/{user_id}/resumes/{resume_id}/versions/{version_id}`. Deleting a
+  user removes that user's rows and every object under the prefix. A later
+  version does not erase the earlier file or its results.
 - The frontend is a TanStack Start application, its own container. It never
   owns data. Its server functions fetch the Rust API and forward the session
   cookie.
@@ -72,18 +80,25 @@ producing a Node server (`node .output/server/index.mjs`) and Tailwind v4.
 ```text
 POST /api/resumes
   store the bytes in object storage
-  insert the resume row and an outbox entry for ResumeUploaded
+  insert the resume, its first version, and an outbox entry for ResumeUploaded
   respond 202
+
+POST /api/resumes/:id/versions
+  store another file as the next version of that resume
+  the previous version, its parse, and its runs stay where they are
 
 Outbox dispatcher (claims rows with SKIP LOCKED, so replicas are safe)
   ResumeUploaded
-    extract text and layout signals
-    structure a canonical profile
+    read that version's file once into a verification parse
+    store it on the version so the user can check the structure
     write ResumeParsed
   ResumeParsed
     insert one run row and an AtsRunRequested entry per plugin
+    mark that version running
   AtsRunRequested
-    the plugin analyzes the parsed input
+    load that version's bytes from object storage
+    the plugin reads the file itself, ignoring the verification parse,
+    and builds its own parse and verdict
     it POSTs /api/callbacks/{plugin_id} with an HMAC signature,
     a timestamp, and an idempotency key
     a small delay (300-1200ms) so the cards arrive separately in the UI
@@ -91,11 +106,11 @@ Outbox dispatcher (claims rows with SKIP LOCKED, so replicas are safe)
 POST /api/callbacks/:plugin_id
   verify the HMAC in constant time, reject timestamps skewed past five minutes,
   and ignore a replayed idempotency key
-  insert the callback row
+  store that plugin's parse and verdict on its run
   write AtsCallbackReceived
 
   AtsCallbackReceived
-    when every run is terminal, mark the resume complete
+    when every run for that version is terminal, mark the version complete
     push to the server-sent-events hub for that resume
 ```
 
@@ -106,8 +121,9 @@ Postgres and then subscribes. The HMAC secret is per plugin.
 
 Each integration returns what it kept, what it dropped, a score from 0 to 100,
 and a factor list such as "contact in header: -25" or "standard headings: +15".
-The narrative is a template filled from those factors. Plugins return no prose,
-and there is no second model call per plugin.
+Each factor carries one sentence of advice. The verdict summary is those
+sentences filled into a template: the score, then what to change, then what
+helped. There is no second model call per plugin.
 
 | Plugin | Bias | What the demo shows |
 | --- | --- | --- |
@@ -121,21 +137,31 @@ simulated and modeled on publicly described parser behavior.
 
 ## Parsing
 
-DOCX is the golden path. Unzip the file and walk `word/document.xml` plus the
-headers with quick-xml, so tables, text boxes, and header contact are real
-signals.
+The app reads the file once before any vendor runs. That parse is stored on
+the version and shown as "what we read": name, contact, sections, and the layout
+signals, so the user can see that the file yielded a real structure. A second
+upload is a new version of the same resume, and the detail page can put the two
+results next to each other. Vendors
+are not blocked on an approval click. An empty extract is still shown, and the
+fleet still runs, because a blank read is itself something to verify.
 
-PDF gets the same signals from positioned text blocks: column count from
-clustering on the x axis, whether contact information sits above the body band,
-and whether text lives inside boxes. Table detection looks for aligned blocks
-with low variance in x and is flagged as inferred. Plugins receive a
-`LayoutConfidence` value, so a drop of "a table" on a PDF is presented as an
-inference rather than a fact.
+Each plugin then opens the stored PDF or DOCX and produces its own
+`ParseInput`. Two plugins can disagree about an email in the header because
+they read the file differently, not because they scored the verification parse
+two ways.
 
-Canonical structuring sits behind an `Llm` trait aimed at any
-OpenAI-compatible endpoint. When `LLM_API_KEY` is empty, a heuristic extractor
-fills the same schema, so the demo runs without a key. One model call per
-resume, not per plugin.
+A DOCX reader unzips the package and walks `word/document.xml` plus the headers.
+Tables, text boxes, and header contact come from the markup, so the confidence
+is `structural`.
+
+A PDF reader recovers the same signals from positioned text. Column count comes
+from clustering on the x axis, header contact from which band the address sits
+in, and table detection from aligned blocks. Those signals are `inferred`.
+
+The spine's stub reader only proves the path: it opens the zip or scans the PDF
+bytes, then posts a callback. The fleet replaces that reader. A plugin may later
+call an OpenAI-compatible model on text it extracted itself. That call belongs
+to the plugin. The spine does not make one shared model call for the fleet.
 
 ## Frontend
 
@@ -161,9 +187,10 @@ page loads state from the API, then opens the event stream.
 
 The interface is a teardown, not a dashboard. One serif face for the score
 numerals, monospace for the factor list so it reads like a parser report, and a
-color ramp where the score itself is the color. The dropzone comes first, then
-four cards that fill in as callbacks arrive. Empty, uploading, and parsing
-states are designed up front. No stat-card grid and no sidebar. Components come
+color ramp where the score itself is the color. The dropzone comes first. The
+detail page shows the verification parse above four cards that fill in as
+callbacks arrive. Empty, uploading, and reading states are designed up front.
+No stat-card grid and no sidebar. Components come
 from shadcn/ui, and the official shadcn skill is installed into the repo so the
 agent building the interface reads the project's real configuration instead of
 guessing.
@@ -195,6 +222,7 @@ POST /api/auth/logout
 GET  /api/me
 
 POST /api/resumes              multipart, 5MB, PDF or DOCX by magic bytes, 202
+POST /api/resumes/:id/versions another file on the same resume, 202
 GET  /api/resumes
 GET  /api/resumes/:id
 GET  /api/resumes/:id/events   server-sent events
@@ -236,8 +264,8 @@ Tests are written with the change they cover:
 | Where | What it proves | Needs |
 | --- | --- | --- |
 | `crates/domain` | event names, score math, factor aggregation | nothing |
-| `crates/plugins` | each plugin's verdict on the two fixture resumes, asserted on the factor list rather than the headline number | fixture files |
-| `crates/storage` | outbox claims with `SKIP LOCKED` under two concurrent workers, idempotency dedupe, HMAC rejection on skew and on replay | Postgres |
+| `crates/plugins` | each plugin's verdict on the two fixture files, asserted on the factor list rather than the headline number | fixture files |
+| `crates/storage` | outbox claims with `SKIP LOCKED` under two concurrent workers, idempotency dedupe, deleting one user leaves the other | a Postgres container the test starts |
 | `crates/app` | upload through parse through callback to a terminal state, driven through the router in-process | Postgres |
 | `crates/auth` | magic link single use and expiry, session cookie round trip | Postgres |
 | `web` | server functions against a mocked API, and a render test that the detail page shows four cards | vitest |
@@ -292,14 +320,22 @@ later addition. Wave 0 does not depend on it, and this session has no box.
 Written once, in `docs/contracts.md`, before wave 2, and not renegotiated
 mid-wave:
 
-- `ParseInput`: canonical profile, layout signals, and a `LayoutConfidence`.
+- `ParseInput`: one shape, two writers. The resume's parse is the app's
+  verification extract. A run's parse is what that plugin read from the bytes.
 - Event names: `ResumeUploaded`, `ResumeParsed`, `AtsRunRequested`,
   `AtsCallbackReceived`.
-- Callback body: plugin id, run id, verdict, factors. HMAC over timestamp plus
-  body, five-minute skew, idempotency key.
-- Response shapes for `POST /api/resumes`, `GET /api/resumes/:id`, and the
-  event stream.
-- Plugin verdict: kept, dropped, score, and a factor list. No prose.
+- Callback body: run id, that plugin's parse, and the verdict. HMAC over
+  timestamp plus body, five-minute skew, idempotency key. The callback does
+  not carry the verification parse.
+- Ownership: every resume has a user id and one or more versions. Object keys
+  are `users/{user_id}/resumes/{resume_id}/versions/{version_id}`. This spine
+  uses a demo user until the magic-link wave supplies the session, and account
+  removal deletes the rows and the objects.
+- Response shapes for `POST /api/resumes`, `POST /api/resumes/:id/versions`,
+  `GET /api/resumes/:id`, and the event stream. Detail returns versions newest
+  first, each with its own parse and runs.
+- Plugin verdict: kept, dropped, score, a summary, and a factor list. Each
+  factor has one sentence of advice. The summary is a template of that advice.
 
 ## Development modes
 
