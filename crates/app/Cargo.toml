@@ -13,13 +13,34 @@ path = "src/main.rs"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1"
 aws-smithy-types = "1"
-axum = "0.8"
+anyhow = "1"
+async-stream = "0.3"
+async-trait = "0.1"
+axum = { version = "0.8", features = ["multipart"] }
+chrono = { version = "0.4", features = ["serde"] }
+domain = { path = "../domain" }
+futures-util = "0.3"
+plugins = { path = "../plugins" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util"] }
+storage = { path = "../storage" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util", "sync"] }
 tower = "0.5"
+uuid = { version = "1", features = ["serde", "v4"] }
+zip = "2.2"
 
 [dev-dependencies]
+axum = { version = "0.8", features = ["multipart"] }
+domain = { path = "../domain" }
+futures-util = "0.3"
 http-body-util = "0.1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+serde_json = "1"
+storage = { path = "../storage" }
+testcontainers-modules = { version = "0.15", features = ["postgres"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }
 tower = { version = "0.5", features = ["util"] }
+uuid = { version = "1", features = ["serde", "v4"] }
+zip = "2.2"
