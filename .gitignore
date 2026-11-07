@@ -1,0 +1,8 @@
+/target
+.worktrees/
+.direnv/
+result
+result-*
+.env
+*.swp
+.DS_Store

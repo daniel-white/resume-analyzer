@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/app",
+    "crates/domain",
+    "crates/plugins",
+    "crates/storage",
+    "crates/auth",
+    "crates/mail",
+]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.1.0"
+publish = false
