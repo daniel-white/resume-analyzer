@@ -220,7 +220,7 @@ input:focus-visible {
 .back a:hover { color: #fffdf8; }
 .site-navigation { position: relative; display: flex; align-items: center; gap: 1.5rem; padding: 0.25rem 0 0.85rem; border-bottom: 1px solid #e8d09c40; }
 .brand { display: inline-flex; align-items: center; gap: 0.75rem; text-decoration: none; flex: none; }
-.brand-mark { display: grid; place-items: center; height: 2.75rem; width: 2.75rem; border-radius: 10px; border: 1px solid #e8d09c70; background: #fffdf80a; color: #e8d09c; }
+.brand-mark { display: grid; place-items: center; height: 2.75rem; width: 2.75rem; border-radius: 10px; border: 1px solid #ffffff70; background: #ffffff0a; color: #ffffff; }
 .brand .wordmark { line-height: 1.2; }
 .brand-caption { display: block; margin-top: 0.35rem; font-family: var(--font-mono); font-size: 0.55rem; font-style: normal; letter-spacing: 0.025em; color: #d5deee; }
 .nav-library { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.7rem 0.9rem; border: 1px solid transparent; border-radius: 8px; color: #d5deee; font-size: 0.875rem; text-decoration: none; }
@@ -246,7 +246,7 @@ input:focus-visible {
 .resume-overview { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; margin-top: 0.85rem; }
 .overview-title { display: flex; align-items: flex-start; gap: 1rem; min-width: 0; }
 .overview-title > div { min-width: 0; }
-.overview-icon { display: grid; place-items: center; width: 3.5rem; height: 4rem; flex: none; background: #fffdf810; border: 1px solid #e8d09c60; border-radius: 10px; color: #e8d09c; transform: rotate(-5deg); }
+.overview-icon { display: grid; place-items: center; width: 3.5rem; height: 4rem; flex: none; background: #ffffff10; border: 1px solid #ffffff60; border-radius: 10px; color: #ffffff; transform: rotate(-5deg); }
 .overview-icon svg { width: 28px; height: 28px; stroke-width: 1.4; }
 .eyebrow { font-family: var(--font-mono); font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: #e8d09c; }
 .overview-title .filename { margin-top: 0.4rem; line-height: 1.2; letter-spacing: -0.035em; }
