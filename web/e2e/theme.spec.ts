@@ -2,6 +2,27 @@ import { expect, test } from "@playwright/test";
 
 import { designed, installApi, ready } from "./api";
 
+test("prevents UI selection but preserves textbox editing", async ({ page }) => {
+  await installApi(page, { signedIn: false, resumes: [] });
+  await page.goto("/login");
+  await ready(page);
+  await expect(page.locator("body")).toHaveCSS("user-select", "none");
+  // WebKit computes descendants as auto but still uses the parent's none value.
+  const heading = await page.locator(".sign h1").boundingBox();
+  expect(heading).not.toBeNull();
+  await page.mouse.move(heading!.x, heading!.y + heading!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(heading!.x + heading!.width, heading!.y + heading!.height / 2, { steps: 10 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.getSelection()?.toString())).toBe("");
+  const email = page.locator(".sign input");
+  await expect(email).toHaveCSS("user-select", "text");
+  await email.fill("ada@example.com");
+  await email.selectText();
+  await page.keyboard.type("grace@example.com");
+  await expect(email).toHaveValue("grace@example.com");
+});
+
 test("uses consistent editorial headings, readable sans copy, and technical mono", async ({ page }) => {
   await installApi(page, { signedIn: false, resumes: [] });
   await page.goto("/");

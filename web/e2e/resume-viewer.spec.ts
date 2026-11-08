@@ -10,6 +10,8 @@ for (const [format, resume] of [["PDF", designed], ["DOCX", stored]] as const) {
     const viewer = page.getByLabel("Original resume");
     await expect(viewer.getByText(`Original ${format} resume`)).toBeVisible({ timeout: 20_000 });
     await expect(viewer.getByRole("button", { name: "Zoom in", exact: true })).toBeVisible();
+    await expect(viewer.locator("#react-doc-viewer")).toHaveCSS("user-select", "text");
+    await expect(viewer.getByRole("button", { name: "Zoom in", exact: true })).toHaveCSS("user-select", "none");
     await expect(viewer.getByRole("button", { name: /download/i })).toHaveCount(0);
     // Exercise asynchronously inserted links in both renderer trees.
     await viewer.locator("#react-doc-viewer").evaluate((element) => {

@@ -83,6 +83,21 @@ body {
   background: var(--background);
 }
 
+/* Avoid accidental UI selection without interfering with editing or documents. */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input, textarea, [contenteditable]:not([contenteditable="false"]),
+.resume-viewer #react-doc-viewer {
+  -webkit-user-select: text;
+  user-select: text;
+}
+.resume-viewer .rdv-pdf-controls, .resume-viewer .rdv-toolbar-btn {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .desk {
   width: min(100%, 72rem);
   margin-inline: auto;
