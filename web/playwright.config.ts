@@ -47,7 +47,7 @@ export default defineConfig({
     },
     {
       name: "webkit",
-      testMatch: "resume-viewer.spec.ts",
+      testMatch: ["resume-viewer.spec.ts", "theme.spec.ts"],
       use: { ...devices["Desktop Safari"] },
     },
   ],

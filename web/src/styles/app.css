@@ -5,7 +5,7 @@
 @theme inline {
   --font-sans: Arial, Helvetica, sans-serif;
   --font-serif: Georgia, "Times New Roman", serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -35,6 +35,12 @@
 }
 
 :root {
+  /* Serif: editorial headings/grades. Sans: reading/UI. Mono: technical data. */
+  --type-body: 0.875rem;
+  --type-small: 0.75rem;
+  --type-label: 0.75rem;
+  --type-section: 1.75rem;
+  --type-card: 1.375rem;
   --background: #f6f5ef;
   --foreground: #20251e;
   --card: #ffffff;
@@ -65,6 +71,7 @@
 html {
   min-height: 100%;
   font-family: var(--font-sans);
+  line-height: 1.6;
   background: var(--background);
 }
 
@@ -137,7 +144,7 @@ input:focus-visible {
 .comparison-summary { display: grid; grid-template-columns: minmax(11rem, 1fr) 3fr; gap: 1.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: 10px; background: #f8faf8; }
 .comparison-score { display: grid; gap: 0.35rem; }
 .comparison-score > span:first-child, .comparison-note { font-size: 0.75rem; color: var(--muted-foreground); }
-.comparison-score strong { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-mono); font-size: 1.5rem; }
+.comparison-score strong { display: flex; align-items: center; gap: 0.6rem; font-family: var(--font-sans); font-size: 1.5rem; }
 .score-change { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.8rem; color: var(--muted-foreground); }
 .score-change.up { color: var(--score-high); }
 .score-change.down { color: var(--score-mid); }
@@ -229,7 +236,7 @@ input:focus-visible {
 .account-trigger:hover, .account-trigger[data-state="open"] { background: #fffdf810; color: #fffdf8; }
 .account-email { max-width: 15rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .account-menu { z-index: 45; min-width: 14rem; max-width: calc(100vw - 2rem); padding: 0.4rem; background: #ffffff; color: #1c1915; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 32px #07112440; }
-.account-menu-label { padding: 0.7rem; color: #5c554c; font-family: var(--font-mono); font-size: 0.65rem; }
+.account-menu-label { padding: 0.7rem; color: #5c554c; font-family: var(--font-sans); font-size: var(--type-small); }
 .account-menu-label span { display: block; color: #1c1915; margin-top: 0.4rem; overflow-wrap: anywhere; }
 .account-menu-separator { height: 1px; background: var(--border); margin: 0.25rem; }
 .account-menu-item { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem; font-size: 0.875rem; border-radius: 7px; cursor: pointer; outline: none; }
@@ -266,7 +273,7 @@ input:focus-visible {
 .overall-rating-value { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.5rem; }
 .overall-rating-value .ink-stamp { --stamp-size: 3.5rem; background: #ffffff; }
 .overall-rating-note { display: block; color: #d5deee; font-size: 0.65rem; margin-top: 0.5rem; }
-.stat-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.65rem; color: #d5deee; font-family: var(--font-mono); }
+.stat-label { display: flex; align-items: center; gap: 0.4rem; font-size: var(--type-label); color: #d5deee; font-family: var(--font-sans); font-weight: 600; }
 .stat-label svg { width: 13px; height: 13px; }
 .overview-stats strong { display: block; margin-top: 0.35rem; font-size: 1.9rem; font-weight: 500; font-variant-numeric: tabular-nums; }
 .overview-stats .grade-range strong { font-size: 1.15rem; color: #d5deee; }
@@ -294,7 +301,7 @@ input:focus-visible {
 .resume-viewer .rdv-toolbar-group:has(> #pdf-download:only-child) + .rdv-toolbar-divider { display: none; }
 .pending-read { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.4rem; color: var(--muted-foreground); font-size: 0.75rem; }
 .document-loading { padding: 0.85rem; background: #f3f4f6; }
-.loading-caption { display: flex; gap: 0.5rem; align-items: center; font-family: var(--font-mono); font-size: 0.75rem; }
+.loading-caption { display: flex; gap: 0.5rem; align-items: center; font-family: var(--font-sans); font-size: var(--type-small); }
 .document-loading .loading-caption { color: #5c554c; margin-bottom: 1rem; }
 .skeleton-document { padding: 2rem; min-height: 32rem; background: #ffffff; border-radius: 4px; box-shadow: 0 2px 8px #1c191510; }
 .loading-shimmer { background: linear-gradient(100deg, #e5e7eb 25%, #f3f4f6 45%, #e5e7eb 65%); background-size: 250% 100%; border-radius: 4px; animation: skeleton-shimmer 1.8s ease-in-out infinite; }
@@ -689,7 +696,7 @@ select {
 .drop.list h2, .drop.waiting h2 { font-size: 1.35rem; }
 .drop.list .upload-callout, .drop.waiting .upload-callout { margin: 0 0 0 auto; }
 .empty-library { margin: 1.25rem 0 0; }
-.empty-library-note { font-family: var(--font-mono); font-size: 0.65rem; color: #d5deee; }
+.empty-library-note { font-family: var(--font-sans); font-size: var(--type-small); color: #d5deee; }
 .empty-library > h2 { font-size: 1.5rem; margin-top: 0.5rem; letter-spacing: -0.025em; }
 .empty-library-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; gap: 1.25rem; margin-top: 0.85rem; }
 .empty-library-steps li { display: flex; gap: 0.85rem; }
@@ -826,7 +833,8 @@ select {
 .filename { font-family: var(--font-serif); font-weight: 400; font-size: clamp(32px, 3.5vw, 46px); }
 .overview-title .lede, .lede { color: var(--muted-foreground); }
 .overview-stats, .overall-rating { border-color: var(--border); }
-.overview-stats strong { font-family: var(--font-serif); }
+.overview-stats strong { font-family: var(--font-sans); font-weight: 600; line-height: 1.2; }
+.overview-stats .overall-rating-value strong, .overview-stats .grade-range strong { font-family: var(--font-serif); font-weight: 400; }
 .stat-label, .overall-rating-note, .overview-stats .grade-range strong, .overview-stats small { color: var(--muted-foreground); }
 .analysis-state { color: #8a5a12; }
 .analysis-state.is-complete { color: var(--score-high); }
@@ -846,8 +854,8 @@ select {
 .fold-summary { padding: 18px; }
 .fold-summary > .min-w-0 { flex: 1; }
 .fold-summary > .fold-chevron { margin-left: auto; }
-.fold-summary h2 { font-family: var(--font-serif); font-size: 22px; font-weight: 400; }
-.fold-body { font-size: 13px; line-height: 1.8; padding: 0 18px 22px; }
+.fold-summary h2 { font-family: var(--font-serif); font-size: var(--type-card); font-weight: 400; line-height: 1.25; }
+.fold-body { font-size: var(--type-body); line-height: 1.7; padding: 0 18px 22px; }
 .mark-frame { border-radius: 6px; box-shadow: inset 0 0 0 1px var(--border); }
 .viewer-heading { padding: 16px; font-size: 12px; }
 .viewer-heading h2 { font-weight: 600; }
@@ -878,6 +886,32 @@ select {
 .health-summary { margin-top: 28px; padding: 24px; font-size: 14px; line-height: 1.8; }
 .document-loading { background: var(--muted); }
 .loading-shimmer { background-image: linear-gradient(100deg, #e2e4d9 25%, #f6f5ef 45%, #e2e4d9 65%); }
+
+/* Shared type roles. Never apply these to the uploaded document's renderer. */
+.results-heading h2, .empty-library > h2, .extract .label {
+  font-family: var(--font-serif); font-size: var(--type-section); font-weight: 400; line-height: 1.25;
+}
+.extract .note, .facts dd { font-family: var(--font-sans); font-size: var(--type-body); line-height: 1.7; }
+.empty-library-steps h3, .comparison-table caption { font-size: var(--type-card); line-height: 1.25; }
+.auth-intro h2, .missing h1 { font-weight: 400; }
+.filename, .sign h1, .confirmation-title { line-height: 1.2; }
+.eyebrow { font-size: var(--type-label); letter-spacing: 0.1em; }
+.stat-label, .version-label, .row-grade-label, .facts dt, .comparison-table thead th {
+  font-family: var(--font-sans); font-size: var(--type-label); font-weight: 600; line-height: 1.5;
+}
+.version-note, .overall-rating-note, .results-footnote, .sign .sign-note, .upload-formats {
+  font-family: var(--font-sans); font-size: var(--type-small); line-height: 1.6;
+}
+.library-heading > p:last-child, .overview-title .lede, .drop p, .sign p,
+.auth-intro > p:last-child, .confirmation-description, .empty-library-steps p,
+.results-heading p { font-size: var(--type-body); line-height: 1.7; }
+.nav-library, .public-home, .account-trigger, .viewer-heading, .version-picker select,
+.version-actions button, .version-upload, .upload-callout, .sign label,
+.sign button[type="submit"], .sign .text, .sign a, .confirmation-actions button {
+  font-family: var(--font-sans); font-size: var(--type-body); line-height: 1.5;
+}
+.sign input { font-family: var(--font-sans); font-size: 1rem; line-height: 1.5; }
+.viewer-heading h2 { font-family: var(--font-sans); }
 
 @media (max-width: 1000px) {
   .wrap { width: calc(100% - 56px); }

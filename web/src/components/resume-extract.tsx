@@ -8,7 +8,7 @@ export function ResumeExtract({ parse }: { parse: ParseInput }) {
     <Sheet>
       <article className="sheet-face p-6" aria-label="Resume verification extract">
         <header className="border-b border-border pb-4">
-          <h2 className="text-2xl font-medium">{parse.profile.name || "Your resume"}</h2>
+          <h2 className="font-serif text-2xl font-normal leading-tight">{parse.profile.name || "Your resume"}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {[parse.profile.email, parse.profile.phone].filter(Boolean).join(" · ")}
           </p>

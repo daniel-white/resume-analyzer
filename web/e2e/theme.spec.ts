@@ -2,6 +2,41 @@ import { expect, test } from "@playwright/test";
 
 import { designed, installApi, ready } from "./api";
 
+test("uses consistent editorial headings, readable sans copy, and technical mono", async ({ page }) => {
+  await installApi(page, { signedIn: false, resumes: [] });
+  await page.goto("/");
+  await ready(page);
+  await expect(page.locator(".hero-copy h1")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".how-heading h2")).toHaveCSS("font-weight", "400");
+  await expect(page.locator(".landing-steps h3").first()).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".hero-description")).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator(".landing-formats")).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator(".landing-no-account")).toHaveCSS("font-size", "12px");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".landing-no-account")).toHaveCSS("font-size", "12px");
+
+  await page.goto("/login");
+  await expect(page.locator(".sign h1")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".sign input")).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator(".sign input")).toHaveCSS("font-size", "16px");
+
+  await installApi(page, { resumes: [designed] });
+  await page.goto(`/resumes/${designed.id}`);
+  await ready(page);
+  await expect(page.locator(".filename")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".results-heading h2")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".extract h2")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".extract h2")).toHaveCSS("font-size", "28px");
+  await expect(page.locator(".overview-stats > div:nth-child(2) strong")).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator(".overall-rating-value strong")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".stat-label").first()).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator(".viewer-heading h2")).toHaveCSS("font-family", /Arial/);
+  await page.locator(".fold-summary").first().click();
+  const factors = page.locator(".fold-body ul.border-t").first();
+  await expect(factors).toHaveCSS("font-family", /Arial/);
+  await expect(factors.locator("li > span:last-child").first()).toHaveCSS("font-family", /monospace/);
+});
+
 test("carries the landing palette into sign-in and link recovery", async ({ page }, testInfo) => {
   await installApi(page, { signedIn: false, resumes: [] });
   await page.goto("/login");

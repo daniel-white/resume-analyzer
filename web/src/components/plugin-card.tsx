@@ -96,7 +96,7 @@ export function PluginCard({
             {verdict.report ? <ProviderReportView report={verdict.report} /> : null}
             {parse ? (
               <section className="mt-4 border-t pt-3" aria-label={`${plugin.name} extract`}>
-                <h3 className="text-xs uppercase text-muted-foreground">This system's extract</h3>
+                <h3 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground">This system's extract</h3>
                 <p className="mt-2 text-sm">{[parse.profile.name, parse.profile.email, parse.profile.phone].filter(Boolean).join(" · ") || "No contact details extracted."}</p>
                 {parse.profile.sections.map((section, index) => (
                   <div className="mt-3 text-sm" key={`${section.heading}-${index}`}>
@@ -122,7 +122,7 @@ export function ProviderReportView({ report }: { report: NonNullable<Verdict["re
   return (
     <section className="mt-4 border-t pt-3" aria-label="Simulated parser report">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-xs uppercase text-muted-foreground">Simulated parser report</h3>
+        <h3 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground">Simulated parser report</h3>
         <span className="text-xs font-medium">{outcome}</span>
       </div>
       <p className="mt-2 text-sm">{report.engine} <span className="font-mono text-xs text-muted-foreground">v{report.engine_version}</span></p>
