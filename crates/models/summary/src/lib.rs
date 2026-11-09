@@ -45,6 +45,9 @@ only standard alphabetical characters, letters, spaces, and common punctuation s
 as hyphens or apostrophes; never include digits, symbols, marks, or decorative \
 characters inside a name. Do not add fake names; only use names supported by the \
 document.";
+
+#[derive(Clone)]
+enum Mode {
     Extractive,
     Ollama {
         url: String,
