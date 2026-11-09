@@ -107,12 +107,13 @@ impl SummaryGenerator {
     }
 
     pub fn generate(&self, parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
+        let looks = looks_like_resume(sections);
         if self.model_available()
             && let Mode::Ollama { url, model, client } = &self.mode
         {
             let request = chat_request(model, parse, sections);
             match infer(client, url, request) {
-                Ok(text) if usable_summary(&text) => {
+                Ok(text) if usable_summary(&text, looks) => {
                     return ProfileSummary {
                         text,
                         engine: "ollama".to_owned(),
@@ -307,10 +308,21 @@ fn clean_output(output: &str) -> String {
     )
 }
 
-fn usable_summary(text: &str) -> bool {
+fn usable_summary(text: &str, is_resume: bool) -> bool {
     let words = text.split_whitespace().count();
     let lowercase = text.to_lowercase();
-    (45..=125).contains(&words)
+    let starts_with_decline = text.starts_with("This does not look like a résumé.");
+    // A non-résumé document must be declined explicitly and stays shorter.
+    if !is_resume {
+        return starts_with_decline
+            && (45..=70).contains(&words)
+            && !lowercase.contains("this candidate")
+            && !lowercase.contains("is presented");
+    }
+    // A résumé must not lead with a decline and stays in profile range.
+    is_resume
+        && !starts_with_decline
+        && (80..=125).contains(&words)
         && !lowercase.contains("this candidate")
         && !lowercase.contains("is presented")
 }
@@ -414,6 +426,21 @@ fn lowercase_start(text: &str) -> String {
     first.to_lowercase().chain(chars).collect()
 }
 
+fn looks_like_resume(sections: &SectionMap) -> bool {
+    sections.sections.iter().any(|section| {
+        matches!(
+            section.kind,
+            SectionKind::Experience
+                | SectionKind::Education
+                | SectionKind::Skills
+                | SectionKind::Projects
+                | SectionKind::Certifications
+                | SectionKind::Publications
+                | SectionKind::Volunteer
+        ) && !section.body.trim().is_empty()
+    })
+}
+
 fn first_line(text: &str, limit: usize) -> Option<String> {
     text.lines()
         .map(str::trim)
@@ -489,13 +516,17 @@ mod tests {
 
     #[test]
     fn model_output_must_be_owner_facing_and_about_one_hundred_words() {
-        assert!(usable_summary(&fixture_summary(90)));
-        assert!(!usable_summary(&fixture_summary(20)));
-        assert!(!usable_summary(&fixture_summary(130)));
+        assert!(usable_summary(&fixture_summary(90), true));
+        assert!(!usable_summary(&fixture_summary(20), true));
+        assert!(!usable_summary(&fixture_summary(130), true));
         assert!(!usable_summary(&format!(
             "This candidate {}",
             fixture_summary(90)
-        )));
+        ), true));
+        // Non-résumé responses must decline explicitly with 45-70 words.
+        let decline = "This does not look like a résumé. I could not find enough work experience education skills or project information to build a grounded professional profile. Please upload a document that includes those details so I can help you create a clear summary based on your actual work history and qualifications.";
+        assert!(usable_summary(&decline, false));
+        assert!(!usable_summary(&fixture_summary(90), false));
     }
 
     fn fixture_summary(words: usize) -> String {
