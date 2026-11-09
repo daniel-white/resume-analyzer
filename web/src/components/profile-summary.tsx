@@ -7,7 +7,6 @@ import type { ProfileSummary, SectionVote } from "~/server/resumes";
 import { VoteButtons } from "./resume-structure";
 
 const PROFILE_SUMMARY_ID = "profile-summary";
-
 const IS_NOT_RESUME_PREFIX = "This does not look like a résumé.";
 
 export function ProfileSummaryCard({

@@ -1,16 +1,17 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import type { ProfileSummary } from "~/server/resumes";
 import { ProfileSummaryCard } from "./profile-summary";
 
-const summary = {
+const summary: ProfileSummary = {
   text: "Ada is a computing pioneer with skills in mathematics and Rust.",
   engine: "ollama",
   model: "qwen2.5:0.5b",
   feedback: "up" as const,
 };
 
-function render(value: typeof summary | null = summary) {
+function render(value: ProfileSummary | null = summary) {
   return renderToStaticMarkup(
     <ProfileSummaryCard summary={value} resumeId="resume-1" versionId="version-1" />,
   );
@@ -43,7 +44,7 @@ describe("profile summary", () => {
 
   it("shows a different layout when the document does not look like a résumé", () => {
     const html = render({
-      text: "This does not look like a résumé. I could not find enough work experience education skills or project information to build a grounded professional profile. Please upload a document that includes those details so I can help you create a clear summary based on your actual work history and qualifications.",
+      text: "This does not look like a résumé. Could not find enough work experience education skills or project information to build a grounded professional profile for review. Please upload a document that includes those details for a clear summary based on actual work history and qualifications.",
       engine: "ollama",
       model: "qwen2.5:0.5b",
       feedback: null,

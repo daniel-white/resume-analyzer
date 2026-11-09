@@ -535,6 +535,7 @@ describe("version selection", () => {
       text: "Ada is a computing pioneer.",
       engine: "ollama",
       model: "qwen2.5:0.5b",
+      is_resume: true,
       feedback: "up" as const,
     };
     const withSummary = {
