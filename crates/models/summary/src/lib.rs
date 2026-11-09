@@ -365,7 +365,7 @@ fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
         .map(|name| format!("{name}, "))
         .unwrap_or_default();
     let text = format!(
-        "{name}your résumé version shows a useful background to build on. As you refine it, emphasize the work that best shows how you apply your abilities and the results your work supports. Specific examples will make those strengths easier to understand and remember. You already have a strong starting point; keep shaping your story around the roles and challenges you want to pursue next. Think about the projects and achievements that best demonstrate your skills, and write them down clearly so that anyone reading your résumé can quickly understand what you can bring to a role."
+        "{name}your résumé version shows a useful background to build on."
     );
     ProfileSummary {
         text: clean_output(&text),
@@ -441,14 +441,9 @@ mod tests {
         let summary = SummaryGenerator::extractive().generate(&parse, &sections);
         assert!(summary.text.contains("Ada, your résumé version shows a useful background"));
         assert!(summary.text.contains("your résumé"));
-        assert!(
-            summary
-                .text
-                .contains("You already have a strong starting point")
-        );
         assert!(!summary.text.contains("This candidate"));
         assert!(!summary.text.contains("is presented"));
-        assert!((80..=120).contains(&summary.text.split_whitespace().count()));
+        assert!((8..=20).contains(&summary.text.split_whitespace().count()));
         assert_eq!(summary.model, FALLBACK_MODEL);
     }
 
