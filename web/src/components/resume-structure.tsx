@@ -1,5 +1,5 @@
 import { ScanText, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { voteResumeSection } from "~/fns/resumes.functions";
 import { sectionKindLabel } from "~/lib/sections";
@@ -30,6 +30,11 @@ export function ResumeStructure({
   const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMap(sections);
+    setSelectedId(initialSelectedId);
+  }, [sections, initialSelectedId]);
 
   if (!map || map.sections.length === 0) {
     return (
