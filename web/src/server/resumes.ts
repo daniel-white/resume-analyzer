@@ -6,6 +6,39 @@ export type RunStatus = "requested" | "complete";
 export type DateStyle = "mm-yyyy" | "other" | "absent";
 export type LayoutConfidence = "structural" | "inferred";
 
+export type SectionKind =
+  | "summary"
+  | "experience"
+  | "education"
+  | "skills"
+  | "projects"
+  | "certifications"
+  | "awards"
+  | "languages"
+  | "publications"
+  | "volunteer"
+  | "interests"
+  | "contact"
+  | "other";
+
+export type SectionVote = "up" | "down";
+
+export type DetectedSection = {
+  id: string;
+  kind: SectionKind;
+  heading: string;
+  body: string;
+  confidence: number;
+  feedback?: SectionVote | null;
+};
+
+/// The app's own section reading, shown next to the providers' extracts.
+export type SectionMap = {
+  engine: string;
+  model: string;
+  sections: DetectedSection[];
+};
+
 export type Section = {
   heading: string;
   body: string;
@@ -99,6 +132,7 @@ export type VersionDetail = {
   status: ResumeStatus;
   created_at: string;
   parse: ParseInput | null;
+  sections?: SectionMap | null;
   runs: RunView[];
 };
 
@@ -206,6 +240,7 @@ export type Teardown =
       file: { url: string; mediaType: string };
       extract: ExtractField[] | null;
       parse?: ParseInput | null;
+      sections: SectionMap | null;
       cards: VerdictCard[];
     };
 
@@ -385,6 +420,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     lede: reading ? readingLede(plugins.length) : completeLede(version.parse),
     extract: version.parse ? extractFields(version.parse) : null,
     parse: version.parse,
+    sections: version.sections ?? null,
     cards: pluginCards(plugins, version.runs),
   };
 }
@@ -461,6 +497,10 @@ export type DeleteResult = { ok: true } | { ok: false; message: string };
 
 export type RenameResult = { ok: true } | { ok: false; message: string };
 
+export type VoteResult =
+  | { ok: true; vote: SectionVote | null }
+  | { ok: false; message: string };
+
 export async function renameResume(
   baseUrl: string,
   id: string,
@@ -482,6 +522,30 @@ export async function renameResume(
       : "Could not rename your resume. Please try again." };
   }
   return { ok: true };
+}
+
+export async function voteSection(
+  baseUrl: string,
+  resumeId: string,
+  versionId: string,
+  sectionId: string,
+  vote: SectionVote | null,
+  cookie: string | undefined,
+): Promise<VoteResult> {
+  const path = `/api/resumes/${encodeURIComponent(resumeId)}`
+    + `/versions/${encodeURIComponent(versionId)}`
+    + `/sections/${encodeURIComponent(sectionId)}`;
+  const result = await apiFetch(baseUrl, path, cookie, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ vote }),
+  });
+  if (!result.ok) {
+    return { ok: false, message: result.status === 404
+      ? "That section is no longer here. Refresh and try again."
+      : "Could not save your feedback. Please try again." };
+  }
+  return { ok: true, vote };
 }
 
 export async function deleteResume(

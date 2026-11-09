@@ -11,7 +11,7 @@ use axum::extract::{Multipart, Path, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
-use domain::{Ats, CallbackBody, DOCX, MAX_UPLOAD_BYTES, PDF, verify};
+use domain::{Ats, CallbackBody, DOCX, MAX_UPLOAD_BYTES, PDF, SectionVote, verify};
 use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 use storage::{Objects, RecordOutcome};
@@ -244,6 +244,44 @@ pub async fn resume_file(
         bytes,
     )
         .into_response()
+}
+
+#[derive(Deserialize)]
+pub struct SectionVoteBody {
+    /// `null` clears the vote.
+    vote: Option<SectionVote>,
+}
+
+#[derive(Serialize)]
+struct SectionVoteResponse {
+    vote: Option<SectionVote>,
+}
+
+/// Set or clear the caller's vote on one detected section. Section ids are
+/// stable within a version, and unknown or unowned ids are indistinguishable
+/// from each other.
+pub async fn vote_section(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path((resume_id, version_id, section_id)): Path<(Uuid, Uuid, String)>,
+    Json(body): Json<SectionVoteBody>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match api
+        .store
+        .vote_section(user_id, resume_id, version_id, &section_id, body.vote)
+        .await
+    {
+        Ok(true) => Json(SectionVoteResponse { vote: body.vote }).into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("vote section: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 pub async fn plugins(State(api): State<Arc<Api>>) -> Response {

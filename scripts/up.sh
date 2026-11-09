@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # deps:  dependencies + gateway + hostnames, API still runs on the host.
-# demo:  bake the API and the compiled web app, load them, and serve both
-#        on https://app.resume.local. /api stays on Rust; / is the web pod.
-# The ATS stubs are a separate chart. ClusterIP only, never a gateway route.
+# demo:  bake the API, the compiled web app, and the section model, load them,
+#        and serve both on https://app.resume.local. /api stays on Rust; / is
+#        the web pod. The ATS stubs are a separate chart. ClusterIP only,
+#        never a gateway route.
 set -euo pipefail
 
 mode=${1:-deps}
@@ -41,10 +42,10 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    "$root/scripts/bake.sh" --load api web
+    "$root/scripts/bake.sh" --load api web model
     # Named :dev loads can reuse Minikube's cached archive even after a new
     # Docker build. Stream the actual daemon images to replace that cache.
-    docker save resume-analyzer/api:dev resume-analyzer/web:dev |
+    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
       minikube image load --profile "$profile" --overwrite -
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"

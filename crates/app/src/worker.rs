@@ -9,6 +9,7 @@ use std::time::Duration;
 use base64::Engine;
 use domain::{Ats, EventName, EventRecord, ResumeFile, RunPayload, UploadedPayload};
 use plugins::structure;
+use sections::SectionDetector;
 use serde::Serialize;
 use storage::{Objects, Store};
 use uuid::Uuid;
@@ -24,6 +25,7 @@ pub struct Worker {
     self_url: String,
     client: reqwest::Client,
     notifications: Option<(mail::Smtp, String)>,
+    detector: SectionDetector,
 }
 
 impl Worker {
@@ -43,7 +45,15 @@ impl Worker {
             self_url: self_url.into(),
             client: reqwest::Client::new(),
             notifications: None,
+            detector: SectionDetector::heuristic(),
         }
+    }
+
+    /// The section detector the worker uses. The default is the offline
+    /// heading-alias engine so tests never download a model.
+    pub fn detector(mut self, detector: SectionDetector) -> Self {
+        self.detector = detector;
+        self
     }
 
     /// Python provider urls, keyed by plugin id. Empty keeps the in-process stub.
@@ -170,11 +180,19 @@ impl Worker {
     async fn uploaded(&self, event: &EventRecord) -> anyhow::Result<()> {
         let payload: UploadedPayload = serde_json::from_value(event.payload.clone())?;
         let bytes = self.objects.get(&payload.object_key).await?;
-        let parse = structure(&ResumeFile {
+        let file = ResumeFile {
             media_type: &payload.media_type,
             bytes: &bytes,
-        });
-        self.store.save_parse(event.version_id, &parse).await
+        };
+        let parse = structure(&file);
+        // Reading lines and running the model is CPU work; keep the event loop
+        // free while a cold model loads.
+        let lines = plugins::lines(&file);
+        let detector = self.detector.clone();
+        let sections = tokio::task::spawn_blocking(move || detector.detect(&lines)).await?;
+        self.store
+            .save_parse(event.version_id, &parse, Some(&sections))
+            .await
     }
 
     async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {

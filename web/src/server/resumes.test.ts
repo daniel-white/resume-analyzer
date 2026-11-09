@@ -15,6 +15,7 @@ import {
   scoreBand,
   teardown,
   uploadFailure,
+  voteSection,
   type ParseInput,
   type Plugin,
   type ResumeDetail,
@@ -508,6 +509,27 @@ describe("version selection", () => {
     expect(view.cards[0]).toMatchObject({ pending: false, score: 95 });
   });
 
+  it("carries the app's section reading for the selected version", () => {
+    const map = {
+      engine: "fastembed",
+      model: "bge-small",
+      sections: [{
+        id: "experience-1",
+        kind: "experience" as const,
+        heading: "Experience",
+        body: "Built things.",
+        confidence: 0.94,
+        feedback: "up" as const,
+      }],
+    };
+    const withSections = {
+      ...version("complete", parse({}), [], "old.pdf", 1),
+      sections: map,
+    };
+    expect(teardown({ ...detail, versions: [withSections] }, plugins, "version-1"))
+      .toMatchObject({ sections: map });
+  });
+
   it("does not silently show the latest results for a missing version", () => {
     expect(teardown(detail, plugins, "deleted-version")).toEqual({ kind: "missing" });
   });
@@ -555,5 +577,23 @@ describe("version API requests", () => {
     expect(calls.every(([, init]) => init.method === "DELETE")).toBe(true);
     fetch.mockImplementation(async () => new Response(null, { status: 500 }));
     expect(await deleteResume("http://api.test", "resume-1", undefined)).toMatchObject({ ok: false });
+  });
+
+  it("records and clears a vote on one detected section", async () => {
+    const fetch = vi.fn(async () => Response.json({ vote: "up" }));
+    vi.stubGlobal("fetch", fetch);
+    expect(
+      await voteSection("http://api.test", "resume-1", "version-1", "experience-1", "up", "session=test"),
+    ).toEqual({ ok: true, vote: "up" });
+    const [url, init] = fetch.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.pathname).toBe("/api/resumes/resume-1/versions/version-1/sections/experience-1");
+    expect(init.method).toBe("PUT");
+    expect(new Headers(init.headers).get("cookie")).toBe("session=test");
+    expect(JSON.parse(String(init.body))).toEqual({ vote: "up" });
+
+    fetch.mockImplementation(async () => new Response(null, { status: 404 }));
+    expect(
+      await voteSection("http://api.test", "resume-1", "version-1", "missing-1", null, undefined),
+    ).toMatchObject({ ok: false });
   });
 });

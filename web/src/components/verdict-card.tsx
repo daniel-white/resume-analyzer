@@ -1,9 +1,9 @@
-import type { VerdictCard } from "~/server/resumes";
+import type { SectionKind, VerdictCard } from "~/server/resumes";
 import { useState } from "react";
 
 import { PluginCard } from "./plugin-card";
 
-export function VerdictCardView({ card, initiallySelected = false }: { card: VerdictCard; initiallySelected?: boolean }) {
+export function VerdictCardView({ card, initiallySelected = false, highlightKind }: { card: VerdictCard; initiallySelected?: boolean; highlightKind?: SectionKind | null }) {
   const [selected, setSelected] = useState(initiallySelected);
   return (
     <article aria-label={card.name}>
@@ -21,6 +21,7 @@ export function VerdictCardView({ card, initiallySelected = false }: { card: Ver
         parse={card.pending ? null : card.parse}
         selected={selected}
         onSelect={() => setSelected(!selected)}
+        highlightKind={highlightKind}
       />
     </article>
   );

@@ -15,13 +15,19 @@ group "default" {
 }
 
 group "all" {
-  targets = ["api", "web", "providers"]
+  targets = ["api", "web", "providers", "model"]
 }
 
 target "api" {
   context    = "."
   dockerfile = "Dockerfile"
   tags       = ["${REGISTRY}/api:${TAG}"]
+}
+
+target "model" {
+  context    = "."
+  dockerfile = "Dockerfile.model"
+  tags       = ["${REGISTRY}/model:${TAG}"]
 }
 
 target "web" {

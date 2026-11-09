@@ -3,7 +3,8 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use domain::{
     CallbackPayload, EventName, ParseInput, ResumeDetail, ResumeStatus, ResumeSummary, RunPayload,
-    RunStatus, RunView, UploadedPayload, Verdict, VersionDetail, VersionSummary,
+    RunStatus, RunView, SectionMap, SectionVote, UploadedPayload, Verdict, VersionDetail,
+    VersionSummary,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -310,7 +311,7 @@ impl Store {
             return Ok(None);
         };
         let versions = sqlx::query(
-            "select id, number, filename, media_type, status, created_at, parse
+            "select id, number, filename, media_type, status, created_at, parse, sections
              from versions
              where resume_id = $1
              order by number desc",
@@ -328,10 +329,41 @@ impl Store {
         .bind(id)
         .fetch_all(&self.pool)
         .await?;
+        let votes = sqlx::query(
+            "select feedback.version_id, feedback.section_id, feedback.vote
+             from section_feedback feedback
+             join versions on versions.id = feedback.version_id
+             where versions.resume_id = $1 and feedback.user_id = $2",
+        )
+        .bind(id)
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await?;
         let mut details = Vec::with_capacity(versions.len());
         for version in &versions {
             let version_id: Uuid = version.try_get("id")?;
             let parse: Option<Json<ParseInput>> = version.try_get("parse")?;
+            let mut sections: Option<SectionMap> = version
+                .try_get::<Option<Json<SectionMap>>, _>("sections")?
+                .map(|json| json.0);
+            if let Some(map) = &mut sections {
+                for section in &mut map.sections {
+                    section.feedback = votes.iter().find_map(|vote| {
+                        if vote.try_get::<Uuid, _>("version_id").ok() == Some(version_id)
+                            && vote.try_get::<String, _>("section_id").ok().as_deref()
+                                == Some(section.id.as_str())
+                        {
+                            match vote.try_get::<String, _>("vote").ok().as_deref() {
+                                Some("up") => Some(SectionVote::Up),
+                                Some("down") => Some(SectionVote::Down),
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        }
+                    });
+                }
+            }
             details.push(VersionDetail {
                 id: version_id,
                 number: version.try_get("number")?,
@@ -340,6 +372,7 @@ impl Store {
                 status: status(version.try_get("status")?)?,
                 created_at: version.try_get("created_at")?,
                 parse: parse.map(|json| json.0),
+                sections,
                 runs: runs
                     .iter()
                     .filter(|run| run.try_get::<Uuid, _>("version_id").ok() == Some(version_id))
@@ -444,20 +477,26 @@ impl Store {
         Ok(())
     }
 
-    /// Parse result and the `ResumeParsed` event commit together. A retry of
-    /// `ResumeUploaded` does not write a second parse event.
-    pub async fn save_parse(&self, version_id: Uuid, parse: &ParseInput) -> anyhow::Result<()> {
+    /// Parse result, our section reading, and the `ResumeParsed` event commit
+    /// together. A retry of `ResumeUploaded` does not write a second parse event.
+    pub async fn save_parse(
+        &self,
+        version_id: Uuid,
+        parse: &ParseInput,
+        sections: Option<&SectionMap>,
+    ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         let resume_id: Uuid = sqlx::query_scalar("select resume_id from versions where id = $1")
             .bind(version_id)
             .fetch_one(&mut *tx)
             .await?;
         sqlx::query(
-            "update versions set status = 'parsed', parse = $2
+            "update versions set status = 'parsed', parse = $2, sections = $3
              where id = $1 and status = 'uploaded'",
         )
         .bind(version_id)
         .bind(Json(parse))
+        .bind(sections.cloned().map(Json))
         .execute(&mut *tx)
         .await?;
         let already = sqlx::query(
@@ -481,6 +520,68 @@ impl Store {
         }
         tx.commit().await?;
         Ok(())
+    }
+
+    /// Record, change, or clear one user's vote on a detected section. Returns
+    /// false when the version is not the caller's or the section is not in the
+    /// stored map, so the API can answer 404 without leaking ownership.
+    pub async fn vote_section(
+        &self,
+        user_id: Uuid,
+        resume_id: Uuid,
+        version_id: Uuid,
+        section_id: &str,
+        vote: Option<SectionVote>,
+    ) -> anyhow::Result<bool> {
+        let owned: Option<Uuid> = sqlx::query_scalar(
+            "select versions.id
+             from versions join resumes on resumes.id = versions.resume_id
+             where resumes.user_id = $1 and resumes.id = $2 and versions.id = $3
+               and exists (
+                   select 1
+                   from jsonb_array_elements(
+                       coalesce(versions.sections -> 'sections', '[]'::jsonb)
+                   ) as section
+                   where section ->> 'id' = $4
+               )",
+        )
+        .bind(user_id)
+        .bind(resume_id)
+        .bind(version_id)
+        .bind(section_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        if owned.is_none() {
+            return Ok(false);
+        }
+        match vote {
+            Some(vote) => {
+                sqlx::query(
+                    "insert into section_feedback (version_id, user_id, section_id, vote)
+                     values ($1, $2, $3, $4)
+                     on conflict (version_id, user_id, section_id)
+                     do update set vote = excluded.vote, updated_at = now()",
+                )
+                .bind(version_id)
+                .bind(user_id)
+                .bind(section_id)
+                .bind(vote_key(vote))
+                .execute(&self.pool)
+                .await?;
+            }
+            None => {
+                sqlx::query(
+                    "delete from section_feedback
+                     where version_id = $1 and user_id = $2 and section_id = $3",
+                )
+                .bind(version_id)
+                .bind(user_id)
+                .bind(section_id)
+                .execute(&self.pool)
+                .await?;
+            }
+        }
+        Ok(true)
     }
 
     pub async fn fanout(&self, version_id: Uuid, plugin_ids: &[&str]) -> anyhow::Result<()> {
@@ -836,6 +937,13 @@ fn run_status(value: String) -> anyhow::Result<RunStatus> {
     RunStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad run status {value}"))
 }
 
+fn vote_key(vote: SectionVote) -> &'static str {
+    match vote {
+        SectionVote::Up => "up",
+        SectionVote::Down => "down",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -902,7 +1010,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(version, &parse).await.unwrap();
+        store.save_parse(version, &parse, None).await.unwrap();
         store
             .fanout(version, &["greenline", "levr", "ash"])
             .await
@@ -997,7 +1105,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(version_id, &parse).await.unwrap();
+        store.save_parse(version_id, &parse, None).await.unwrap();
         store.fanout(version_id, &["greenline"]).await.unwrap();
         let before = store
             .detail(domain::DEMO_USER_ID, resume_id)
@@ -1075,7 +1183,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(second, &parse).await.unwrap();
+        store.save_parse(second, &parse, None).await.unwrap();
         store.fanout(second, &["stub"]).await.unwrap();
         let detail = store.detail(owner, resume).await.unwrap().unwrap();
         let run_id = detail.versions[0].runs[0].id;
@@ -1206,7 +1314,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(version_id, &parse).await.unwrap();
+        store.save_parse(version_id, &parse, None).await.unwrap();
         store.fanout(version_id, &["stub"]).await.unwrap();
         let claimed = store.claim().await.unwrap().unwrap();
         store.finish(claimed.id, claimed.token).await.unwrap();
@@ -1289,7 +1397,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(ada_version, &parse).await.unwrap();
+        store.save_parse(ada_version, &parse, None).await.unwrap();
         store.fanout(ada_version, &["stub"]).await.unwrap();
         let removed = store.delete_user(ada).await.unwrap();
         assert_eq!(removed.len(), 1);
@@ -1324,7 +1432,7 @@ mod tests {
             .await
             .unwrap();
         let parse = ParseInput::empty(domain::LayoutConfidence::Structural);
-        store.save_parse(first, &parse).await.unwrap();
+        store.save_parse(first, &parse, None).await.unwrap();
         store.fanout(first, &["stub"]).await.unwrap();
         let run_id = store
             .detail(user, resume_id)
@@ -1368,7 +1476,7 @@ mod tests {
                 .is_none()
         );
         let second_parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
-        store.save_parse(second, &second_parse).await.unwrap();
+        store.save_parse(second, &second_parse, None).await.unwrap();
         store.fanout(second, &["stub"]).await.unwrap();
 
         let detail = store.detail(user, resume_id).await.unwrap().unwrap();
@@ -1388,5 +1496,129 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].latest.filename, "plain.pdf");
         assert_eq!(listed[0].latest.number, 2);
+    }
+
+    #[tokio::test]
+    async fn sections_are_stored_with_the_parse_and_votes_are_per_user() {
+        use domain::{DetectedSection, SectionKind};
+
+        let store = Ephemeral::start().await.unwrap();
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        sqlx::query(
+            "insert into users (id, email) values ($1, 'owner@example.com'), ($2, 'other@example.com')",
+        )
+        .bind(owner)
+        .bind(other)
+        .execute(store.pool())
+        .await
+        .unwrap();
+        let resume = Uuid::new_v4();
+        let version = Uuid::new_v4();
+        store
+            .create_resume(owner, resume, version, "resume.pdf", domain::PDF, "file")
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        let map = SectionMap {
+            engine: "test".to_owned(),
+            model: "alias".to_owned(),
+            sections: vec![DetectedSection {
+                id: "experience-1".to_owned(),
+                kind: SectionKind::Experience,
+                heading: "Experience".to_owned(),
+                body: "Built things.".to_owned(),
+                confidence: 0.9,
+                feedback: None,
+            }],
+        };
+        store.save_parse(version, &parse, Some(&map)).await.unwrap();
+
+        let detail = store.detail(owner, resume).await.unwrap().unwrap();
+        assert_eq!(detail.versions[0].sections.as_ref(), Some(&map));
+
+        assert!(
+            store
+                .vote_section(
+                    owner,
+                    resume,
+                    version,
+                    "experience-1",
+                    Some(SectionVote::Up)
+                )
+                .await
+                .unwrap()
+        );
+        assert!(
+            !store
+                .vote_section(owner, resume, version, "skills-1", Some(SectionVote::Up))
+                .await
+                .unwrap(),
+            "a section that was not detected cannot be voted on"
+        );
+        assert!(
+            !store
+                .vote_section(
+                    other,
+                    resume,
+                    version,
+                    "experience-1",
+                    Some(SectionVote::Up)
+                )
+                .await
+                .unwrap(),
+            "another user's version is never writable"
+        );
+
+        let feedback = |user| {
+            let store = &store.store;
+            async move {
+                store.detail(user, resume).await.unwrap().map(|detail| {
+                    detail.versions[0].sections.as_ref().unwrap().sections[0].feedback
+                })
+            }
+        };
+        assert_eq!(feedback(owner).await, Some(Some(SectionVote::Up)));
+        assert_eq!(feedback(other).await, None, "another user sees no version");
+
+        store
+            .vote_section(
+                owner,
+                resume,
+                version,
+                "experience-1",
+                Some(SectionVote::Down),
+            )
+            .await
+            .unwrap();
+        assert_eq!(feedback(owner).await, Some(Some(SectionVote::Down)));
+        store
+            .vote_section(owner, resume, version, "experience-1", None)
+            .await
+            .unwrap();
+        assert_eq!(feedback(owner).await, Some(None));
+
+        store
+            .vote_section(
+                owner,
+                resume,
+                version,
+                "experience-1",
+                Some(SectionVote::Up),
+            )
+            .await
+            .unwrap();
+        assert!(
+            store
+                .delete_resume(owner, resume, Some(version))
+                .await
+                .unwrap()
+                .is_some()
+        );
+        let remaining: i64 = sqlx::query_scalar("select count(*) from section_feedback")
+            .fetch_one(store.pool())
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
 }

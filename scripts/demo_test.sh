@@ -19,6 +19,12 @@ const api = documents.find(doc => doc.includes("kind: Deployment") && doc.includ
 assert(api?.includes("smart_resume=http://smart-resume:8080"));
 assert(api?.includes("indy_hackers_hiring=http://indy-hackers-hiring:8080"));
 assert(api.includes("blast_track=http://blast-track:8080"));
+assert(api.includes("image: resume-analyzer/model:dev"));
+assert(api.includes("name: section-model"));
+assert(api.includes("- /bin/cp"));
+assert(api.includes("name: SECTION_MODEL_DIR"));
+assert(api.includes('value: "/models"'));
+assert(api.includes("emptyDir: {}"));
 assert(web?.includes("image: resume-analyzer/web:dev"));
 assert(web.includes("value: http://api:8080"));
 assert(web.includes('value: "3000"'));
@@ -58,7 +64,7 @@ if grep -q '  name: web$\|  name: app$' <<<"$deps"; then
   exit 1
 fi
 
-docker buildx bake --print --file docker-bake.hcl api web providers | node --input-type=module -e '
+docker buildx bake --print --file docker-bake.hcl api web providers model | node --input-type=module -e '
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const targets = JSON.parse(readFileSync(0, "utf8")).target;
@@ -67,6 +73,8 @@ assert(targets.web.tags.includes("resume-analyzer/web:dev"));
 assert(targets.api.tags.includes("resume-analyzer/api:dev"));
 assert.equal(targets.providers.context, "providers");
 assert(targets.providers.tags.includes("resume-analyzer/ats:dev"));
+assert.equal(targets.model.dockerfile, "Dockerfile.model");
+assert(targets.model.tags.includes("resume-analyzer/model:dev"));
 '
 node --input-type=module <<'JS'
 import assert from "node:assert/strict";
@@ -87,8 +95,8 @@ for (const step of steps) {
   previous = position;
 }
 JS
-grep -Fq '"$root/scripts/bake.sh" --load api web' scripts/up.sh
-grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev |' scripts/up.sh
+grep -Fq '"$root/scripts/bake.sh" --load api web model' scripts/up.sh
+grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |' scripts/up.sh
 grep -Fq 'minikube image load --profile "$profile" --overwrite -' scripts/up.sh
 if grep -Eq 'minikube image load .*resume-analyzer/(api|web|ats):dev' scripts/up.sh; then
   echo "demo: stream daemon images, not cached named :dev archives" >&2
@@ -98,6 +106,11 @@ grep -Fq 'args+=(--set api.enabled=true --set web.enabled=true)' scripts/up.sh
 grep -Fq 'COPY web/src ./src' Dockerfile.web
 if grep -Fq 'COPY web/ ./' Dockerfile.web; then
   echo "demo: do not copy local generated web state into the image" >&2
+  exit 1
+fi
+grep -Fq 'FROM scratch' Dockerfile.model
+if grep -Eq '^FROM debian:bookworm-slim$' Dockerfile.model; then
+  echo "demo: the model image must not ship a full Debian userland" >&2
   exit 1
 fi
 if grep -q 'image inspect resume-analyzer/web' scripts/up.sh; then

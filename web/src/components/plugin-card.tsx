@@ -1,7 +1,8 @@
 import { FactorList } from "~/components/factor-list";
 import { Score, ScoreStamp } from "~/components/score";
 import { Sheet } from "~/components/sheet";
-import type { ParseInput, Verdict } from "~/server/resumes";
+import { headingMatches, providerFound, sectionKindLabel } from "~/lib/sections";
+import type { ParseInput, SectionKind, Verdict } from "~/server/resumes";
 import { cn } from "~/lib/utils";
 import { LoaderCircle } from "lucide-react";
 
@@ -26,6 +27,7 @@ export function PluginCard({
   selected,
   onSelect,
   parse,
+  highlightKind,
 }: {
   plugin: { id: string; name: string; bias: string };
   verdict: CardVerdict | null;
@@ -33,7 +35,11 @@ export function PluginCard({
   selected: boolean;
   onSelect: () => void;
   parse?: ParseInput | null;
+  highlightKind?: SectionKind | null;
 }) {
+  const highlighted = highlightKind && verdict
+    ? providerFound(highlightKind, { parse, kept: verdict.kept })
+    : null;
   return (
     <Sheet>
       <details className={cn("sheet-face", selected && "sheet-selected")} open={selected}>
@@ -69,13 +75,20 @@ export function PluginCard({
         ) : (
           <div className="fold-body">
             <p>{verdict.summary ?? aside[plugin.id] ?? plugin.bias}</p>
+            {highlightKind && highlighted !== null ? (
+              <p className={cn("section-verdict", highlighted ? "is-found" : "is-missed")}>
+                {highlighted
+                  ? `Found the ${sectionKindLabel(highlightKind)} section`
+                  : `Did not find the ${sectionKindLabel(highlightKind)} section`}
+              </p>
+            ) : null}
             <div className="mt-4">
               <h3 className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">
                 Kept
               </h3>
               <ul className="mt-1.5 flex flex-col gap-1">
                 {(verdict.kept.length === 0 ? ["Nothing"] : verdict.kept).map((line) => (
-                  <li key={line}>{line}</li>
+                  <li key={line} className={cn(highlightKind && headingMatches(highlightKind, line) && "extract-hit")}>{line}</li>
                 ))}
               </ul>
             </div>
@@ -99,7 +112,10 @@ export function PluginCard({
                 <h3 className="text-xs font-medium tracking-[0.08em] uppercase text-muted-foreground">This system's extract</h3>
                 <p className="mt-2 text-sm">{[parse.profile.name, parse.profile.email, parse.profile.phone].filter(Boolean).join(" · ") || "No contact details extracted."}</p>
                 {parse.profile.sections.map((section, index) => (
-                  <div className="mt-3 text-sm" key={`${section.heading}-${index}`}>
+                  <div
+                    className={cn("mt-3 text-sm", highlightKind && headingMatches(highlightKind, section.heading) && "extract-hit")}
+                    key={`${section.heading}-${index}`}
+                  >
                     <h4 className="font-medium">{section.heading}</h4>
                     <p className="whitespace-pre-wrap">{section.body}</p>
                   </div>

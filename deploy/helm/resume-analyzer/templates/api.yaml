@@ -15,6 +15,20 @@ spec:
       labels:
         app: api
     spec:
+      {{- if .Values.sections.model.enabled }}
+      initContainers:
+        - name: section-model
+          image: {{ .Values.sections.model.image }}
+          imagePullPolicy: {{ .Values.sections.model.pullPolicy }}
+          command:
+            - /bin/cp
+            - -R
+            - /model/.
+            - {{ .Values.sections.model.dir }}/
+          volumeMounts:
+            - name: section-model
+              mountPath: {{ .Values.sections.model.dir }}
+      {{- end }}
       containers:
         - name: api
           image: {{ .Values.api.image }}
@@ -56,11 +70,30 @@ spec:
             - name: PLUGIN_SECRET
               value: {{ .Values.api.pluginSecret | quote }}
             {{- end }}
+            {{- if .Values.sections.model.enabled }}
+            - name: SECTION_MODEL
+              value: "auto"
+            - name: SECTION_MODEL_DIR
+              value: {{ .Values.sections.model.dir | quote }}
+            - name: SECTION_MODEL_NAME
+              value: {{ .Values.sections.model.name | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health
               port: {{ .Values.api.port }}
             periodSeconds: 5
+          {{- if .Values.sections.model.enabled }}
+          volumeMounts:
+            - name: section-model
+              mountPath: {{ .Values.sections.model.dir }}
+              readOnly: true
+          {{- end }}
+      {{- if .Values.sections.model.enabled }}
+      volumes:
+        - name: section-model
+          emptyDir: {}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

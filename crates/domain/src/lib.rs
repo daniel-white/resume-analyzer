@@ -337,6 +337,75 @@ pub struct RunView {
     pub verdict: Option<Verdict>,
 }
 
+/// Canonical section labels. The detector maps free-text headings onto these
+/// so the UI can compare our reading with each provider's extract.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SectionKind {
+    Summary,
+    Experience,
+    Education,
+    Skills,
+    Projects,
+    Certifications,
+    Awards,
+    Languages,
+    Publications,
+    Volunteer,
+    Interests,
+    Contact,
+    Other,
+}
+
+impl SectionKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Summary => "Summary",
+            Self::Experience => "Experience",
+            Self::Education => "Education",
+            Self::Skills => "Skills",
+            Self::Projects => "Projects",
+            Self::Certifications => "Certifications",
+            Self::Awards => "Awards",
+            Self::Languages => "Languages",
+            Self::Publications => "Publications",
+            Self::Volunteer => "Volunteer",
+            Self::Interests => "Interests",
+            Self::Contact => "Contact",
+            Self::Other => "Other",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SectionVote {
+    Up,
+    Down,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct DetectedSection {
+    /// Stable within one version, so feedback can point at it.
+    pub id: String,
+    pub kind: SectionKind,
+    pub heading: String,
+    pub body: String,
+    pub confidence: f32,
+    /// The calling user's vote. Not stored inside the section map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<SectionVote>,
+}
+
+/// One model's reading of the resume. Distinct from ParseInput: this is our
+/// representation, not a vendor's extraction.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SectionMap {
+    pub engine: String,
+    pub model: String,
+    pub sections: Vec<DetectedSection>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VersionDetail {
     pub id: Uuid,
@@ -347,6 +416,9 @@ pub struct VersionDetail {
     pub created_at: DateTime<Utc>,
     /// The app's verification extract for this upload. Distinct from each run's parse.
     pub parse: Option<ParseInput>,
+    /// The app's section detector reading, when it has run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sections: Option<SectionMap>,
     pub runs: Vec<RunView>,
 }
 

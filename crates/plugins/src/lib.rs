@@ -80,6 +80,116 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
 
+/// Ordered text lines for the section detector. This is a separate read from
+/// the frozen verification parse: it keeps paragraphs in document order
+/// instead of reducing the file to a few fields.
+pub fn lines(file: &ResumeFile<'_>) -> Vec<String> {
+    match file.media_type {
+        domain::DOCX => docx_lines(file.bytes),
+        domain::PDF if file.bytes.starts_with(b"%PDF") => pdf_lines(file.bytes),
+        _ => split_lines(&String::from_utf8_lossy(file.bytes)),
+    }
+}
+
+fn docx_lines(bytes: &[u8]) -> Vec<String> {
+    let Ok(mut archive) = ZipArchive::new(Cursor::new(bytes)) else {
+        return Vec::new();
+    };
+    let mut header = Vec::new();
+    let mut body = Vec::new();
+    let mut footer = Vec::new();
+    for index in 0..archive.len() {
+        let Ok(mut file) = archive.by_index(index) else {
+            continue;
+        };
+        let name = file.name().to_owned();
+        let mut xml = String::new();
+        if file.read_to_string(&mut xml).is_err() {
+            continue;
+        }
+        if name == "word/document.xml" {
+            body.extend(paragraph_lines(&xml));
+        } else if name.starts_with("word/header") {
+            header.extend(paragraph_lines(&xml));
+        } else if name.starts_with("word/footer") {
+            footer.extend(paragraph_lines(&xml));
+        }
+    }
+    header.extend(body);
+    header.extend(footer);
+    header
+}
+
+fn paragraph_lines(xml: &str) -> Vec<String> {
+    xml.split("</w:p>")
+        .filter_map(|paragraph| {
+            // Runs split on formatting, not word boundaries, so concatenate
+            // them. Whitespace lives inside the runs.
+            let text = texts(paragraph).concat();
+            let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            if text.is_empty() { None } else { Some(text) }
+        })
+        .collect()
+}
+
+fn pdf_lines(bytes: &[u8]) -> Vec<String> {
+    if let Ok(text) = pdf_extract::extract_text_from_mem(bytes) {
+        let lines = split_lines(&text);
+        if !lines.is_empty() {
+            return lines;
+        }
+    }
+    // A file without a usable text layer still has readable string literals.
+    raw_pdf_lines(bytes)
+}
+
+/// Last-resort read for a PDF the extractor rejects. Test fixtures and some
+/// hand-built files have content streams with no page tree.
+fn raw_pdf_lines(bytes: &[u8]) -> Vec<String> {
+    let text = String::from_utf8_lossy(bytes);
+    let mut out = Vec::new();
+    let mut rest = text.as_ref();
+    while let Some(start) = rest.find('(') {
+        let after = &rest[start + 1..];
+        let Some(end) = after.find(')') else {
+            break;
+        };
+        let literal = unescape_pdf(&after[..end]);
+        let literal = literal.trim();
+        if !literal.is_empty() {
+            out.push(literal.to_owned());
+        }
+        rest = &after[end + 1..];
+    }
+    out
+}
+
+fn unescape_pdf(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    let mut characters = value.chars();
+    while let Some(character) = characters.next() {
+        if character != '\\' {
+            out.push(character);
+            continue;
+        }
+        match characters.next() {
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some(escaped) => out.push(escaped),
+            None => break,
+        }
+    }
+    out
+}
+
+fn split_lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|line| !line.is_empty())
+        .collect()
+}
+
 /// The simulated fleet. The worker posts each file to the matching Python
 /// provider instead of calling `read`.
 pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
@@ -498,5 +608,42 @@ mod tests {
             read.verdict.summary,
             "Score 10 of 100. Upload a PDF or DOCX the parser can open."
         );
+    }
+
+    #[test]
+    fn docx_lines_follow_document_order_and_join_split_runs() {
+        let bytes = docx(
+            "<w:p><w:r><w:t>Ada Lovelace</w:t></w:r></w:p><w:p><w:r><w:t>ada@example.com</w:t></w:r></w:p>",
+            concat!(
+                "<w:p><w:r><w:t>Ex</w:t></w:r><w:r><w:t>perience</w:t></w:r></w:p>",
+                "<w:p><w:r><w:t>Staff Engineer</w:t></w:r></w:p>",
+                "<w:p><w:r><w:t>   </w:t></w:r></w:p>",
+                "<w:p><w:r><w:t>Education</w:t></w:r></w:p>",
+            ),
+        );
+        let lines = lines(&ResumeFile {
+            media_type: domain::DOCX,
+            bytes: &bytes,
+        });
+        assert_eq!(
+            lines,
+            vec![
+                "Ada Lovelace",
+                "ada@example.com",
+                "Experience",
+                "Staff Engineer",
+                "Education",
+            ]
+        );
+    }
+
+    #[test]
+    fn a_pdf_without_a_page_tree_falls_back_to_its_literals() {
+        let bytes = plain_pdf();
+        let lines = lines(&ResumeFile {
+            media_type: domain::PDF,
+            bytes: &bytes,
+        });
+        assert_eq!(lines, vec!["Ada Lovelace", "ada@example.com"]);
     }
 }

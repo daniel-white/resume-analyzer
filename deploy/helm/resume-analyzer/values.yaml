@@ -20,6 +20,17 @@ web:
   pullPolicy: Never
   port: 3000
 
+sections:
+  # Baked BGE small ONNX files. An initContainer copies them into an emptyDir
+  # so the API never downloads a model at startup. `SECTION_MODEL=off` falls
+  # back to the deterministic heading aliases instead.
+  model:
+    enabled: true
+    image: resume-analyzer/model:dev
+    pullPolicy: Never
+    dir: /models
+    name: BAAI/bge-small-en-v1.5
+
 gateway:
   enabled: true
   mdns:

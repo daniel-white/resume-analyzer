@@ -1,4 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { ExtractStrip } from "~/components/extract-strip";
 import { ResumeOverview } from "~/components/resume-overview";
@@ -11,7 +12,9 @@ import { SiteHeader } from "~/components/site-header";
 import { VerdictGrid } from "~/components/verdict-grid";
 import { ResumeVersions } from "~/components/resume-versions";
 import { ResumeComparison } from "~/components/resume-comparison";
+import { ResumeStructure } from "~/components/resume-structure";
 import { getTeardown } from "~/fns/resumes.functions";
+import type { SectionKind } from "~/server/resumes";
 
 export const Route = createFileRoute("/resumes/$id")({
   validateSearch: (search: Record<string, unknown>): { version?: string; provider?: string } => ({
@@ -35,6 +38,9 @@ function TeardownPage() {
   const view = Route.useLoaderData();
   const { id } = Route.useParams();
   const { provider } = Route.useSearch();
+  const [highlightKind, setHighlightKind] = useState<SectionKind | null>(null);
+
+  useEffect(() => setHighlightKind(null), [view.versionId]);
 
   return (
     <Page wide>
@@ -45,13 +51,21 @@ function TeardownPage() {
       <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
       <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
       {view.extract ? <ExtractStrip fields={view.extract} /> : null}
+      <ResumeStructure
+        key={view.versionId}
+        sections={view.sections}
+        cards={view.cards}
+        resumeId={view.resumeId}
+        versionId={view.versionId}
+        onHighlight={setHighlightKind}
+      />
       <div className="desk-split resume-content">
         <div className="desk-resume">
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />
         </div>
         <section className="analysis-results" aria-label="System results">
           <div className="results-heading"><h2>ATS results</h2><p>Select a system to view extracted content and score details.</p></div>
-          <VerdictGrid cards={view.cards} provider={provider} />
+          <VerdictGrid cards={view.cards} provider={provider} highlightKind={highlightKind} />
           <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
         </section>
       </div>

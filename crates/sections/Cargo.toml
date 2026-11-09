@@ -1,0 +1,16 @@
+[package]
+name = "sections"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+domain = { path = "../domain" }
+# 4.9.1 is the last release on ONNX Runtime rc.9, which still publishes an
+# x86_64-apple-darwin binary. Newer releases dropped Intel macOS, so the model
+# could not load on a developer laptop. The runtime is statically linked.
+fastembed = { version = "4.9.1", default-features = false, features = ["ort-download-binaries", "hf-hub-rustls-tls"] }
+
+[dev-dependencies]
+serde_json = "1"

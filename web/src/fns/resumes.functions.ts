@@ -10,8 +10,10 @@ import {
   stageResume,
   deleteResume,
   renameResume,
+  voteSection,
   type RenameResult,
   type DeleteResult,
+  type VoteResult,
   type LibraryView,
   type Teardown,
   type UploadResult,
@@ -122,6 +124,34 @@ export const removeResume = createServerFn({ method: "POST" })
       return await deleteResume(apiBase(), data.id, cookie(), data.versionId);
     } catch (error) {
       if (error instanceof SignedOut) signedOut();
+      throw error;
+    }
+  });
+
+export const voteResumeSection = createServerFn({ method: "POST" })
+  .validator((data: {
+    resumeId: string;
+    versionId: string;
+    sectionId: string;
+    vote: "up" | "down" | null;
+  }) => {
+    if (!data.resumeId || !data.versionId || !data.sectionId) {
+      throw new Error("missing section");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<VoteResult> => {
+    try {
+      return await voteSection(
+        apiBase(),
+        data.resumeId,
+        data.versionId,
+        data.sectionId,
+        data.vote,
+        cookie(),
+      );
+    } catch (error) {
+      if (error instanceof SignedOut) signedOut(`/resumes/${data.resumeId}`);
       throw error;
     }
   });

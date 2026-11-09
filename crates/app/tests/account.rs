@@ -276,7 +276,10 @@ async fn login_cookie_can_manage_the_account() {
     // must not enqueue work, and repeated owner visits add the new plugin once.
     let version_uuid = uuid::Uuid::parse_str(version_id).expect("version uuid");
     let parse = domain::ParseInput::empty(domain::LayoutConfidence::Inferred);
-    store.save_parse(version_uuid, &parse).await.expect("parse");
+    store
+        .save_parse(version_uuid, &parse, None)
+        .await
+        .expect("parse");
     store
         .fanout(version_uuid, &["legacy"])
         .await

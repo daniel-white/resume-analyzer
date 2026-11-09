@@ -36,7 +36,7 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
   if printf '%s\n' "$files" | grep -Eq '^(scripts/(factory(_test)?\.sh|check\.sh)|factory/|\.opencode/skills/ats-plugin/)'; then
     run_factory=1
   fi
-  if printf '%s\n' "$files" | grep -Eq '^(Dockerfile(\.web)?$|docker-bake\.hcl$|deploy/|scripts/(up|demo_test)\.sh$)'; then
+  if printf '%s\n' "$files" | grep -Eq '^(Dockerfile(\.web|\.model)?$|docker-bake\.hcl$|deploy/|scripts/(up|demo_test)\.sh$)'; then
     run_demo=1
   fi
 else

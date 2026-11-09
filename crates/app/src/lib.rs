@@ -15,7 +15,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, State};
-use axum::routing::{delete, get, post};
+use axum::routing::{delete, get, post, put};
 use domain::MAX_UPLOAD_BYTES;
 
 use crate::config::Config;
@@ -60,6 +60,10 @@ pub fn api_router(api: Arc<Api>) -> Router {
         .route(
             "/api/resumes/{id}/versions/{version_id}",
             delete(api::delete_version),
+        )
+        .route(
+            "/api/resumes/{id}/versions/{version_id}/sections/{section_id}",
+            put(api::vote_section),
         )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
@@ -134,10 +138,15 @@ pub async fn serve() {
         .map(|url| url.trim().trim_end_matches('/').to_owned())
         .filter(|url| !url.is_empty())
         .unwrap_or_else(|| callback_url(address));
+    // Pay the model load once in the background, not on the first upload.
+    let detector = sections::SectionDetector::from_env();
+    let warming = detector.clone();
+    tokio::task::spawn_blocking(move || warming.warm());
     let worker = Arc::new(
         Worker::new(store, objects, plugins, bus, callback)
             .endpoints(fleet.endpoints)
-            .notifications(api.mail.clone(), &config.app_origin),
+            .notifications(api.mail.clone(), &config.app_origin)
+            .detector(detector),
     );
     worker.spawn();
     let cleanup_api = api.clone();

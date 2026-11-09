@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+
+# The section detector loads local ONNX files from SECTION_MODEL_DIR. Bake the
+# BGE small model into an image so the API pod never downloads a model while it
+# is starting. The Helm chart copies these files into an emptyDir with an
+# initContainer.
+FROM debian:bookworm-slim AS fetch
+ARG MODEL_REPO=Xenova/bge-small-en-v1.5
+ARG MODEL_REVISION=main
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /model
+RUN set -eux; \
+    for file in onnx/model.onnx tokenizer.json config.json special_tokens_map.json tokenizer_config.json; do \
+      mkdir -p "$(dirname "$file")"; \
+      curl --fail --location --retry 3 --retry-delay 2 \
+        --output "$file" \
+        "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${file}"; \
+    done; \
+    test -s onnx/model.onnx; \
+    test -s tokenizer.json
+
+# The final image holds only the model files and a static cp. The initContainer
+# runs it to fill an emptyDir, so a full Debian userland would be dead weight.
+FROM busybox:stable-musl AS tool
+
+FROM scratch
+COPY --from=tool /bin/busybox /bin/cp
+COPY --from=fetch /model /model
