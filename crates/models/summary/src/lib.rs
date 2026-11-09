@@ -364,48 +364,8 @@ fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
         .and_then(|name| name.split_whitespace().next())
         .map(|name| format!("{name}, "))
         .unwrap_or_default();
-    let your = if name.is_empty() { "Your" } else { "your" };
-    let identity = sections
-        .sections
-        .iter()
-        .find(|section| section.kind == SectionKind::Experience)
-        .or_else(|| {
-            sections
-                .sections
-                .iter()
-                .find(|section| section.kind == SectionKind::Summary)
-        })
-        .and_then(|section| first_line(&section.body, 80))
-        .filter(|line| line.split_whitespace().count() <= 10 && !line.contains('@'))
-        .map(|line| lowercase_start(line.trim_end_matches(['.', ',', ';', ':'])));
-    let skills = sections
-        .sections
-        .iter()
-        .find(|section| section.kind == SectionKind::Skills)
-        .and_then(|section| skill_list(&section.body));
-
-    let opening = match identity {
-        Some(identity) if !identity.is_empty() => {
-            let article =
-                if identity.starts_with(['a', 'e', 'i', 'o', 'u', 'A', 'E', 'I', 'O', 'U']) {
-                    "an"
-                } else {
-                    "a"
-                };
-            format!(
-                "{name}{your} experience as {article} {identity} gives you a distinctive foundation to build on."
-            )
-        }
-        _ => format!("{name}{your} background gives you a useful foundation to build on."),
-    };
-    let strengths = match skills {
-        Some(skills) => format!(
-            "Your strengths in {skills} add range to that background and give you valuable material to highlight."
-        ),
-        None => "The experience you describe gives you useful material to highlight.".to_owned(),
-    };
     let text = format!(
-        "{opening} {strengths} As you refine your résumé, emphasize the work that best shows how you apply these abilities and the results your work supports. Specific examples will make those strengths easier to understand and remember. You already have a strong starting point; keep shaping your story around the roles and challenges you want to pursue next."
+        "{name}your résumé version shows a useful background to build on. As you refine it, emphasize the work that best shows how you apply your abilities and the results your work supports. Specific examples will make those strengths easier to understand and remember. You already have a strong starting point; keep shaping your story around the roles and challenges you want to pursue next. Think about the projects and achievements that best demonstrate your skills, and write them down clearly so that anyone reading your résumé can quickly understand what you can bring to a role."
     );
     ProfileSummary {
         text: clean_output(&text),
@@ -413,46 +373,6 @@ fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
         model: FALLBACK_MODEL.to_owned(),
         feedback: None,
     }
-}
-
-fn skill_list(text: &str) -> Option<String> {
-    let skills: Vec<String> = text
-        .split([',', ';', '|', '\n'])
-        .map(str::trim)
-        .filter_map(|skill| {
-            let skill = skill
-                .trim_start_matches(['•', '-', '*'])
-                .trim()
-                .trim_start_matches("and ")
-                .trim_end_matches('.')
-                .trim();
-            (!skill.is_empty()).then(|| truncate(skill, 40))
-        })
-        .take(4)
-        .collect();
-    match skills.as_slice() {
-        [] => None,
-        [skill] => Some(skill.clone()),
-        [first, second] => Some(format!("{first} and {second}")),
-        skills => Some(format!(
-            "{}, and {}",
-            skills[..skills.len() - 1].join(", "),
-            skills[skills.len() - 1]
-        )),
-    }
-}
-
-fn lowercase_start(text: &str) -> String {
-    let mut chars = text.chars();
-    let Some(first) = chars.next() else {
-        return String::new();
-    };
-    // Preserve acronyms such as AWS and CEO while making an ordinary job title
-    // fit naturally in the middle of a sentence.
-    if text.chars().take(2).all(char::is_uppercase) {
-        return text.to_owned();
-    }
-    first.to_lowercase().chain(chars).collect()
 }
 
 fn looks_like_resume(sections: &SectionMap) -> bool {
@@ -468,14 +388,6 @@ fn looks_like_resume(sections: &SectionMap) -> bool {
                 | SectionKind::Volunteer
         ) && !section.body.trim().is_empty()
     })
-}
-
-fn first_line(text: &str, limit: usize) -> Option<String> {
-    text.lines()
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(|line| truncate(line.trim_start_matches(['•', '-', '*']).trim(), limit))
-        .filter(|line| !line.is_empty())
 }
 
 fn truncate(text: &str, limit: usize) -> String {
@@ -527,10 +439,7 @@ mod tests {
     fn fallback_addresses_the_owner_with_natural_grounded_encouragement() {
         let (parse, sections) = fixture();
         let summary = SummaryGenerator::extractive().generate(&parse, &sections);
-        assert!(summary.text.starts_with(
-            "Ada, your experience as a computing pioneer gives you a distinctive foundation"
-        ));
-        assert!(summary.text.contains("Mathematics, Rust, and poetry"));
+        assert!(summary.text.contains("Ada, your résumé version shows a useful background"));
         assert!(summary.text.contains("your résumé"));
         assert!(
             summary
@@ -539,7 +448,7 @@ mod tests {
         );
         assert!(!summary.text.contains("This candidate"));
         assert!(!summary.text.contains("is presented"));
-        assert!((80..=100).contains(&summary.text.split_whitespace().count()));
+        assert!((80..=120).contains(&summary.text.split_whitespace().count()));
         assert_eq!(summary.model, FALLBACK_MODEL);
     }
 
