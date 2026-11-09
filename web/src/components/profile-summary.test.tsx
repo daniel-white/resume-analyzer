@@ -40,4 +40,17 @@ describe("profile summary", () => {
     expect(html).toContain("after this version is parsed");
     expect(html).not.toContain("Is this summary accurate?");
   });
+
+  it("shows a different layout when the document does not look like a résumé", () => {
+    const html = render({
+      text: "This does not look like a résumé. I could not find enough work experience education skills or project information to build a grounded professional profile. Please upload a document that includes those details so I can help you create a clear summary based on your actual work history and qualifications.",
+      engine: "ollama",
+      model: "qwen2.5:0.5b",
+      feedback: null,
+    });
+    expect(html).toContain("Not a résumé");
+    expect(html).not.toContain("Who the model thinks you are");
+    expect(html).not.toContain("Is this summary accurate?");
+    expect(html).toContain("Upload a document with work experience");
+  });
 });

@@ -8,6 +8,8 @@ import { VoteButtons } from "./resume-structure";
 
 const PROFILE_SUMMARY_ID = "profile-summary";
 
+const IS_NOT_RESUME_PREFIX = "This does not look like a résumé.";
+
 export function ProfileSummaryCard({
   summary,
   resumeId,
@@ -26,8 +28,10 @@ export function ProfileSummaryCard({
     setError(null);
   }, [summary]);
 
+  const isNotResume = current != null && current.text.startsWith(IS_NOT_RESUME_PREFIX);
+
   async function vote(choice: SectionVote) {
-    if (!current || busy) return;
+    if (!current || busy || isNotResume) return;
     const previous = current.feedback ?? null;
     const next = previous === choice ? null : choice;
     setBusy(true);
@@ -56,8 +60,12 @@ export function ProfileSummaryCard({
       <div className="profile-summary-heading">
         <span className="profile-summary-icon"><UserRound size={20} aria-hidden="true" /></span>
         <div>
-          <p className="profile-summary-eyebrow">Model impression</p>
-          <h2 id="profile-summary-heading">Who the model thinks you are</h2>
+          <p className="profile-summary-eyebrow">
+            {isNotResume ? "Not a résumé" : "Model impression"}
+          </p>
+          <h2 id="profile-summary-heading">
+            {isNotResume ? "This doesn’t look like a résumé" : "Who the model thinks you are"}
+          </h2>
         </div>
       </div>
       {current ? (
@@ -67,20 +75,28 @@ export function ProfileSummaryCard({
               {current.text}
             </Markdown>
           </div>
-          <p className="profile-summary-model">
-            {current.engine === "ollama" ? "Local LLM" : "Extractive fallback"} · {current.model}
-            <span>Generated from your résumé; may be inaccurate.</span>
-          </p>
-          <div className="structure-vote" role="group" aria-label="Is this profile summary accurate?">
-            <span>Is this summary accurate?</span>
-            <VoteButtons
-              feedback={current.feedback ?? null}
-              busy={busy}
-              onVote={(choice) => void vote(choice)}
-              yesLabel="Yes, this summary is accurate"
-              noLabel="No, this summary is not accurate"
-            />
-          </div>
+          {!isNotResume ? (
+            <>
+              <p className="profile-summary-model">
+                {current.engine === "ollama" ? "Local LLM" : "Extractive fallback"} · {current.model}
+                <span>Generated from your résumé; may be inaccurate.</span>
+              </p>
+              <div className="structure-vote" role="group" aria-label="Is this profile summary accurate?">
+                <span>Is this summary accurate?</span>
+                <VoteButtons
+                  feedback={current.feedback ?? null}
+                  busy={busy}
+                  onVote={(choice) => void vote(choice)}
+                  yesLabel="Yes, this summary is accurate"
+                  noLabel="No, this summary is not accurate"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="profile-summary-model">
+              <span>Upload a document with work experience, education, skills, or projects.</span>
+            </p>
+          )}
         </>
       ) : (
         <p className="profile-summary-pending">
