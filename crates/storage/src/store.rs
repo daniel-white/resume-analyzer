@@ -1746,4 +1746,99 @@ mod tests {
             .unwrap();
         assert_eq!(remaining, 0);
     }
+
+    /// Regression: Postgres rejects jsonb text that carries an unsupported
+    /// Unicode escape sequence, surfacing from the database as
+    /// "unsupported Unicode escape sequence". The shapes we store must never
+    /// produce one, so round-trip every Unicode-heavy field through the real
+    /// claim/save/callback paths and assert the database accepts it.
+    #[tokio::test]
+    async fn stored_unicode_round_trips_through_postgres_jsonb() {
+        let store = Ephemeral::start().await.unwrap();
+        let user = domain::DEMO_USER_ID;
+        let resume_id = Uuid::new_v4();
+        let version_id = Uuid::new_v4();
+        store
+            .create_resume(user, resume_id, version_id, "uni.pdf", domain::PDF, "uni-key")
+            .await
+            .unwrap();
+
+        let mut parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        parse.profile.name = Some("Zoë — Søren 🚀".to_owned());
+        parse.profile.email = Some("ada@example.com".to_owned());
+        parse.profile.sections = vec![domain::Section {
+            heading: "Überschäft and Qualifikationën".to_owned(),
+            body: "Löyens — built the café.\nTabs\tand\ttabs.\u{2028}Separator.".to_owned(),
+            in_table: false,
+            in_text_box: false,
+            in_header: false,
+        }];
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "alias".to_owned(),
+            sections: vec![domain::DetectedSection {
+                id: "experience-1".to_owned(),
+                kind: domain::SectionKind::Experience,
+                heading: "Experience".to_owned(),
+                body: "Building café rocket software. 🚀".to_owned(),
+                confidence: 0.9,
+                feedback: None,
+            }],
+        };
+        let summary = domain::ProfileSummary {
+            text: "Ada’s résumé builds coffee rockets. 🚀".to_owned(),
+            engine: "extractive".to_owned(),
+            model: "section-extract-v1".to_owned(),
+            feedback: None,
+        };
+        store
+            .save_parse(version_id, &parse, Some(&sections), Some(&summary))
+            .await
+            .unwrap();
+        store.fanout(version_id, &["stub"]).await.unwrap();
+        let detail = store.detail(user, resume_id).await.unwrap().unwrap();
+        let run = detail.versions[0].runs[0].clone();
+        let verdict = Verdict {
+            kept: vec!["email".to_owned()],
+            dropped: vec![],
+            score: 80,
+            summary: "Zoë — Søren 🚀 keeps the café. 🚀".to_owned(),
+            factors: vec![],
+            report: None,
+        };
+        store
+            .record_callback("stub", run.id, &run.id.to_string(), &parse, &verdict)
+            .await
+            .unwrap();
+        let detail = store.detail(user, resume_id).await.unwrap().unwrap();
+        let stored = detail
+            .versions
+            .iter()
+            .find(|version| version.id == version_id)
+            .and_then(|version| version.runs.first())
+            .and_then(|run| run.verdict.clone())
+            .expect("callback verdict stored");
+        assert_eq!(stored.score, 80);
+        assert!(stored.summary.contains('🚀'));
+        let parts: Vec<&str> = stored
+            .summary
+            .split(|character: char| character.is_whitespace() || character == '—' || character == '\u{2028}')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(parts.first(), Some(&"Zoë"));
+    }
+
+    /// Demonstrates that a raw `\u` escape with a surrogate codepoint in a
+    /// jsonb value triggers Postgres's "unsupported Unicode escape sequence" error
+    /// (SQLSTATE 0A000). This test documents the failure mode rather than
+    /// attempting to prevent it in application code.
+    #[tokio::test]
+    async fn postgresql_rejects_surrogate_unicode_escape() {
+        let store = Ephemeral::start().await.unwrap();
+        let result = sqlx::query("SELECT 1::jsonb WHERE 1 = ('\\u' || 'D83D' || '\\u' || 'DE00')::text")
+            .fetch_one(store.pool())
+            .await;
+        assert!(result.is_err());
+    }
 }
