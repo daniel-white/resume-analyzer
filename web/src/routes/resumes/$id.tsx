@@ -1,7 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
-import { ExtractStrip } from "~/components/extract-strip";
 import { ResumeOverview } from "~/components/resume-overview";
 import { ResumeDetailsSkeleton } from "~/components/resume-loading";
 import { NotFound } from "~/components/not-found";
@@ -50,11 +49,10 @@ function TeardownPage() {
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
       <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
       <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
-      {view.extract ? <ExtractStrip fields={view.extract} /> : null}
       <ResumeStructure
         key={view.versionId}
+        fields={view.extract}
         sections={view.sections}
-        cards={view.cards}
         resumeId={view.resumeId}
         versionId={view.versionId}
         onHighlight={setHighlightKind}
@@ -64,7 +62,7 @@ function TeardownPage() {
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />
         </div>
         <section className="analysis-results" aria-label="System results">
-          <div className="results-heading"><h2>ATS results</h2><p>Select a system to view extracted content and score details.</p></div>
+          <div className="results-heading"><h2>ATS results</h2></div>
           <VerdictGrid cards={view.cards} provider={provider} highlightKind={highlightKind} />
           <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
         </section>

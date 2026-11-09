@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import type { SectionMap, VerdictCard } from "~/server/resumes";
+import type { SectionMap } from "~/server/resumes";
 import { ResumeStructure, VoteButtons } from "./resume-structure";
 
 const sections: SectionMap = {
@@ -27,56 +27,23 @@ const sections: SectionMap = {
   ],
 };
 
-const cards: VerdictCard[] = [
-  {
-    id: "greenline",
-    name: "Greenline",
-    subtitle: "Standard headings.",
-    pending: false,
-    score: 80,
-    band: "high",
-    kept: ["Experience"],
-    missed: [],
-    factors: [],
-    parse: null,
-  },
-  {
-    id: "levr",
-    name: "Levr",
-    subtitle: "Exact tokens.",
-    pending: false,
-    score: 70,
-    band: "mid",
-    kept: ["email"],
-    missed: [],
-    factors: [],
-    parse: null,
-  },
-  {
-    id: "ash",
-    name: "Ash",
-    subtitle: "Still reading.",
-    pending: true,
-  },
-];
-
 describe("our reading", () => {
   it("lists each detected section as a selectable control", () => {
     const html = renderToStaticMarkup(
-      <ResumeStructure sections={sections} cards={cards} resumeId="resume-1" versionId="version-1" onHighlight={() => {}} />,
+      <ResumeStructure sections={sections} fields={[{ label: "Name", value: "Ada Lovelace" }]} resumeId="resume-1" versionId="version-1" onHighlight={() => {}} />,
     );
-    expect(html).toContain("Our read of your resume");
+    expect(html).toContain("Résumé details");
+    expect(html).toContain("Ada Lovelace");
     expect(html).toContain("Experience");
     expect(html).toContain("Education");
     expect(html).toContain("94%");
     expect(html).toContain('aria-expanded="false"');
   });
 
-  it("compares which systems found the selected section", () => {
+  it("shows section body and vote controls when selected", () => {
     const html = renderToStaticMarkup(
       <ResumeStructure
         sections={sections}
-        cards={cards}
         resumeId="resume-1"
         versionId="version-1"
         onHighlight={() => {}}
@@ -85,17 +52,12 @@ describe("our reading", () => {
     );
     expect(html).toContain("Built things.");
     expect(html).toContain("Did we read this section correctly?");
-    expect(html).toContain("Which systems found it");
-    expect(html).toContain("Greenline");
-    expect(html).toContain("Levr");
-    expect(html).not.toContain("Ash");
-    expect(html).toContain(">Found<");
-    expect(html).toContain(">Missed<");
+    expect(html).not.toContain("Which systems found it");
   });
 
   it("shows a reading state before sections arrive", () => {
     const html = renderToStaticMarkup(
-      <ResumeStructure sections={null} cards={cards} resumeId="resume-1" versionId="version-1" onHighlight={() => {}} />,
+      <ResumeStructure sections={null} resumeId="resume-1" versionId="version-1" onHighlight={() => {}} />,
     );
     expect(html).toContain("Reading your file into sections.");
   });

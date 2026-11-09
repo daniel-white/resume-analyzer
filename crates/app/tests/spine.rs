@@ -495,9 +495,12 @@ async fn upload_reaches_a_callback() {
             .unwrap();
         // Long deep links use MIME quoted-printable: unfold its soft line breaks
         // and encoded equals signs before asserting the user-visible URL.
+        // The accented word in the subject is an RFC 2047 base64 encoded word.
+        assert!(
+            message.contains("Subject: Your =?utf-8?b?csOpc3Vtw6k=?= analysis results are ready")
+        );
         let message = message.replace("=\n", "").replace("=3D", "=");
         assert!(message.contains("To: ada@example.com"));
-        assert!(message.contains("Your resume analysis results are ready"));
         assert!(message.contains("http://127.0.0.1:3000/resumes/"));
         assert!(message.contains("?version="));
         assert!(message.contains("&provider=stub"));

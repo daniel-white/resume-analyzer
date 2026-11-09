@@ -2,25 +2,25 @@ import { ScanText, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useState } from "react";
 
 import { voteResumeSection } from "~/fns/resumes.functions";
-import { providerFound, sectionKindLabel } from "~/lib/sections";
+import { sectionKindLabel } from "~/lib/sections";
 import { cn } from "~/lib/utils";
 import type {
   DetectedSection,
+  ExtractField,
   SectionMap,
   SectionVote,
-  VerdictCard,
 } from "~/server/resumes";
 
 export function ResumeStructure({
   sections,
-  cards,
+  fields = null,
   resumeId,
   versionId,
   onHighlight,
   initialSelectedId = null,
 }: {
   sections: SectionMap | null;
-  cards: VerdictCard[];
+  fields?: ExtractField[] | null;
   resumeId: string;
   versionId: string;
   onHighlight: (kind: DetectedSection["kind"] | null) => void;
@@ -33,10 +33,11 @@ export function ResumeStructure({
 
   if (!map || map.sections.length === 0) {
     return (
-      <section className="card structure" aria-label="Our reading of your resume">
+      <section className="card structure" aria-label="Résumé details">
         <h2 className="label flex items-center gap-2">
-          <ScanText size={20} aria-hidden="true" /> Our read of your resume
+          <ScanText size={20} aria-hidden="true" /> Résumé details
         </h2>
+        <ResumeFacts fields={fields} />
         <p className="note">
           {map
             ? "We could not find any sections in this file."
@@ -45,9 +46,6 @@ export function ResumeStructure({
       </section>
     );
   }
-
-  const selected = map.sections.find((section) => section.id === selectedId) ?? null;
-  const complete = cards.filter((card) => !card.pending);
 
   function select(section: DetectedSection) {
     const next = selectedId === section.id ? null : section.id;
@@ -81,13 +79,13 @@ export function ResumeStructure({
   }
 
   return (
-    <section className="card structure" aria-label="Our reading of your resume">
+    <section className="card structure" aria-label="Résumé details">
       <h2 className="label flex items-center gap-2">
-        <ScanText size={20} aria-hidden="true" /> Our read of your resume
+        <ScanText size={20} aria-hidden="true" /> Résumé details
       </h2>
+      <ResumeFacts fields={fields} />
       <p className="note">
-        Every section below came from your file. Select one to see which
-        systems found it and to mark whether we read it correctly.
+        Select a section to check our reading and compare ATS results.
       </p>
       <ol className="structure-sections">
         {map.sections.map((section) => {
@@ -125,27 +123,6 @@ export function ResumeStructure({
                     />
                   </div>
                   {error ? <p className="structure-error" role="alert">{error}</p> : null}
-                  <div className="structure-compare">
-                    <h3>Which systems found it</h3>
-                    {complete.length === 0 ? (
-                      <p className="structure-pending">No system has finished reading yet.</p>
-                    ) : (
-                      <ul>
-                        {complete.map((card) => {
-                          const found = providerFound(section.kind, {
-                            parse: card.parse,
-                            kept: card.kept,
-                          });
-                          return (
-                            <li key={card.id} className={found ? "is-found" : "is-missed"}>
-                              <span>{card.name}</span>
-                              <strong>{found ? "Found" : "Missed"}</strong>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </div>
                 </div>
               ) : null}
             </li>
@@ -153,6 +130,17 @@ export function ResumeStructure({
         })}
       </ol>
     </section>
+  );
+}
+
+function ResumeFacts({ fields }: { fields: ExtractField[] | null }) {
+  if (!fields?.length) return null;
+  return (
+    <dl className="facts">
+      {fields.map((field) => (
+        <div key={field.label}><dt>{field.label}</dt><dd>{field.value}</dd></div>
+      ))}
+    </dl>
   );
 }
 

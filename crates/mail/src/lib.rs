@@ -144,15 +144,21 @@ mod tests {
             },
         ];
         let message = analysis_message("owner@example.com", "resume.pdf", 2, &results).unwrap();
+        let subject = message
+            .headers()
+            .get::<lettre::message::header::Subject>()
+            .unwrap();
+        assert_eq!(subject.as_ref(), "Your résumé analysis results are ready");
         let encoded = String::from_utf8(message.formatted()).unwrap();
         assert!(encoded.contains("To: owner@example.com"));
-        assert!(encoded.contains("Your résumé analysis results are ready"));
-        assert!(encoded.contains("Greenline"));
-        assert!(encoded.contains("Levr"));
-        assert!(encoded.contains("provider=levr"));
-        assert!(encoded.contains("resume.pdf (version 2)"));
-        assert!(encoded.contains("85/100"));
-        assert!(encoded.contains(url));
-        assert!(encoded.contains("simulated ATS"));
+        // URLs in the body use quoted-printable encoding.
+        let body = encoded.replace("=\r\n", "").replace("=3D", "=");
+        assert!(body.contains("Greenline"));
+        assert!(body.contains("Levr"));
+        assert!(body.contains("provider=levr"));
+        assert!(body.contains("resume.pdf (version 2)"));
+        assert!(body.contains("85/100"));
+        assert!(body.contains(url));
+        assert!(body.contains("simulated ATS"));
     }
 }
