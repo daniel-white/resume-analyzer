@@ -12,6 +12,7 @@ import { VerdictGrid } from "~/components/verdict-grid";
 import { ResumeVersions } from "~/components/resume-versions";
 import { ResumeComparison } from "~/components/resume-comparison";
 import { ResumeStructure } from "~/components/resume-structure";
+import { ProfileSummaryCard } from "~/components/profile-summary";
 import { getTeardown } from "~/fns/resumes.functions";
 import type { SectionKind } from "~/server/resumes";
 
@@ -49,6 +50,12 @@ function TeardownPage() {
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
       <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
       <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
+      <ProfileSummaryCard
+        key={`summary-${view.versionId}`}
+        summary={view.profileSummary}
+        resumeId={view.resumeId}
+        versionId={view.versionId}
+      />
       <ResumeStructure
         key={view.versionId}
         fields={view.extract}

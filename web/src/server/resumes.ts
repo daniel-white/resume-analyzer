@@ -39,6 +39,13 @@ export type SectionMap = {
   sections: DetectedSection[];
 };
 
+export type ProfileSummary = {
+  text: string;
+  engine: string;
+  model: string;
+  feedback?: SectionVote | null;
+};
+
 export type Section = {
   heading: string;
   body: string;
@@ -133,6 +140,7 @@ export type VersionDetail = {
   created_at: string;
   parse: ParseInput | null;
   sections?: SectionMap | null;
+  profile_summary?: ProfileSummary | null;
   runs: RunView[];
 };
 
@@ -241,6 +249,7 @@ export type Teardown =
       extract: ExtractField[] | null;
       parse?: ParseInput | null;
       sections: SectionMap | null;
+      profileSummary: ProfileSummary | null;
       cards: VerdictCard[];
     };
 
@@ -421,6 +430,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     extract: version.parse ? extractFields(version.parse) : null,
     parse: version.parse,
     sections: version.sections ?? null,
+    profileSummary: version.profile_summary ?? null,
     cards: pluginCards(plugins, version.runs),
   };
 }

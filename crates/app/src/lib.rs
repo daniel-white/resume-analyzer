@@ -142,11 +142,15 @@ pub async fn serve() {
     let detector = sections::SectionDetector::from_env();
     let warming = detector.clone();
     tokio::task::spawn_blocking(move || warming.warm());
+    let summarizer = summary::SummaryGenerator::from_env();
+    let warming = summarizer.clone();
+    tokio::task::spawn_blocking(move || warming.warm());
     let worker = Arc::new(
         Worker::new(store, objects, plugins, bus, callback)
             .endpoints(fleet.endpoints)
             .notifications(api.mail.clone(), &config.app_origin)
-            .detector(detector),
+            .detector(detector)
+            .summarizer(summarizer),
     );
     worker.spawn();
     let cleanup_api = api.clone();

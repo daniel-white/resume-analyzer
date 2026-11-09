@@ -530,6 +530,21 @@ describe("version selection", () => {
       .toMatchObject({ sections: map });
   });
 
+  it("carries the generated profile and its vote for the selected version", () => {
+    const profileSummary = {
+      text: "Ada is a computing pioneer.",
+      engine: "ollama",
+      model: "qwen2.5:0.5b",
+      feedback: "up" as const,
+    };
+    const withSummary = {
+      ...version("complete", parse({}), [], "old.pdf", 1),
+      profile_summary: profileSummary,
+    };
+    expect(teardown({ ...detail, versions: [withSummary] }, plugins, "version-1"))
+      .toMatchObject({ profileSummary });
+  });
+
   it("does not silently show the latest results for a missing version", () => {
     expect(teardown(detail, plugins, "deleted-version")).toEqual({ kind: "missing" });
   });

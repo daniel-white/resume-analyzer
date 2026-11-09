@@ -6,7 +6,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-domain = { path = "../domain" }
+domain = { path = "../../domain" }
 # 4.9.1 is the last release on ONNX Runtime rc.9, which still publishes an
 # x86_64-apple-darwin binary. Newer releases dropped Intel macOS, so the model
 # could not load on a developer laptop. The runtime is statically linked.

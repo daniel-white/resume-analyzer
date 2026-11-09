@@ -957,6 +957,41 @@ select {
   .library-row .file-row { padding: 16px; }
 }
 
+/* A clearly labelled model interpretation, kept separate from ATS verdicts. */
+.profile-summary {
+  margin-top: 1rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid #c8d3b5;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #f5f8ee 0%, #fffef9 72%);
+  box-shadow: 0 6px 24px #20251e05;
+}
+.profile-summary-heading { display: flex; align-items: center; gap: 0.75rem; }
+.profile-summary-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--secondary);
+  color: #4f6534;
+}
+.profile-summary-eyebrow {
+  margin-bottom: 0.15rem;
+  color: #596d36;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.profile-summary h2 { font-family: var(--font-serif); font-size: var(--type-section); font-weight: 400; line-height: 1.25; }
+.profile-summary-text { max-width: 75ch; margin-top: 1rem; font-family: var(--font-serif); font-size: 1.2rem; line-height: 1.65; overflow-wrap: anywhere; white-space: pre-wrap; }
+.profile-summary-model { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; margin-top: 0.75rem; color: var(--muted-foreground); font-family: var(--font-mono); font-size: 10px; }
+.profile-summary-model span { font-family: var(--font-sans); font-size: var(--type-small); }
+.profile-summary-pending { margin-top: 0.85rem; color: var(--muted-foreground); font-size: var(--type-body); }
+
 /* Our reading: selectable sections, feedback, and provider comparison. */
 .structure {
   margin-top: 1rem;

@@ -411,6 +411,8 @@ async fn one_callback(
     // verification extract and each provider's own extract stay independent.
     assert!(version["parse"]["profile"]["sections"].is_array());
     assert!(version["parse"]["layout"]["columns"].is_number());
+    assert!(version["profile_summary"]["text"].is_string());
+    assert_eq!(version["profile_summary"]["engine"], "extractive");
     let verdict = &version["runs"][0]["verdict"];
     assert!(verdict["kept"].is_array());
     assert!(verdict["dropped"].is_array());

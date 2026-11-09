@@ -277,7 +277,7 @@ async fn login_cookie_can_manage_the_account() {
     let version_uuid = uuid::Uuid::parse_str(version_id).expect("version uuid");
     let parse = domain::ParseInput::empty(domain::LayoutConfidence::Inferred);
     store
-        .save_parse(version_uuid, &parse, None)
+        .save_parse(version_uuid, &parse, None, None)
         .await
         .expect("parse");
     store

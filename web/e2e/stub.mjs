@@ -166,6 +166,21 @@ const server = createServer(async (request, response) => {
       });
     }
 
+    const sectionVote = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/sections\/([^/]+)$/);
+    if (sectionVote && method === "PUT") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      const found = scenario.resumes.find((item) => item.id === decodeURIComponent(sectionVote[1]));
+      const version = found?.versions.find((item) => item.id === decodeURIComponent(sectionVote[2]));
+      const sectionId = decodeURIComponent(sectionVote[3]);
+      if (!version || (sectionId === "profile-summary" && !version.profile_summary)) {
+        return sendJson(response, 404, { error: "missing" });
+      }
+      const body = await readJson(request);
+      if (![null, "up", "down"].includes(body.vote)) return send(response, 400, "Invalid vote");
+      if (sectionId === "profile-summary") version.profile_summary.feedback = body.vote;
+      return sendJson(response, 200, { vote: body.vote });
+    }
+
     const file = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/file$/);
     if (file && method === "GET") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
@@ -283,6 +298,12 @@ function resume(input) {
         status: input.status,
         created_at: "2026-11-07T18:00:00Z",
         parse: input.parse,
+        profile_summary: input.parse ? {
+          text: "Ada Lovelace is a computing pioneer with skills in analytical engines and mathematics.",
+          engine: "ollama",
+          model: "qwen2.5:0.5b",
+          feedback: null,
+        } : null,
         runs: input.runs,
       },
     ],

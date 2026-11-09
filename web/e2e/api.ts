@@ -90,6 +90,12 @@ function resume(input: {
         status: input.status,
         created_at: "2026-11-07T18:00:00Z",
         parse: input.parse,
+        profile_summary: input.parse ? {
+          text: "Ada Lovelace is a computing pioneer with skills in analytical engines and mathematics.",
+          engine: "ollama",
+          model: "qwen2.5:0.5b",
+          feedback: null,
+        } : null,
         runs: input.runs,
       },
     ],

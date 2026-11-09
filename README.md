@@ -50,6 +50,28 @@ pnpm dev
 Open <http://localhost:3000>. The frontend proxies `/api` to the Rust API on
 port 8080. Read sign-in emails at <http://localhost:8025>.
 
+### Candidate profile model
+
+After parsing, the worker creates a short candidate profile and stores it with
+that resume version. The details page labels it as a model impression and lets
+the signed-in user vote it up or down. Model code lives under `crates/models`.
+
+For local LLM summaries, install [Ollama](https://ollama.com/), pull the small
+default model, and start its server before the API:
+
+```sh
+ollama pull qwen2.5:0.5b
+ollama serve
+```
+
+The API warms `qwen2.5:0.5b` at `http://127.0.0.1:11434` by default. Set
+`SUMMARY_MODEL_NAME` or `SUMMARY_MODEL_URL` to change that, or
+`SUMMARY_MODEL=off` to always use the deterministic extractive fallback. If the
+model cannot load or generate, the same fallback is used and identified in the
+UI. Resume text stays on the configured Ollama server; it is sent as JSON user
+data separate from fixed system instructions, with no tools available to the
+model. Output is bounded and rendered as plain text.
+
 ## Checks
 
 ```sh

@@ -414,6 +414,19 @@ pub struct SectionMap {
     pub sections: Vec<DetectedSection>,
 }
 
+pub const PROFILE_SUMMARY_ID: &str = "profile-summary";
+
+/// A model-generated description of the candidate, not an ATS score summary.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileSummary {
+    pub text: String,
+    pub engine: String,
+    pub model: String,
+    /// The calling user's vote. Not stored inside the generated summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feedback: Option<SectionVote>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VersionDetail {
     pub id: Uuid,
@@ -427,6 +440,8 @@ pub struct VersionDetail {
     /// The app's section detector reading, when it has run.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sections: Option<SectionMap>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_summary: Option<ProfileSummary>,
     pub runs: Vec<RunView>,
 }
 

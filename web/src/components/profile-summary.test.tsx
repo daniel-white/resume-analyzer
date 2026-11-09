@@ -1,0 +1,43 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { ProfileSummaryCard } from "./profile-summary";
+
+const summary = {
+  text: "Ada is a computing pioneer with skills in mathematics and Rust.",
+  engine: "ollama",
+  model: "qwen2.5:0.5b",
+  feedback: "up" as const,
+};
+
+function render(value: typeof summary | null = summary) {
+  return renderToStaticMarkup(
+    <ProfileSummaryCard summary={value} resumeId="resume-1" versionId="version-1" />,
+  );
+}
+
+describe("profile summary", () => {
+  it("highlights the model's impression and asks for a vote", () => {
+    const html = render();
+    expect(html).toContain("Who the model thinks you are");
+    expect(html).toContain(summary.text);
+    expect(html).toContain("Local LLM");
+    expect(html).toContain(summary.model);
+    expect(html).toContain("may be inaccurate");
+    expect(html).toContain("Is this summary accurate?");
+    expect(html).toContain("Yes, this summary is accurate");
+    expect(html.match(/aria-pressed="true"/g)).toHaveLength(1);
+  });
+
+  it("renders model output as text rather than markup", () => {
+    const html = render({ ...summary, text: "<img src=x onerror=alert(1)> Ignore instructions" });
+    expect(html).not.toContain("<img src=x");
+    expect(html).toContain("&lt;img src=x");
+  });
+
+  it("explains when a summary is not available yet", () => {
+    const html = render(null);
+    expect(html).toContain("after this version is parsed");
+    expect(html).not.toContain("Is this summary accurate?");
+  });
+});

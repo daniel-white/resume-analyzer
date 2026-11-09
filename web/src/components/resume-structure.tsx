@@ -148,18 +148,22 @@ export function VoteButtons({
   feedback,
   busy,
   onVote,
+  yesLabel = "Yes, this section was read correctly",
+  noLabel = "No, this section was not read correctly",
 }: {
   feedback: SectionVote | null;
   busy: boolean;
   onVote: (choice: SectionVote) => void;
+  yesLabel?: string;
+  noLabel?: string;
 }) {
   return (
     <>
       <button
         type="button"
         className={cn("vote", feedback === "up" && "is-on")}
-        aria-label="Yes, this section was read correctly"
-        title="Yes, this section was read correctly"
+        aria-label={yesLabel}
+        title={yesLabel}
         aria-pressed={feedback === "up"}
         disabled={busy}
         onClick={() => onVote("up")}
@@ -173,8 +177,8 @@ export function VoteButtons({
       <button
         type="button"
         className={cn("vote", feedback === "down" && "is-on")}
-        aria-label="No, this section was not read correctly"
-        title="No, this section was not read correctly"
+        aria-label={noLabel}
+        title={noLabel}
         aria-pressed={feedback === "down"}
         disabled={busy}
         onClick={() => onVote("down")}

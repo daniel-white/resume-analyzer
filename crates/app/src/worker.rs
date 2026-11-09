@@ -12,6 +12,7 @@ use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
 use storage::{Objects, Store};
+use summary::SummaryGenerator;
 use uuid::Uuid;
 
 use crate::bus::Bus;
@@ -26,6 +27,7 @@ pub struct Worker {
     client: reqwest::Client,
     notifications: Option<(mail::Smtp, String)>,
     detector: SectionDetector,
+    summarizer: SummaryGenerator,
 }
 
 impl Worker {
@@ -46,6 +48,7 @@ impl Worker {
             client: reqwest::Client::new(),
             notifications: None,
             detector: SectionDetector::heuristic(),
+            summarizer: SummaryGenerator::extractive(),
         }
     }
 
@@ -53,6 +56,12 @@ impl Worker {
     /// heading-alias engine so tests never download a model.
     pub fn detector(mut self, detector: SectionDetector) -> Self {
         self.detector = detector;
+        self
+    }
+
+    /// The profile summary generator. Tests default to the offline extractor.
+    pub fn summarizer(mut self, summarizer: SummaryGenerator) -> Self {
+        self.summarizer = summarizer;
         self
     }
 
@@ -189,10 +198,21 @@ impl Worker {
         // free while a cold model loads.
         let lines = plugins::document_lines(&file);
         let detector = self.detector.clone();
-        let sections =
-            tokio::task::spawn_blocking(move || detector.detect_document(&lines)).await?;
+        let summarizer = self.summarizer.clone();
+        let summary_parse = parse.clone();
+        let (sections, profile_summary) = tokio::task::spawn_blocking(move || {
+            let sections = detector.detect_document(&lines);
+            let summary = summarizer.generate(&summary_parse, &sections);
+            (sections, summary)
+        })
+        .await?;
         self.store
-            .save_parse(event.version_id, &parse, Some(&sections))
+            .save_parse(
+                event.version_id,
+                &parse,
+                Some(&sections),
+                Some(&profile_summary),
+            )
             .await
     }
 
