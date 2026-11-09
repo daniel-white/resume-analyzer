@@ -31,10 +31,14 @@ export function ResumeStructure({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Initialize selectedId only once on mount, not on every sections change
   useEffect(() => {
     setMap(sections);
+  }, [sections]);
+
+  if (initialSelectedId && !selectedId) {
     setSelectedId(initialSelectedId);
-  }, [sections, initialSelectedId]);
+  }
 
   if (!map || map.sections.length === 0) {
     return (

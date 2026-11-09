@@ -61,6 +61,20 @@ describe("our reading", () => {
     );
     expect(html).toContain("Reading your file into sections.");
   });
+
+  it("renders selected section with aria-expanded true when initialSelectedId matches", () => {
+    const html = renderToStaticMarkup(
+      <ResumeStructure
+        sections={sections}
+        resumeId="resume-1"
+        versionId="version-1"
+        onHighlight={() => {}}
+        initialSelectedId="experience-1"
+      />,
+    );
+    expect(html).toContain('aria-expanded="true"');
+    expect(html).toContain("structure-body-experience-1");
+  });
 });
 
 describe("section votes", () => {
