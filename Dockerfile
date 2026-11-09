@@ -6,7 +6,9 @@ FROM lukemathwalker/cargo-chef:0.1.78-rust-1.99.1-bookworm AS chef
 WORKDIR /src
 
 FROM chef AS planner
-COPY Cargo.toml Cargo.lock ./
+COPY tmp/cargo-manifests.tar ./tmp/
+RUN tar -xf tmp/cargo-manifests.tar -C . \
+    && rm -rf ./tmp
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS build

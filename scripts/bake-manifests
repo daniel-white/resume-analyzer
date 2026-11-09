@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Bundles all Cargo.toml, Cargo.lock, rust-toolchain, and config files into a tarball,
+# plus stub src/lib.rs files so `cargo metadata` can resolve the workspace.
+# This is the manifest bundle used by the engops pattern.
+# The planner stage copies this tarball into the repo, extracts it, and runs cargo chef prepare.
+# This keeps the dependency layer cached across Rust source changes.
+
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Create a temporary directory for the manifest bundle
+MANIFEST_DIR=$(mktemp -d)
+trap 'rm -rf "$MANIFEST_DIR"' EXIT
+
+# Create the tmp directory for the tarball
+mkdir -p tmp
+
+# Copy root Cargo.toml and Cargo.lock
+cp Cargo.toml "$MANIFEST_DIR/Cargo.toml"
+cp Cargo.lock "$MANIFEST_DIR/Cargo.lock"
+
+# Copy all crate Cargo.toml files recursively (preserving directory structure)
+while IFS= read -r -d '' crate_manifest; do
+    crate_dir=$(dirname "$crate_manifest")
+    mkdir -p "$MANIFEST_DIR/$crate_dir"
+    cp "$crate_manifest" "$MANIFEST_DIR/$crate_manifest"
+done < <(find crates -name 'Cargo.toml' -print0)
+
+# Copy all crate Cargo.lock files recursively if they exist
+while IFS= read -r -d '' crate_lock; do
+    crate_dir=$(dirname "$crate_lock")
+    mkdir -p "$MANIFEST_DIR/$crate_dir"
+    cp "$crate_lock" "$MANIFEST_DIR/$crate_lock"
+done < <(find crates -name 'Cargo.lock' -print0)
+
+# Create stub src/lib.rs files so cargo metadata can resolve workspace targets
+if [ -f "rust-toolchain" ]; then
+    cp rust-toolchain "$MANIFEST_DIR/"
+fi
+if [ -f "rust-toolchain.toml" ]; then
+    cp rust-toolchain.toml "$MANIFEST_DIR/"
+fi
+
+# Copy .cargo config if it exists
+if [ -d ".cargo" ]; then
+    cp -r .cargo "$MANIFEST_DIR/"
+fi
+
+# Create stub src/lib.rs files so cargo metadata can resolve workspace targets
+while IFS= read -r -d '' crate_manifest; do
+    crate_dir=$(dirname "$crate_manifest")
+    mkdir -p "$MANIFEST_DIR/$crate_dir/src"
+    : > "$MANIFEST_DIR/$crate_dir/src/lib.rs"
+done < <(find crates -name 'Cargo.toml' -print0)
+
+# Create the tarball
+tar -cf tmp/cargo-manifests.tar -C "$MANIFEST_DIR" .
+
+echo "Manifest bundle created: tmp/cargo-manifests.tar"

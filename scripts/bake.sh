@@ -9,4 +9,6 @@ cd "$root"
 # shellcheck source=docker-cred.sh
 source "$root/scripts/docker-cred.sh"
 
+"$root/scripts/bake-manifests"
+
 exec docker buildx bake --file docker-bake.hcl "$@"
