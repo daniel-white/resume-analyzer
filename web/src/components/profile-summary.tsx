@@ -28,6 +28,7 @@ export function ProfileSummaryCard({
   }, [summary]);
 
   const isNotResume = current != null && current.text.startsWith(IS_NOT_RESUME_PREFIX);
+  const isEmpty = current != null && current.text.trim() === "";
 
   async function vote(choice: SectionVote) {
     if (!current || busy || isNotResume) return;
@@ -67,7 +68,7 @@ export function ProfileSummaryCard({
           </h2>
         </div>
       </div>
-      {current ? (
+      {current && !isEmpty ? (
         <>
           <div className="profile-summary-text">
             <Markdown allowedElements={["strong", "em"]} unwrapDisallowed>

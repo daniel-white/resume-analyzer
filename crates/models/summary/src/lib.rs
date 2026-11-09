@@ -348,7 +348,7 @@ fn usable_summary(text: &str) -> bool {
     }
 }
 
-fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
+fn extract(_parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
     if !looks_like_resume(sections) {
         return ProfileSummary {
             text: "This does not look like a résumé. Could not find enough work experience education skills or project information to build a grounded professional profile for review. Please upload a document that includes those details for a clear summary based on actual work history and qualifications.".to_owned(),
@@ -357,18 +357,8 @@ fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
             feedback: None,
         };
     }
-    let name = parse
-        .profile
-        .name
-        .as_deref()
-        .and_then(|name| name.split_whitespace().next())
-        .map(|name| format!("{name}, "))
-        .unwrap_or_default();
-    let text = format!(
-        "{name}your résumé version shows a useful background to build on."
-    );
     ProfileSummary {
-        text: clean_output(&text),
+        text: String::new(),
         engine: ENGINE.to_owned(),
         model: FALLBACK_MODEL.to_owned(),
         feedback: None,
@@ -439,11 +429,9 @@ mod tests {
     fn fallback_addresses_the_owner_with_natural_grounded_encouragement() {
         let (parse, sections) = fixture();
         let summary = SummaryGenerator::extractive().generate(&parse, &sections);
-        assert!(summary.text.contains("Ada, your résumé version shows a useful background"));
-        assert!(summary.text.contains("your résumé"));
+        assert!(summary.text.is_empty());
         assert!(!summary.text.contains("This candidate"));
         assert!(!summary.text.contains("is presented"));
-        assert!((8..=20).contains(&summary.text.split_whitespace().count()));
         assert_eq!(summary.model, FALLBACK_MODEL);
     }
 

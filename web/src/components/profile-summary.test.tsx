@@ -42,6 +42,12 @@ describe("profile summary", () => {
     expect(html).not.toContain("Is this summary accurate?");
   });
 
+  it("shows the pending message when the fallback produced no text", () => {
+    const html = render({ text: "", engine: "extractive", model: "section-extract-v1", feedback: null });
+    expect(html).toContain("after this version is parsed");
+    expect(html).not.toContain("Is this summary accurate?");
+  });
+
   it("shows a different layout when the document does not look like a résumé", () => {
     const html = render({
       text: "This does not look like a résumé. Could not find enough work experience education skills or project information to build a grounded professional profile for review. Please upload a document that includes those details for a clear summary based on actual work history and qualifications.",
