@@ -187,9 +187,10 @@ impl Worker {
         let parse = structure(&file);
         // Reading lines and running the model is CPU work; keep the event loop
         // free while a cold model loads.
-        let lines = plugins::lines(&file);
+        let lines = plugins::document_lines(&file);
         let detector = self.detector.clone();
-        let sections = tokio::task::spawn_blocking(move || detector.detect(&lines)).await?;
+        let sections =
+            tokio::task::spawn_blocking(move || detector.detect_document(&lines)).await?;
         self.store
             .save_parse(event.version_id, &parse, Some(&sections))
             .await

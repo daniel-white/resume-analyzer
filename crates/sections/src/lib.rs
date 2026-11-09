@@ -261,9 +261,53 @@ impl SectionDetector {
 
     /// Detect sections from ordered text lines.
     pub fn detect(&self, lines: &[String]) -> SectionMap {
-        let lines = clean_lines(lines);
+        let lines: Vec<_> = lines
+            .iter()
+            .map(|text| domain::DocumentLine {
+                text: text.clone(),
+                ..Default::default()
+            })
+            .collect();
+        self.detect_document(&lines)
+    }
+
+    /// Formatting supports a label decision; it never supplies the label itself.
+    pub fn detect_document(&self, source: &[domain::DocumentLine]) -> SectionMap {
+        let mut sizes: Vec<_> = source
+            .iter()
+            .take(MAX_LINES)
+            .filter_map(|line| {
+                line.font_size
+                    .filter(|size| size.is_finite() && *size > 0.)
+                    .map(|size| (size, line.text.chars().count().min(200)))
+            })
+            .collect();
+        sizes.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let midpoint = sizes.iter().map(|(_, weight)| weight).sum::<usize>() / 2;
+        let mut weight = 0;
+        let normal_size = sizes
+            .iter()
+            .find(|(_, count)| {
+                weight += count;
+                weight > midpoint
+            })
+            .map(|(size, _)| *size);
+        let mut lines = Vec::new();
+        let mut hints = Vec::new();
+        for line in source.iter().take(MAX_LINES) {
+            if let Some(text) = clean_lines(std::slice::from_ref(&line.text)).pop() {
+                lines.push(repair_initial(&text));
+                hints.push(
+                    line.emphasized
+                        || line
+                            .font_size
+                            .zip(normal_size)
+                            .is_some_and(|(size, normal)| size >= normal * 1.2),
+                );
+            }
+        }
         let state = self.state();
-        let headings = find_headings(&lines, state);
+        let headings = find_headings(&lines, &hints, state);
         let sections = segment(&lines, &headings);
         SectionMap {
             engine: if state.is_some() {
@@ -401,11 +445,15 @@ struct Heading {
     confidence: f32,
 }
 
-fn find_headings(lines: &[String], state: Option<&Mutex<EmbeddingState>>) -> Vec<Heading> {
+fn find_headings(
+    lines: &[String],
+    hints: &[bool],
+    state: Option<&Mutex<EmbeddingState>>,
+) -> Vec<Heading> {
     let candidates: Vec<(usize, &String)> = lines
         .iter()
         .enumerate()
-        .filter(|(_, line)| heading_shaped(line))
+        .filter(|(_, line)| alias_kind(line).is_some() || heading_shaped(line))
         .collect();
     if candidates.is_empty() {
         return Vec::new();
@@ -430,7 +478,10 @@ fn find_headings(lines: &[String], state: Option<&Mutex<EmbeddingState>>) -> Vec
         let texts: Vec<String> = learned.iter().map(|(_, line)| line.clone()).collect();
         if let Ok(vectors) = state.model.embed(texts, None) {
             for ((index, _), vector) in learned.into_iter().zip(vectors) {
-                if let Some((kind, confidence)) = embedding_kind(&vector, &state.labels) {
+                if let Some((kind, confidence)) =
+                    embedding_kind(&vector, &state.labels, hints[index])
+                    && body_supports(kind, &lines[index + 1..])
+                {
                     decisions.insert(index, (kind, confidence));
                 }
             }
@@ -481,7 +532,72 @@ fn heading_shaped(line: &str) -> bool {
     line.chars().any(char::is_alphabetic)
 }
 
+/// Semantic similarity alone can mistake job titles and skill names for
+/// headings. Require independent evidence in the following body for learned
+/// labels; exact aliases do not need this language-dependent check.
+fn body_supports(kind: SectionKind, lines: &[String]) -> bool {
+    let body = lines
+        .iter()
+        .take(5)
+        .take_while(|line| alias_kind(line).is_none())
+        .map(|line| normalize(line))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let cues: &[&str] = match kind {
+        SectionKind::Experience => &[
+            "engineer",
+            "manager",
+            "developed",
+            "built",
+            "led",
+            "present",
+        ],
+        SectionKind::Education => &[
+            "university",
+            "college",
+            "bachelor",
+            "master",
+            "degree",
+            "diploma",
+            "bsc",
+            "msc",
+            "phd",
+        ],
+        SectionKind::Skills => &[
+            "rust",
+            "python",
+            "java",
+            "javascript",
+            "typescript",
+            "sql",
+            "excel",
+            "leadership",
+            "communication",
+        ],
+        SectionKind::Projects => &["built", "developed", "github", "application", "project"],
+        SectionKind::Certifications => &["certified", "certificate", "certification", "license"],
+        SectionKind::Languages => &["english", "spanish", "french", "german", "native", "fluent"],
+        SectionKind::Contact => return looks_like_contact(&lines[..lines.len().min(5)]),
+        SectionKind::Summary => &[
+            "professional",
+            "experienced",
+            "years",
+            "seeking",
+            "specialist",
+        ],
+        SectionKind::Awards => &["award", "winner", "honor", "prize", "scholarship"],
+        SectionKind::Publications => &["journal", "published", "doi", "conference"],
+        SectionKind::Volunteer => &["volunteer", "community", "nonprofit", "charity"],
+        SectionKind::Interests => &["reading", "hiking", "music", "travel", "sports"],
+        SectionKind::Other => return false,
+    };
+    body.split_whitespace().any(|word| cues.contains(&word))
+}
+
 fn alias_kind(line: &str) -> Option<(SectionKind, f32)> {
+    if line.chars().count() > MAX_HEADING_CHARS {
+        return None;
+    }
     let normalized = normalize(line);
     if normalized.is_empty() {
         return None;
@@ -490,6 +606,11 @@ fn alias_kind(line: &str) -> Option<(SectionKind, f32)> {
         for alias in *aliases {
             if normalized == *alias {
                 return Some((*kind, 0.97));
+            }
+            // Letter-spaced headings and stray spaces inside extracted words
+            // are safe to repair against a known label, not arbitrary prose.
+            if normalized.replace(' ', "") == alias.replace(' ', "") {
+                return Some((*kind, 0.9));
             }
             // Accept a trailing plural/singular variation without accepting a
             // longer phrase that merely contains a label.
@@ -504,6 +625,7 @@ fn alias_kind(line: &str) -> Option<(SectionKind, f32)> {
 fn embedding_kind(
     vector: &[f32],
     labels: &[(SectionKind, Vec<f32>)],
+    formatted: bool,
 ) -> Option<(SectionKind, f32)> {
     let mut best: HashMap<SectionKind, f32> = HashMap::new();
     for (kind, label) in labels {
@@ -518,7 +640,8 @@ fn embedding_kind(
     let second = ranked.get(1).map(|(_, score)| *score).unwrap_or(0.0);
     // A close second means the heading is ambiguous; leave it for the alias
     // fallback rather than inventing a section.
-    if score < 0.62 || score - second < 0.02 {
+    let threshold = if formatted { 0.58 } else { 0.62 };
+    if score < threshold || score - second < 0.02 {
         return None;
     }
     Some((kind, (0.6 + (score - 0.62) * 1.4).clamp(0.6, 0.96)))
@@ -590,12 +713,18 @@ fn segment(lines: &[String], headings: &[Heading]) -> Vec<DetectedSection> {
     if first > 0 {
         let body = join_body(&lines[..first]);
         if !body.is_empty() {
+            let contact = looks_like_contact(&lines[..first]);
+            let kind = if contact {
+                SectionKind::Contact
+            } else {
+                SectionKind::Other
+            };
             sections.push(DetectedSection {
-                id: section_id(SectionKind::Contact, 1),
-                kind: SectionKind::Contact,
-                heading: "Contact".to_owned(),
+                id: section_id(kind, 1),
+                kind,
+                heading: if contact { "Contact" } else { "Resume" }.to_owned(),
                 body,
-                confidence: 0.75,
+                confidence: if contact { 0.75 } else { 0.4 },
                 feedback: None,
             });
         }
@@ -697,6 +826,43 @@ fn looks_like_contact(lines: &[String]) -> bool {
     })
 }
 
+/// Repair only known words, not arbitrary initials ("R programming", "A team",
+/// "I enjoy") or names. Geometry handles inferred PDF spaces separately.
+fn repair_initial(line: &str) -> String {
+    let Some((initial, rest)) = line.split_once(' ') else {
+        return line.to_owned();
+    };
+    if initial.chars().count() != 1 || !initial.chars().all(char::is_uppercase) {
+        return line.to_owned();
+    }
+    let word = rest.split_whitespace().next().unwrap_or("");
+    let joined = format!("{initial}{word}").to_lowercase();
+    if [
+        "experience",
+        "education",
+        "professional",
+        "summary",
+        "skills",
+        "projects",
+        "certifications",
+        "languages",
+        "interests",
+        "employment",
+        "engineer",
+        "developed",
+        "managed",
+        "built",
+        "designed",
+        "implemented",
+    ]
+    .contains(&joined.as_str())
+    {
+        format!("{initial}{rest}")
+    } else {
+        line.to_owned()
+    }
+}
+
 fn clean_lines(lines: &[String]) -> Vec<String> {
     let mut cleaned = Vec::new();
     for line in lines.iter().take(MAX_LINES) {
@@ -712,6 +878,7 @@ fn clean_lines(lines: &[String]) -> Vec<String> {
 
 fn normalize(value: &str) -> String {
     let mut normalized = String::new();
+    let value = value.replace('&', " and ");
     for character in value.chars() {
         if character.is_alphanumeric() {
             normalized.extend(character.to_lowercase());
@@ -803,6 +970,104 @@ mod tests {
         assert_eq!(map.sections.len(), 1);
         assert_eq!(map.sections[0].kind, SectionKind::Skills);
         assert!(map.sections[0].body.contains("Rust"));
+    }
+
+    #[test]
+    fn extraction_spacing_and_ampersands_match_known_labels() {
+        let map = SectionDetector::heuristic().detect(&lines(&[
+            "E X P E R I E N C E",
+            "Built things.",
+            "Edu cation",
+            "BSc Mathematics",
+            "Awards & Honors",
+            "Scholarship",
+        ]));
+        assert_eq!(
+            map.sections.iter().map(|s| s.kind).collect::<Vec<_>>(),
+            vec![
+                SectionKind::Experience,
+                SectionKind::Education,
+                SectionKind::Awards
+            ]
+        );
+        assert_eq!(alias_kind("Experienced software engineer"), None);
+    }
+
+    #[test]
+    fn opening_prose_is_not_automatically_contact_information() {
+        let map = SectionDetector::heuristic().detect(&lines(&[
+            "An experienced software engineer.",
+            "Skills",
+            "Rust",
+        ]));
+        assert_eq!(map.sections[0].kind, SectionKind::Other);
+        assert_eq!(map.sections[0].body, "An experienced software engineer.");
+    }
+
+    #[test]
+    fn learned_labels_need_independent_body_evidence() {
+        assert!(!body_supports(
+            SectionKind::Education,
+            &lines(&["Built a compiler."])
+        ));
+        assert!(body_supports(
+            SectionKind::Education,
+            &lines(&["BSc at University of London"])
+        ));
+        // Do not borrow evidence from the next explicit section.
+        assert!(!body_supports(
+            SectionKind::Education,
+            &lines(&["Skills", "University"])
+        ));
+        assert!(!body_supports(SectionKind::Skills, &[]));
+    }
+
+    #[test]
+    fn sanity_check_repairs_known_words_not_initials_or_prose() {
+        assert_eq!(repair_initial("E ngineer at Acme"), "Engineer at Acme");
+        assert_eq!(
+            repair_initial("P rofessional summary"),
+            "Professional summary"
+        );
+        for text in [
+            "A team player",
+            "I enjoy programming",
+            "R programming",
+            "J Smith",
+        ] {
+            assert_eq!(repair_initial(text), text);
+        }
+    }
+
+    #[test]
+    fn formatting_is_support_not_a_label_or_permission_to_ignore_ambiguity() {
+        let labels = vec![
+            (SectionKind::Experience, vec![1., 0.]),
+            (SectionKind::Education, vec![-1., 0.]),
+        ];
+        assert!(embedding_kind(&[0.6, 0.8], &labels, false).is_none());
+        assert_eq!(
+            embedding_kind(&[0.6, 0.8], &labels, true).unwrap().0,
+            SectionKind::Experience
+        );
+        let ambiguous = vec![
+            (SectionKind::Experience, vec![1., 0.]),
+            (SectionKind::Education, vec![1., 0.]),
+        ];
+        assert!(embedding_kind(&[1., 0.], &ambiguous, true).is_none());
+        let map = SectionDetector::heuristic().detect_document(&[
+            domain::DocumentLine {
+                text: "Acme Corporation".into(),
+                emphasized: true,
+                font_size: Some(24.),
+            },
+            domain::DocumentLine {
+                text: "Built software.".into(),
+                font_size: Some(12.),
+                ..Default::default()
+            },
+        ]);
+        assert_eq!(map.sections[0].kind, SectionKind::Other);
     }
 
     #[test]

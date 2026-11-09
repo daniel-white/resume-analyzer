@@ -22,6 +22,7 @@ mod blast_track;
 mod greenline;
 mod indy_hackers_hiring;
 mod levr;
+mod pdf;
 mod smart_resume;
 mod workdaye;
 
@@ -84,14 +85,41 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
 /// the frozen verification parse: it keeps paragraphs in document order
 /// instead of reducing the file to a few fields.
 pub fn lines(file: &ResumeFile<'_>) -> Vec<String> {
+    document_lines(file)
+        .into_iter()
+        .map(|line| line.text)
+        .collect()
+}
+
+pub fn document_lines(file: &ResumeFile<'_>) -> Vec<domain::DocumentLine> {
     match file.media_type {
         domain::DOCX => docx_lines(file.bytes),
-        domain::PDF if file.bytes.starts_with(b"%PDF") => pdf_lines(file.bytes),
-        _ => split_lines(&String::from_utf8_lossy(file.bytes)),
+        domain::PDF if file.bytes.starts_with(b"%PDF") => {
+            if let Ok(lines) = pdf::extract_lines(file.bytes)
+                && !lines.is_empty()
+            {
+                return lines;
+            }
+            raw_pdf_lines(file.bytes)
+                .into_iter()
+                .map(plain_line)
+                .collect()
+        }
+        _ => split_lines(&String::from_utf8_lossy(file.bytes))
+            .into_iter()
+            .map(plain_line)
+            .collect(),
     }
 }
 
-fn docx_lines(bytes: &[u8]) -> Vec<String> {
+fn plain_line(text: String) -> domain::DocumentLine {
+    domain::DocumentLine {
+        text,
+        ..Default::default()
+    }
+}
+
+fn docx_lines(bytes: &[u8]) -> Vec<domain::DocumentLine> {
     let Ok(mut archive) = ZipArchive::new(Cursor::new(bytes)) else {
         return Vec::new();
     };
@@ -120,27 +148,41 @@ fn docx_lines(bytes: &[u8]) -> Vec<String> {
     header
 }
 
-fn paragraph_lines(xml: &str) -> Vec<String> {
+fn paragraph_lines(xml: &str) -> Vec<domain::DocumentLine> {
     xml.split("</w:p>")
         .filter_map(|paragraph| {
             // Runs split on formatting, not word boundaries, so concatenate
             // them. Whitespace lives inside the runs.
             let text = texts(paragraph).concat();
             let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            if text.is_empty() { None } else { Some(text) }
+            if text.is_empty() {
+                return None;
+            }
+            static HEADING: LazyLock<regex::Regex> = LazyLock::new(|| {
+                regex::Regex::new(r#"(?i)<w:pStyle\b[^>]*w:val=["']heading[1-9]["']"#).unwrap()
+            });
+            static BOLD: LazyLock<regex::Regex> = LazyLock::new(|| {
+                regex::Regex::new(r#"<w:b\s*(?:/\s*>|w:val=["'](?:1|true|on)["']\s*/>)"#).unwrap()
+            });
+            static SIZE: LazyLock<regex::Regex> =
+                LazyLock::new(|| regex::Regex::new(r#"<w:sz\b[^>]*w:val=["'](\d+)["']"#).unwrap());
+            let runs: Vec<_> = paragraph
+                .split("</w:r>")
+                .filter(|run| !texts(run).concat().trim().is_empty())
+                .collect();
+            let bold = !runs.is_empty() && runs.iter().all(|run| BOLD.is_match(run));
+            let font_size = SIZE
+                .captures_iter(paragraph)
+                .filter_map(|cap| cap[1].parse::<f32>().ok())
+                .max_by(f32::total_cmp)
+                .map(|size| size / 2.);
+            Some(domain::DocumentLine {
+                text,
+                emphasized: HEADING.is_match(paragraph) || bold,
+                font_size,
+            })
         })
         .collect()
-}
-
-fn pdf_lines(bytes: &[u8]) -> Vec<String> {
-    if let Ok(text) = pdf_extract::extract_text_from_mem(bytes) {
-        let lines = split_lines(&text);
-        if !lines.is_empty() {
-            return lines;
-        }
-    }
-    // A file without a usable text layer still has readable string literals.
-    raw_pdf_lines(bytes)
 }
 
 /// Last-resort read for a PDF the extractor rejects. Test fixtures and some
@@ -608,6 +650,17 @@ mod tests {
             read.verdict.summary,
             "Score 10 of 100. Upload a PDF or DOCX the parser can open."
         );
+    }
+
+    #[test]
+    fn docx_retains_direct_formatting_hints_without_treating_disabled_bold_as_bold() {
+        let lines = paragraph_lines(
+            r#"<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Career</w:t></w:r></w:p><w:p><w:r><w:rPr><w:b/><w:sz w:val="32"/></w:rPr><w:t>Expertise</w:t></w:r></w:p><w:p><w:r><w:rPr><w:b w:val="0"/></w:rPr><w:t>Normal</w:t></w:r></w:p>"#,
+        );
+        assert!(lines[0].emphasized);
+        assert!(lines[1].emphasized);
+        assert_eq!(lines[1].font_size, Some(16.));
+        assert!(!lines[2].emphasized);
     }
 
     #[test]

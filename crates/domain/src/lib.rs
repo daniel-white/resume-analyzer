@@ -337,6 +337,14 @@ pub struct RunView {
     pub verdict: Option<Verdict>,
 }
 
+/// Transient extraction metadata; formatting is evidence, not a section label.
+#[derive(Clone, Debug, Default)]
+pub struct DocumentLine {
+    pub text: String,
+    pub emphasized: bool,
+    pub font_size: Option<f32>,
+}
+
 /// Canonical section labels. The detector maps free-text headings onto these
 /// so the UI can compare our reading with each provider's extract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
