@@ -15,10 +15,12 @@ is required to build the images.
 ## Cache boundaries
 
 - **API:** Cargo Chef 0.1.78 on Rust 1.99.1 Bookworm prepares a workspace
-  recipe, then compiles dependencies in a separate layer. Rust source changes
-  rerun preparation but produce the same recipe, so the cook layer stays cached.
-  Migration changes only invalidate the application layer. Both compilation
-  steps use `--locked` and the same toolchain, profile, and working directory.
+  recipe, then compiles dependencies in a separate layer. The planner stage only
+  reads Cargo.toml/Cargo.lock, so Rust source changes do not invalidate it. The
+  cook layer stays cached; source changes only invalidate the application build
+  step, which recompiles just the changed crates and their dependents. Migration
+  changes only invalidate the application layer. Both compilation steps use
+  `--locked` and the same toolchain, profile, and working directory.
 - **Downloads:** BuildKit mounts retain Cargo registry/Git downloads and the
   pnpm store across lockfile changes on the same builder.
 - **Web:** pnpm setup precedes manifest copies, dependency installation precedes
