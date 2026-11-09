@@ -1,5 +1,6 @@
 import { UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
+import Markdown from "react-markdown";
 
 import { voteResumeSection } from "~/fns/resumes.functions";
 import type { ProfileSummary, SectionVote } from "~/server/resumes";
@@ -61,7 +62,11 @@ export function ProfileSummaryCard({
       </div>
       {current ? (
         <>
-          <p className="profile-summary-text">{current.text}</p>
+          <div className="profile-summary-text">
+            <Markdown allowedElements={["strong", "em"]} unwrapDisallowed>
+              {current.text}
+            </Markdown>
+          </div>
           <p className="profile-summary-model">
             {current.engine === "ollama" ? "Local LLM" : "Extractive fallback"} · {current.model}
             <span>Generated from your résumé; may be inaccurate.</span>
