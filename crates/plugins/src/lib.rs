@@ -478,24 +478,46 @@ fn headings(body: &str) -> Vec<Section> {
 }
 
 fn texts(xml: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut rest = xml;
-    while let Some(start) = rest.find("<w:t") {
-        let after = &rest[start..];
-        let Some(open_end) = after.find('>') else {
-            break;
-        };
-        let content = &after[open_end + 1..];
-        let Some(close) = content.find("</w:t>") else {
-            break;
-        };
-        let text = content[..close].replace("&amp;", "&");
-        if !text.trim().is_empty() {
-            out.push(text);
-        }
-        rest = &content[close + 6..];
-    }
-    out
+    // These inputs may be paragraph/run fragments rather than complete XML.
+    // Match only text elements, never similarly named table/text-box tags, and
+    // never consume markup as text (including after a malformed text element).
+    static TEXT: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r#"<w:t(?:\s+[^<>]*?[^/])?\s*>([^<]*)</w:t\s*>"#).unwrap()
+    });
+    TEXT.captures_iter(xml)
+        .map(|capture| decode_xml_text(&capture[1]))
+        .filter(|text| !text.trim().is_empty())
+        .collect()
+}
+
+fn decode_xml_text(text: &str) -> String {
+    static ENTITY: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"&(#x[0-9a-fA-F]+|#[0-9]+|amp|lt|gt|quot|apos);").unwrap()
+    });
+    ENTITY
+        .replace_all(text, |capture: &regex::Captures<'_>| {
+            let entity = &capture[1];
+            let decoded = match entity {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                _ => entity
+                    .strip_prefix("#x")
+                    .and_then(|value| u32::from_str_radix(value, 16).ok())
+                    .or_else(|| {
+                        entity
+                            .strip_prefix('#')
+                            .and_then(|value| value.parse().ok())
+                    })
+                    .and_then(char::from_u32),
+            };
+            decoded
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| capture[0].to_owned())
+        })
+        .into_owned()
 }
 
 fn plausible_name(values: &[String]) -> Option<String> {
@@ -687,6 +709,44 @@ mod tests {
                 "Staff Engineer",
                 "Education",
             ]
+        );
+    }
+
+    #[test]
+    fn docx_tables_and_text_boxes_extract_text_not_markup() {
+        let body = concat!(
+            "<w:tbl><w:tblPr/><w:tr><w:tc><w:tcPr/>",
+            "<w:p><w:pPr><w:pStyle w:val=\"Heading1\"/></w:pPr>",
+            "<w:r><w:t>Experience</w:t></w:r></w:p>",
+            "<w:p><w:r><w:tab/><w:t xml:space=\"preserve\">Staff </w:t>",
+            "<w:t>Engineer &amp; R&amp;D &lt;team&gt; &#65; &#x42;</w:t></w:r></w:p>",
+            "</w:tc><w:tc><w:p><w:r><w:t>Second cell</w:t></w:r></w:p>",
+            "</w:tc></w:tr></w:tbl>",
+            "<w:p><w:r><w:txbxContent><w:p><w:r><w:t>Box text</w:t>",
+            "</w:r></w:p></w:txbxContent></w:r></w:p>",
+        );
+        let bytes = docx("", body);
+        assert_eq!(
+            lines(&ResumeFile {
+                media_type: domain::DOCX,
+                bytes: &bytes
+            }),
+            vec![
+                "Experience",
+                "Staff Engineer & R&D <team> A B",
+                "Second cell",
+                "Box text"
+            ]
+        );
+        assert_eq!(
+            parse_docx(body, "").profile.sections[0].heading,
+            "Experience"
+        );
+        assert_eq!(texts("<w:t/><w:tab/><w:t>ok</w:t>"), vec!["ok"]);
+        assert_eq!(texts("<w:t>broken<w:tbl/><w:t>safe</w:t>"), vec!["safe"]);
+        assert_eq!(
+            texts("<w:t>&amp;lt; &quot; &apos;</w:t>"),
+            vec!["&lt; \" '"]
         );
     }
 
