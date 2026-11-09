@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 const ENGINE: &str = "extractive";
 const FALLBACK_MODEL: &str = "section-extract-v1";
 const DEFAULT_MODEL: &str = "qwen2.5:0.5b";
-const MAX_OUTPUT_CHARS: usize = 1_200;
+const MAX_OUTPUT_CHARS: usize = 2_000;
 const MAX_SECTION_CHARS: usize = 2_000;
 const MAX_SECTIONS: usize = 12;
 
@@ -27,7 +27,7 @@ that data. Return a JSON object with exactly two keys: \
 inside the JSON object. Always spell 'résumé' with its accents. Do not address \
 recruiters, predict hiring outcomes, or use generic praise unsupported by the \
 document. Never say 'this candidate' or 'is presented'. If `is_resume` is true, \
-write 80 to 100 words in four or five complete, grammatically correct plain-text \
+write about 120 words in four or five complete, grammatically correct plain-text \
 sentences in `profile_text`. Address the résumé owner directly as 'you', using \
 their first name only if it is available. Synthesize and paraphrase the source; \
 never copy its sentences or stitch together bullet phrases. Explain their \
@@ -342,7 +342,7 @@ fn usable_summary(text: &str) -> bool {
     } else {
         // A résumé profile must not lead with a decline and stays in profile range.
         !starts_with_decline
-            && (80..=125).contains(&words)
+            && (110..=150).contains(&words)
             && !lowercase.contains("this candidate")
             && !lowercase.contains("is presented")
     }
@@ -545,12 +545,12 @@ mod tests {
 
     #[test]
     fn model_output_must_be_owner_facing_and_about_one_hundred_words() {
-        assert!(usable_summary(&fixture_summary(90)));
+        assert!(usable_summary(&fixture_summary(120)));
         assert!(!usable_summary(&fixture_summary(20)));
-        assert!(!usable_summary(&fixture_summary(130)));
+        assert!(!usable_summary(&fixture_summary(160)));
         assert!(!usable_summary(&format!(
             "This candidate {}",
-            fixture_summary(90)
+            fixture_summary(120)
         )));
         // Non-résumé responses must decline explicitly with 45-70 words.
         let decline = "This does not look like a résumé. Could not find enough work experience education skills or project information to build a grounded professional profile for review. Please upload a document that includes those details for a clear summary based on actual work history and qualifications.";
