@@ -9,7 +9,7 @@ test("welcomes a signed-out visitor with an upload-first landing", async ({ page
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("They see data.");
-  await expect(page.getByRole("button", { name: "Choose my resume" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose my résumé" })).toBeVisible();
   await page.getByRole("link", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
@@ -19,7 +19,7 @@ test("lists a scored resume and a file still being read", async ({ page }) => {
 
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload a résumé" })).toBeVisible();
   await expect(page.getByText("ada@example.com")).toBeVisible();
   await expect(page.getByRole("link", { name: /ada-designed\.pdf/ })).toBeVisible();
   const analyzed = page.getByRole("link", { name: /ada-designed\.pdf/ });
@@ -35,7 +35,7 @@ test("shows an empty library until a file is stored", async ({ page }, testInfo)
 
   await page.goto("/");
 
-  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await expect(page.getByText("No résumés yet.")).toBeVisible();
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "How it works" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("empty-library-desktop.png"), fullPage: true, caret: "initial" });
@@ -68,9 +68,9 @@ test("opens a scored teardown from the library", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/resumes\/resume-designed$/);
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
-  await expect(page.getByLabel("Resume details", { exact: true })).toContainText("contact in the header");
-  await expect(page.getByLabel("Resume details", { exact: true })).toContainText("Ada Lovelace");
-  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByLabel("Résumé details", { exact: true })).toContainText("contact in the header");
+  await expect(page.getByLabel("Résumé details", { exact: true })).toContainText("Ada Lovelace");
+  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
   await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
@@ -90,14 +90,14 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
   await expect(page.getByText("Analysis in progress", { exact: true })).toBeVisible();
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
-  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
 });
 
 test("renders the original DOCX even before parsing finishes", async ({ page }) => {
   await installApi(page, { resumes: [stored] });
   await page.goto("/resumes/resume-stored");
-  const preview = page.getByLabel("Original resume");
-  await expect(preview.getByText("Original DOCX resume")).toBeVisible({ timeout: 20_000 });
+  const preview = page.getByLabel("Original résumé");
+  await expect(preview.getByText("Original DOCX résumé")).toBeVisible({ timeout: 20_000 });
   await expect(preview.locator("iframe")).toHaveCount(0);
   const download = page.waitForEvent("download");
   await preview.getByRole("link", { name: "Download original" }).click();
@@ -108,7 +108,7 @@ test("shows a useful error when the protected file request fails", async ({ page
   await installApi(page, { resumes: [stored] });
   await page.route("**/api/resumes/*/versions/*/file", (route) => route.fulfill({ status: 401 }));
   await page.goto("/resumes/resume-stored");
-  await expect(page.getByLabel("Original resume").getByRole("alert")).toContainText("Your session has expired");
+  await expect(page.getByLabel("Original résumé").getByRole("alert")).toContainText("Your session has expired");
 });
 
 test("protects file responses on the frontend origin", async ({ page }) => {
@@ -137,8 +137,8 @@ test("says when a resume is missing", async ({ page }) => {
 
   await page.goto("/resumes/missing");
 
-  await expect(page.getByRole("heading", { name: "That resume is not here." })).toBeVisible();
-  await page.getByRole("link", { name: "Your resumes" }).click();
+  await expect(page.getByRole("heading", { name: "That résumé is not here." })).toBeVisible();
+  await page.getByRole("link", { name: "Your résumés" }).click();
   await expect(page).toHaveURL(/\/$/);
 });
 
@@ -147,7 +147,7 @@ test("uploads a file and lands on its teardown", async ({ page }) => {
 
   await page.goto("/");
   await ready(page);
-  await expect(page.getByRole("heading", { name: "Upload a resume" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Upload a résumé" })).toBeVisible();
   await expect(page.getByRole("link", { name: /just-added\.docx/ })).toContainText(
     "Waiting for analysis",
   );

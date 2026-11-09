@@ -20,8 +20,8 @@ export function DocumentSkeleton({ label = "Loading preview…" }: { label?: str
 
 export function ResumeDetailsSkeleton() {
   return (
-    <main className="wrap wide details-loading" aria-busy="true" aria-label="Loading resume details">
-      <p className="loading-caption" role="status"><LoaderCircle className="busy-icon" size={18} aria-hidden="true" />Opening your resume…</p>
+    <main className="wrap wide details-loading" aria-busy="true" aria-label="Loading résumé details">
+      <p className="loading-caption" role="status"><LoaderCircle className="busy-icon" size={18} aria-hidden="true" />Opening your résumé…</p>
       <div aria-hidden="true">
         <div className="loading-shimmer skeleton-page-title" />
         <div className="loading-shimmer skeleton-page-lede" />

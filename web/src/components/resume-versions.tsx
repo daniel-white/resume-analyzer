@@ -86,14 +86,14 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
       }
       await router.invalidate();
     } catch (error) {
-      await handleError(error, "Could not delete the resume. Please try again.");
+      await handleError(error, "Could not delete the résumé. Please try again.");
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <section className="sheet-face resume-versions" aria-label="Resume versions" aria-busy={!!busy}>
+    <section className="sheet-face resume-versions" aria-label="Résumé versions" aria-busy={!!busy}>
       <div className="version-actions">
         <label className="version-picker">
           <span className="version-label"><FileClock size={14} aria-hidden="true" /> Version history</span>
@@ -111,7 +111,7 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             disabled={!!busy} onChange={upload} />
         </label>
-        <div className="delete-split" role="group" aria-label="Delete resume">
+        <div className="delete-split" role="group" aria-label="Delete résumé">
           <button type="button" disabled={!!busy} onClick={(event) => { openerRef.current = event.currentTarget; setError(null); setConfirm("version"); }}><Trash2 size={15} aria-hidden="true" /> Delete this version</button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger ref={menuTriggerRef} className="delete-menu-trigger" disabled={!!busy} aria-label="More delete options"><ChevronDown size={15} aria-hidden="true" /></DropdownMenu.Trigger>
@@ -142,8 +142,8 @@ export function ResumeVersions({ resumeId, versionId, versions }: {
             <span className="confirmation-icon"><AlertTriangle aria-hidden="true" /></span>
             <AlertDialog.Title className="confirmation-title">{confirm === "all" ? "Delete all versions?" : `Delete version ${selected.number}?`}</AlertDialog.Title>
             <AlertDialog.Description className="confirmation-description">{confirm === "all"
-             ? `This will permanently delete this resume, all ${versions.length} ${versions.length === 1 ? "version" : "versions"}, and their results. This cannot be undone.`
-            : `This will permanently delete ${selected.filename} (v${selected.number}) and its results. ${versions.length === 1 ? "This is the last version, so the resume will also be removed. " : "Other versions will not be affected. "}This cannot be undone.`}</AlertDialog.Description>
+             ? `This will permanently delete this résumé, all ${versions.length} ${versions.length === 1 ? "version" : "versions"}, and their results. This cannot be undone.`
+            : `This will permanently delete ${selected.filename} (v${selected.number}) and its results. ${versions.length === 1 ? "This is the last version, so the résumé will also be removed. " : "Other versions will not be affected. "}This cannot be undone.`}</AlertDialog.Description>
             {error ? <p className="error" role="alert">{error}</p> : null}
             <div className="confirmation-actions">
               <AlertDialog.Cancel ref={cancelRef} disabled={!!busy}>Cancel</AlertDialog.Cancel>

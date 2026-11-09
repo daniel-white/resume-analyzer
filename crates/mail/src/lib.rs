@@ -89,9 +89,9 @@ fn analysis_message(
         .join("\n");
     message(
         to,
-        "Your resume analysis results are ready",
+        "Your résumé analysis results are ready",
         format!(
-            "New results are ready for {filename} (version {version}).\n\n{details}\nSign in if prompted. Other providers may still be analyzing your resume.\n\nThese are simulated ATS results; scores do not predict hiring outcomes.\n"
+            "New results are ready for {filename} (version {version}).\n\n{details}\nSign in if prompted. Other providers may still be analyzing your résumé.\n\nThese are simulated ATS results; scores do not predict hiring outcomes.\n"
         ),
     )
 }
@@ -146,7 +146,7 @@ mod tests {
         let message = analysis_message("owner@example.com", "resume.pdf", 2, &results).unwrap();
         let encoded = String::from_utf8(message.formatted()).unwrap();
         assert!(encoded.contains("To: owner@example.com"));
-        assert!(encoded.contains("Your resume analysis results are ready"));
+        assert!(encoded.contains("Your résumé analysis results are ready"));
         assert!(encoded.contains("Greenline"));
         assert!(encoded.contains("Levr"));
         assert!(encoded.contains("provider=levr"));

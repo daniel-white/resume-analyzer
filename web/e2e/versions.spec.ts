@@ -133,7 +133,7 @@ test("deletes all versions and returns to the library", async ({ page }) => {
   await page.getByRole("menuitem", { name: "Delete all versions" }).click();
   await page.getByRole("button", { name: "Confirm deletion" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await expect(page.getByText("No résumés yet.")).toBeVisible();
 });
 
 test("deleting the last version removes the resume", async ({ page }) => {
@@ -144,7 +144,7 @@ test("deleting the last version removes the resume", async ({ page }) => {
   await expect(page.getByRole("alertdialog")).toContainText("last version");
   await page.getByRole("button", { name: "Confirm deletion" }).click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await expect(page.getByText("No résumés yet.")).toBeVisible();
 });
 
 test("deletes all versions from a library row without opening the resume", async ({ page }) => {
@@ -161,15 +161,15 @@ test("deletes all versions from a library row without opening the resume", async
   await expect(page.getByRole("link", { name: new RegExp(designed.versions[0].filename) })).toBeVisible();
   await trigger.click();
   await page.getByRole("button", { name: "Delete all versions", exact: true }).click();
-  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await expect(page.getByText("No résumés yet.")).toBeVisible();
   await page.reload();
-  await expect(page.getByText("No resumes yet.")).toBeVisible();
+  await expect(page.getByText("No résumés yet.")).toBeVisible();
 });
 
 test("a missing version does not show another version's results", async ({ page }) => {
   await installApi(page, { resumes: [versioned] });
   await page.goto(`/resumes/${designed.id}?version=deleted-version`);
-  await expect(page.getByRole("heading", { name: "That resume is not here." })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "That résumé is not here." })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Greenline" })).toHaveCount(0);
 });
 

@@ -10,7 +10,7 @@ import { LandingPage } from "~/components/landing-page";
 import { getLibrary } from "~/fns/resumes.functions";
 
 export const Route = createFileRoute("/")({
-  head: () => ({ meta: [{ title: "The Other Read — Make your experience count" }, { name: "description", content: "See what simulated hiring software picks up from your resume. Upload a PDF or DOCX before signing in, compare ATS readers, and find practical fixes." }] }),
+  head: () => ({ meta: [{ title: "The Other Read — Make your experience count" }, { name: "description", content: "See what simulated hiring software picks up from your résumé. Upload a PDF or DOCX before signing in, compare ATS readers, and find practical fixes." }] }),
   loader: () => getLibrary(),
   component: LibraryPage,
 });
@@ -25,8 +25,8 @@ function LibraryPage() {
       <SiteHeader email={email} />
       <div className="library-heading">
         <p className="eyebrow">YOUR NEXT CHAPTER, IN PROGRESS</p>
-        <h1>Your resumes</h1>
-        <p>{rows.length === 0 ? "Upload a resume to view ATS scores and parsing results." : "Manage your resumes, versions, and ATS results."}</p>
+        <h1>Your résumés</h1>
+        <p>{rows.length === 0 ? "Upload a résumé to view ATS scores and parsing results." : "Manage your résumés, versions, and ATS results."}</p>
       </div>
       {rows.filter((row) => row.status !== "scored").map((row) => (
         <LiveAnalysis key={row.id} resumeId={row.id} active />

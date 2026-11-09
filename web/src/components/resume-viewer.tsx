@@ -65,7 +65,7 @@ export function ResumeViewer({
   }, [file.url]);
 
   return (
-    <section className="resume-viewer overflow-hidden rounded-xl border border-black/10 bg-white text-black" aria-label="Original resume">
+    <section className="resume-viewer overflow-hidden rounded-xl border border-black/10 bg-white text-black" aria-label="Original résumé">
       <div className="viewer-heading">
         <h2><FileText size={17} aria-hidden="true" /> Original file</h2>
         <a href={uri ?? file.url} download={filename}><Download size={15} aria-hidden="true" /> Download original</a>

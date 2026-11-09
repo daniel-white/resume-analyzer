@@ -48,7 +48,7 @@ export function DropZone({ copy }: { copy: DropCopy }) {
     dragDepth.current = 0;
     setDragging(false);
     if (event.dataTransfer.files.length > 1) {
-      setError("Please upload one resume at a time.");
+      setError("Please upload one résumé at a time.");
       return;
     }
     void store(event.dataTransfer.files[0]);
@@ -62,18 +62,18 @@ export function DropZone({ copy }: { copy: DropCopy }) {
       onDrop={onDrop}>
       <input
         type="file"
-        aria-label="Upload resume"
+        aria-label="Upload résumé"
         name="file"
         accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         onChange={onChange}
         disabled={busy}
       />
       <span className={`drop-icon ${copy.tone === "empty" ? "first-upload" : ""}`} aria-hidden="true">{busy ? <LoaderCircle className="busy-icon" size={30} /> : <FileText size={30} strokeWidth={1.4} />}</span>
-      <h2>{busy ? "Uploading resume…" : copy.tone === "empty" ? "Upload your first resume" : "Upload a resume"}</h2>
+      <h2>{busy ? "Uploading résumé…" : copy.tone === "empty" ? "Upload your first résumé" : "Upload a résumé"}</h2>
       <p>Drag and drop a file here or choose one below.</p>
       <span className="upload-callout">{busy ? "Starting analysis…" : <><Upload size={16} aria-hidden="true" />Choose file</>}</span>
       <span className="upload-formats">PDF or DOCX · Up to 5 MB</span>
-      {busy ? <span className="sr-only" role="status">Storing your resume. Please wait.</span> : null}
+      {busy ? <span className="sr-only" role="status">Storing your résumé. Please wait.</span> : null}
       {error ? (
         <p className="error" role="alert">
           {error}

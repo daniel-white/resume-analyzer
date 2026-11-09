@@ -24,7 +24,7 @@ export function compareVersions(from: ComparisonVersion, to: ComparisonVersion) 
 
 export function comparisonMessage(delta: number | null): string {
   if (delta === null) return "Your comparison will take shape as results arrive. Keep going — each revision is a chance to learn.";
-  if (delta > 0) return "Nice progress! More of your resume is getting through. Keep the changes that are working for you.";
+  if (delta > 0) return "Nice progress! More of your résumé is getting through. Keep the changes that are working for you.";
   if (delta < 0) return "A lower score is useful feedback, not a setback. Review the systems below to find a small change to try next.";
   return "Your overall score is holding steady. Changes can still matter — check each system below to see what is working.";
 }

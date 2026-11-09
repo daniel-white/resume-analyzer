@@ -23,7 +23,7 @@ export function DeleteResume({ id, filename }: { id: string; filename: string })
       setOpen(false);
     } catch (cause) {
       if (isRedirect(cause)) await navigate({ to: "/login" });
-      else setError("Could not delete this resume. Please try again.");
+      else setError("Could not delete this résumé. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -36,7 +36,7 @@ export function DeleteResume({ id, filename }: { id: string; filename: string })
         <AlertDialog.Overlay className="confirmation-overlay" />
         <AlertDialog.Content className="confirmation-dialog" onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
           <span className="confirmation-icon"><AlertTriangle aria-hidden="true" /></span>
-          <AlertDialog.Title className="confirmation-title">Delete this resume?</AlertDialog.Title>
+          <AlertDialog.Title className="confirmation-title">Delete this résumé?</AlertDialog.Title>
           <AlertDialog.Description className="confirmation-description">This will permanently delete {filename}, all its versions, and their results. This cannot be undone.</AlertDialog.Description>
           {error ? <p className="error" role="alert">{error}</p> : null}
           <div className="confirmation-actions">

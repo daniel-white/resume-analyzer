@@ -43,7 +43,7 @@ function LoginPage() {
   return (
     <Page>
       <PublicHeader />
-      <div className="auth-intro"><p className="eyebrow">ONE LINK. A DIFFERENT PERSPECTIVE.</p><h2>Your next chapter<br />starts <em>here.</em></h2><p>See the other side of your resume. Keep your results together.<br />Make your next version count.</p></div>
+      <div className="auth-intro"><p className="eyebrow">ONE LINK. A DIFFERENT PERSPECTIVE.</p><h2>Your next chapter<br />starts <em>here.</em></h2><p>See the other side of your résumé. Keep your results together.<br />Make your next version count.</p></div>
       {sent ? (
         <div className="sign" role="status">
           <span className="sign-icon"><Mail size={26} aria-hidden="true" /></span>

@@ -30,7 +30,7 @@ export function SiteHeader({ email }: { email: string }) {
     <header className="site-navigation">
       <Link to="/" className="landing-brand"><span><BookOpen size={23} aria-hidden="true" /></span>The Other Read<span className="landing-beta">BETA</span></Link>
       <nav aria-label="Main navigation">
-        <Link to="/" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Files size={16} aria-hidden="true" /> Your resumes</Link>
+        <Link to="/" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Files size={16} aria-hidden="true" /> Your résumés</Link>
       </nav>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger className="account-trigger" aria-label="Account menu" disabled={busy}>

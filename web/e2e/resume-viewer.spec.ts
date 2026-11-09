@@ -7,8 +7,8 @@ for (const [format, resume] of [["PDF", designed], ["DOCX", stored]] as const) {
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
 
-    const viewer = page.getByLabel("Original resume");
-    await expect(viewer.getByText(`Original ${format} resume`)).toBeVisible({ timeout: 20_000 });
+    const viewer = page.getByLabel("Original résumé");
+    await expect(viewer.getByText(`Original ${format} résumé`)).toBeVisible({ timeout: 20_000 });
     await expect(viewer.getByRole("button", { name: "Zoom in", exact: true })).toBeVisible();
     await expect(viewer.locator("#react-doc-viewer")).toHaveCSS("user-select", "text");
     await expect(viewer.getByRole("button", { name: "Zoom in", exact: true })).toHaveCSS("user-select", "none");
@@ -39,8 +39,8 @@ test("PDF toolbar remains clickable after scrolling the document", async ({ page
   await installApi(page, { resumes: [designed] });
   await page.goto(`/resumes/${designed.id}`);
 
-  const viewer = page.getByLabel("Original resume");
-  await expect(viewer.getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
+  const viewer = page.getByLabel("Original résumé");
+  await expect(viewer.getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
   const zoomIn = viewer.getByRole("button", { name: "Zoom in", exact: true });
   await zoomIn.click();
   await zoomIn.click();

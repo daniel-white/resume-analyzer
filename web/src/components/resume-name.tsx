@@ -39,7 +39,7 @@ export function ResumeName({ id, title }: { id: string; title: string }) {
       close();
     } catch (cause) {
       if (isRedirect(cause)) await navigate({ to: "/login" });
-      else setError("Could not rename your resume. Please try again.");
+      else setError("Could not rename your résumé. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -49,7 +49,7 @@ export function ResumeName({ id, title }: { id: string; title: string }) {
     return (
       <form className="resume-name-editor" onSubmit={(event) => { event.preventDefault(); void save(); }}
         onKeyDown={(event) => { if (event.key === "Escape" && !busy) { event.preventDefault(); close(); } }}>
-        <label htmlFor="resume-set-name">Give your resume a name</label>
+        <label htmlFor="resume-set-name">Give your résumé a name</label>
         <Input id="resume-set-name" autoFocus value={name} disabled={busy} required placeholder="e.g. My next chapter"
           aria-invalid={!!error} aria-describedby={error ? "resume-name-error" : undefined}
           onChange={(event) => setName(event.target.value)} />
@@ -65,7 +65,7 @@ export function ResumeName({ id, title }: { id: string; title: string }) {
   return (
     <div className="resume-set-title">
       <h1 className="filename">{title}</h1>
-      <button ref={trigger} type="button" className="rename-set" aria-label="Rename resume"
+      <button ref={trigger} type="button" className="rename-set" aria-label="Rename résumé"
         onClick={() => { setName(title); setError(null); setEditing(true); }}>
         <Pencil size={14} aria-hidden="true" /> Rename
       </button>

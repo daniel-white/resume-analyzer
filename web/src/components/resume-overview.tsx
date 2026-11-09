@@ -23,7 +23,7 @@ export function ResumeOverview({ resumeId, title, filename, cards, number }: {
       <div className="overview-title">
         <span className="overview-icon" aria-hidden="true"><FileText /></span>
         <div>
-          <p className="eyebrow">Resume analysis · v{number}</p>
+          <p className="eyebrow">Résumé analysis · v{number}</p>
           <ResumeName key={resumeId} id={resumeId} title={title} />
           <p className="set-filename">File: {filename}</p>
           <p className="lede">Review ATS scores and parsing results for this version.</p>

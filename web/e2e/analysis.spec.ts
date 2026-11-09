@@ -13,7 +13,7 @@ test("streams analysis results without polling and closes on completion", async 
   const api = await installApi(page, { resumes: [reading] });
   await page.goto("/resumes/resume-reading");
   await expect.poll(async () => (await api.stats()).connections).toBe(1);
-  await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible();
+  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible();
   const before = (await api.stats()).detailReads;
   // Longer than the old two-second interval: a quiet stream must not poll.
   await page.waitForTimeout(2500);
@@ -42,7 +42,7 @@ test("closes the stream when navigating away and skips completed analyses", asyn
   await page.goto("/resumes/resume-reading");
   await expect.poll(async () => (await api.stats()).streams).toBe(1);
   await page.goto("/resumes/resume-designed");
-  await expect(page.getByLabel("Original resume")).toBeVisible();
+  await expect(page.getByLabel("Original résumé")).toBeVisible();
   await expect.poll(async () => (await api.stats()).streams).toBe(0);
   expect((await api.stats()).connections).toBe(1);
 });

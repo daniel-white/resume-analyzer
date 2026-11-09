@@ -31,7 +31,7 @@ for (const pending of [true, false]) {
     };
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
-    await expect(page.getByLabel("Original resume").getByText("Original PDF resume")).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
     await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
     await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
@@ -56,8 +56,8 @@ for (const pending of [true, false]) {
 test("SmartResume and the original DOCX viewer render together", async ({ page }) => {
   await installApi(page, { resumes: [stored] });
   await page.goto(`/resumes/${stored.id}`);
-  const preview = page.getByLabel("Original resume");
-  await expect(preview.getByText("Original DOCX resume")).toBeVisible({ timeout: 20_000 });
+  const preview = page.getByLabel("Original résumé");
+  await expect(preview.getByText("Original DOCX résumé")).toBeVisible({ timeout: 20_000 });
   await expect(preview.getByRole("link", { name: "Download original" })).toBeVisible();
   const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
   await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
