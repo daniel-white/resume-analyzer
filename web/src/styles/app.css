@@ -853,6 +853,7 @@ select {
 .stat-label, .overall-rating-note, .overview-stats .grade-range strong, .overview-stats small { color: var(--muted-foreground); }
 .analysis-state { color: #8a5a12; }
 .analysis-state.is-complete { color: var(--score-high); }
+.analysis-state.not-resume-notice { color: var(--destructive); }
 .resume-versions { margin-block: 28px 16px; padding: 20px; }
 .version-label { font-family: var(--font-sans); font-size: 11px; font-weight: 600; }
 .version-picker select { border-color: var(--input); font-family: var(--font-sans); font-size: 13px; }

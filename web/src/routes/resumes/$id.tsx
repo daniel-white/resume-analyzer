@@ -16,6 +16,8 @@ import { ProfileSummaryCard } from "~/components/profile-summary";
 import { getTeardown } from "~/fns/resumes.functions";
 import type { SectionKind } from "~/server/resumes";
 
+const IS_NOT_RESUME_PREFIX = "This does not look like a résumé.";
+
 export const Route = createFileRoute("/resumes/$id")({
   validateSearch: (search: Record<string, unknown>): { version?: string; provider?: string } => ({
     version: typeof search.version === "string" && search.version ? search.version : undefined,
@@ -39,6 +41,7 @@ function TeardownPage() {
   const { id } = Route.useParams();
   const { provider } = Route.useSearch();
   const [highlightKind, setHighlightKind] = useState<SectionKind | null>(null);
+  const isNotResume = view.profileSummary?.text?.startsWith(IS_NOT_RESUME_PREFIX) ?? false;
 
   useEffect(() => setHighlightKind(null), [view.versionId]);
 
@@ -46,33 +49,41 @@ function TeardownPage() {
     <Page wide>
       <SiteHeader email={view.email} />
       <ResumeOverview resumeId={view.resumeId} title={view.title} filename={view.filename} cards={view.cards}
-        number={view.versions.find((version) => version.id === view.versionId)!.number} />
+        number={view.versions.find((version) => version.id === view.versionId)!.number} isNotResume={isNotResume} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />
-      <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
-      <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
+      {isNotResume ? null : (
+        <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
+      )}
+      {isNotResume ? null : (
+        <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
+      )}
       <ProfileSummaryCard
         key={`summary-${view.versionId}`}
         summary={view.profileSummary}
         resumeId={view.resumeId}
         versionId={view.versionId}
       />
-      <ResumeStructure
-        key={view.versionId}
-        fields={view.extract}
-        sections={view.sections}
-        resumeId={view.resumeId}
-        versionId={view.versionId}
-        onHighlight={setHighlightKind}
-      />
+      {isNotResume ? null : (
+        <ResumeStructure
+          key={view.versionId}
+          fields={view.extract}
+          sections={view.sections}
+          resumeId={view.resumeId}
+          versionId={view.versionId}
+          onHighlight={setHighlightKind}
+        />
+      )}
       <div className="desk-split resume-content">
         <div className="desk-resume">
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />
         </div>
-        <section className="analysis-results" aria-label="System results">
-          <div className="results-heading"><h2>ATS results</h2></div>
-          <VerdictGrid cards={view.cards} provider={provider} highlightKind={highlightKind} />
-          <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
-        </section>
+        {isNotResume ? null : (
+          <section className="analysis-results" aria-label="System results">
+            <div className="results-heading"><h2>ATS results</h2></div>
+            <VerdictGrid cards={view.cards} provider={provider} highlightKind={highlightKind} />
+            <p className="results-footnote">Simulated ATS results. Scores do not predict hiring outcomes.</p>
+          </section>
+        )}
       </div>
     </Page>
   );

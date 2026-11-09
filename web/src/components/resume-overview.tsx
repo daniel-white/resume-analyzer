@@ -4,12 +4,13 @@ import type { VerdictCard } from "~/server/resumes";
 import { letterGrade, medianScore, ScoreStamp } from "./score";
 import { ResumeName } from "./resume-name";
 
-export function ResumeOverview({ resumeId, title, filename, cards, number }: {
+export function ResumeOverview({ resumeId, title, filename, cards, number, isNotResume }: {
   resumeId: string;
   title: string;
   filename: string;
   cards: VerdictCard[];
   number: number;
+  isNotResume?: boolean;
 }) {
   const scores = cards.flatMap((card) => card.pending ? [] : [card.score]);
   const complete = cards.length > 0 && scores.length === cards.length;
@@ -37,10 +38,17 @@ export function ResumeOverview({ resumeId, title, filename, cards, number }: {
         </div>
         <div><span className="stat-label"><ScanLine aria-hidden="true" /> Systems analyzed</span><strong>{scores.length}<small> / {cards.length}</small></strong></div>
         <div className="grade-range"><span className="stat-label"><Sparkles aria-hidden="true" /> Grade range</span><strong>{spread}</strong></div>
-        <p className={`analysis-state ${complete ? "is-complete" : ""}`} role="status">
-          {complete ? <CheckCheck aria-hidden="true" /> : <ScanLine aria-hidden="true" />}
-          {complete ? "Analysis complete" : "Analysis in progress"}
-        </p>
+        {!isNotResume && (
+          <p className={`analysis-state ${complete ? "is-complete" : ""}`} role="status">
+            {complete ? <CheckCheck aria-hidden="true" /> : <ScanLine aria-hidden="true" />}
+            {complete ? "Analysis complete" : "Analysis in progress"}
+          </p>
+        )}
+        {isNotResume && (
+          <p className="analysis-state not-resume-notice" role="alert">
+            <span aria-hidden="true">⚠</span> This file does not appear to be a résumé. Upload a document with work experience, education, skills, or projects for analysis.
+          </p>
+        )}
       </div>
     </header>
   );
