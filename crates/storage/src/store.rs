@@ -1173,29 +1173,6 @@ fn status(value: String) -> anyhow::Result<ResumeStatus> {
     ResumeStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad resume status {value}"))
 }
 
-/// Serialize a value for a jsonb column, removing NUL codepoints first.
-///
-/// Postgres cannot represent U+0000 in `jsonb`: the text protocol encodes it as
-/// the `\u0000` escape, and jsonb rejects that with SQLSTATE 0A000
-/// ("unsupported Unicode escape sequence"). NULs are common in text pulled from
-/// PDFs and DOCX numeric character references, and third-party callbacks can
-/// send them too, so strip them at the one boundary every jsonb write crosses.
-/// Every other character (including emoji and other non-ASCII text) is kept.
-fn jsonb<T: Serialize>(value: &T) -> anyhow::Result<Json<serde_json::Value>> {
-    let mut value = serde_json::to_value(value)?;
-    strip_nul(&mut value);
-    Ok(Json(value))
-}
-
-fn strip_nul(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::String(text) => text.retain(|character| character != '\0'),
-        serde_json::Value::Array(items) => items.iter_mut().for_each(strip_nul),
-        serde_json::Value::Object(fields) => fields.values_mut().for_each(strip_nul),
-        _ => {}
-    }
-}
-
 /// The heading and kind a diagnosis needs for one rejected reading. The
 /// generated impression is not in the section map, so it gets a synthetic
 /// heading that the model can still point at.
@@ -1251,7 +1228,7 @@ fn run_status(value: String) -> anyhow::Result<RunStatus> {
 ///
 /// Postgres cannot represent U+0000 in `jsonb`: the text protocol encodes it as
 /// the `\u0000` escape, and jsonb rejects that with SQLSTATE 0A000
-/// (\"unsupported Unicode escape sequence\"). NULs are common in text pulled from
+/// ("unsupported Unicode escape sequence"). NULs are common in text pulled from
 /// PDFs and DOCX numeric character references, and third-party callbacks can
 /// send them too, so strip them at the one boundary every jsonb write crosses.
 /// Every other character (including emoji and other non-ASCII text) is kept.
