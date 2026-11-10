@@ -31,8 +31,9 @@ sections:
     dir: /models
     name: BAAI/bge-small-en-v1.5
 
-# llama.cpp serves the candidate-profile model. The image is the official
-# ggml-org/llama.cpp build; the initContainer below downloads the GGUF into
+# llama.cpp serves the candidate-profile model. The image is interpause/llama.cpp
+# (the ggml-org/llama.cpp name does not exist on Docker Hub); the initContainer
+# below downloads the GGUF into
 # the PVC before the server starts, so a fresh pod serves it without a
 # download while a resume uploads. A quantized 3B model answers in well under
 # a second on one core, versus minutes for the Ollama build it replaces. The
