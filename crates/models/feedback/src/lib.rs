@@ -163,13 +163,23 @@ impl FeedbackAnalyzer {
         {
             let request =
                 chat_request(model, markdown, original, section_id, section_heading, section_kind);
-            if let Ok(raw) = infer(client, url, request) {
-                if let Some(text) = usable(&raw) {
-                    return Diagnosis {
-                        text,
-                        engine: "ollama".to_owned(),
-                        model: model.clone(),
-                    };
+            match infer(client, url, request) {
+                Ok(raw) => {
+                    if let Some(text) = usable(&raw) {
+                        return Diagnosis {
+                            text,
+                            engine: "ollama".to_owned(),
+                            model: model.clone(),
+                        };
+                    }
+                    eprintln!(
+                        "feedback model output rejected for section {section_id} ({section_heading}, {}): {}",
+                        section_kind.label(),
+                        preview(&raw),
+                    );
+                }
+                Err(err) => {
+                    eprintln!("feedback model request failed for section {section_id}: {err}; using extraction");
                 }
             }
         }
@@ -379,6 +389,14 @@ fn extract(
             "The reading for “{heading}” was rejected, and the markdown does not contain a matching section. The detector probably missed this heading or folded its text into a neighbouring section. The model was not available, so this diagnosis is inferred from the rendering alone."
         )
     }
+}
+
+fn preview(text: &str) -> String {
+    let text = text.trim();
+    if text.is_empty() {
+        return "(empty)".to_owned();
+    }
+    truncate(text, 200)
 }
 
 fn truncate(text: &str, limit: usize) -> String {

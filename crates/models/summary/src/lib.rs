@@ -29,8 +29,22 @@ inside the JSON object. Always spell 'résumé' with its accents. Do not address
 recruiters, predict hiring outcomes, or use generic praise unsupported by the \
 document. Never say 'this candidate' or 'is presented'. If `is_resume` is true, \
 write about 120 words in four or five complete, grammatically correct plain-text \
-sentences in `profile_text`. Write in the first person as the system, addressing \
+sentences in `profile_text`. Résumés usually list roles in reverse chronological \
+order, newest first, so a job that appears first is the most recent one and a job \
+that appears last is the oldest. Read dates carefully: do not call a role current, \
+recent, or ongoing unless its date range actually says so, and do not assume a \
+role ended just because a later one starts. If a date is missing, vague, or \
+contradictory, say so rather than guessing. Speak as this app, addressing \
 the user directly as 'you' and using their first name only if it is available. \
+Do not refer to yourself in the first person, and do not refer to the user in \
+the third person. Do not start every sentence with 'you' — vary the phrasing \
+so it reads like a person talking, not a checklist. When it is natural, let \
+the subject be the person's work or their résumé instead. Do not repeat yourself: say each \
+point once, and do not restate a fact in different words just to fill space. \
+Do not blur the line between a job and a project: a role with an employer or \
+department is employment, and a project is something built on its own, often \
+without one. Do not call a job position a project, and do not call a project \
+a job. \
 Start by naming the strongest thing you found in their résumé and what it says \
 about their professional identity. Then walk through their experience and their \
 most distinctive skills, paraphrasing and synthesizing rather than copying bullet \
@@ -134,26 +148,38 @@ impl SummaryGenerator {
             && let Mode::Ollama { url, model, client } = &self.mode
         {
             let content = chat_request(parse, sections);
-            let raw = infer(client, url, model, &content).ok()?;
+            let raw = match infer(client, url, model, &content) {
+                Ok(raw) => raw,
+                Err(err) => {
+                    eprintln!("summary model request failed: {err}; using extraction");
+                    return None;
+                }
+            };
             let (is_resume, text) = match model_reply(&raw) {
                 Some((is_resume, text)) => (is_resume, text),
                 // Tolerate a model that ignores the JSON instruction.
                 None => (None, clean_output(&raw)),
             };
-            if usable_summary(&text, is_resume) {
-                // The card keys its "not a résumé" layout off this sentence.
-                let text = if is_resume == Some(false) && !text.starts_with(DECLINE_PREFIX) {
-                    format!("{DECLINE_PREFIX} {text}")
-                } else {
-                    text
-                };
-                return Some(ProfileSummary {
-                    text,
-                    engine: "ollama".to_owned(),
-                    model: model.clone(),
-                    feedback: None,
-                });
+            if !usable_summary(&text, is_resume) {
+                eprintln!(
+                    "summary model output rejected (is_resume={is_resume:?}, words={}): {}",
+                    text.split_whitespace().count(),
+                    preview(&text),
+                );
+                return None;
             }
+            // The card keys its "not a résumé" layout off this sentence.
+            let text = if is_resume == Some(false) && !text.starts_with(DECLINE_PREFIX) {
+                format!("{DECLINE_PREFIX} {text}")
+            } else {
+                text
+            };
+            return Some(ProfileSummary {
+                text,
+                engine: "ollama".to_owned(),
+                model: model.clone(),
+                feedback: None,
+            });
         }
         None
     }
@@ -360,7 +386,7 @@ fn usable_summary(text: &str, is_resume: Option<bool>) -> bool {
     }
 }
 
-fn extract(_parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
+fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
     if !looks_like_resume(sections) {
         return ProfileSummary {
             text: [
@@ -373,11 +399,48 @@ fn extract(_parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
             feedback: None,
         };
     }
+    let name = parse
+        .profile
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(name) = name {
+        lines.push(format!("{name} has a résumé the reader could open, but the local model is not available, so this summary is built from the section headings alone."));
+    } else {
+        lines.push("The reader found a résumé, but the local model is not available, so this summary is built from the section headings alone.".to_owned());
+    }
+    let present: Vec<String> = sections
+        .sections
+        .iter()
+        .filter(|section| !section.body.trim().is_empty())
+        .map(|section| section.kind.label().to_lowercase())
+        .collect();
+    if !present.is_empty() {
+        lines.push(format!(
+            "The document has {}.",
+            join_list(&present),
+        ));
+    }
+    lines.push("Upload another version or check the model setup if you want a fuller summary.".to_owned());
     ProfileSummary {
-        text: String::new(),
+        text: lines.join(" "),
         engine: ENGINE.to_owned(),
         model: FALLBACK_MODEL.to_owned(),
         feedback: None,
+    }
+}
+
+fn join_list(items: &[String]) -> String {
+    match items.len() {
+        0 => String::new(),
+        1 => items[0].to_owned(),
+        2 => format!("{} and {}", items[0], items[1]),
+        _ => {
+            let last = items.last().unwrap();
+            format!("{}, and {}", items[..items.len() - 1].join(", "), last)
+        }
     }
 }
 
@@ -394,6 +457,14 @@ fn looks_like_resume(sections: &SectionMap) -> bool {
                 | SectionKind::Volunteer
         ) && !section.body.trim().is_empty()
     })
+}
+
+fn preview(text: &str) -> String {
+    let text = text.trim();
+    if text.is_empty() {
+        return "(empty)".to_owned();
+    }
+    truncate(text, 200)
 }
 
 fn truncate(text: &str, limit: usize) -> String {
@@ -442,13 +513,29 @@ mod tests {
     }
 
     #[test]
-    fn fallback_addresses_the_owner_with_natural_grounded_encouragement() {
+    fn fallback_addresses_the_owner_and_lists_sections_when_the_model_is_off() {
         let (parse, sections) = fixture();
         let summary = SummaryGenerator::extractive().generate(&parse, &sections);
-        assert!(summary.text.is_empty());
+        assert!(!summary.text.is_empty());
+        assert!(summary.text.contains("Ada Lovelace"));
+        assert!(summary.text.contains("experience"));
+        assert!(summary.text.contains("skills"));
         assert!(!summary.text.contains("This candidate"));
         assert!(!summary.text.contains("is presented"));
         assert_eq!(summary.model, FALLBACK_MODEL);
+    }
+
+    #[test]
+    fn fallback_declines_when_nothing_substantive_is_present() {
+        let mut parse = ParseInput::empty(LayoutConfidence::Structural);
+        parse.profile.name = Some("Ada Lovelace".to_owned());
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "test".to_owned(),
+            sections: vec![],
+        };
+        let summary = SummaryGenerator::extractive().generate(&parse, &sections);
+        assert!(summary.text.starts_with(DECLINE_PREFIX));
     }
 
     #[test]
