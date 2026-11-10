@@ -1,4 +1,5 @@
-{{- if .Values.llama-cpp.enabled }}
+{{- with index .Values "llama-cpp" }}
+{{- if .enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,21 +29,21 @@ spec:
             - |
               set -eux
               mkdir -p /models
-              url="https://huggingface.co/ggml-org/llama3.2-3b-GGUF/resolve/main/{{ .Values.llama-cpp.model }}"
+              url="https://huggingface.co/ggml-org/llama3.2-3b-GGUF/resolve/main/{{ .model }}"
               curl --fail --location --retry 3 --retry-delay 2 \
-                --output "/models/{{ .Values.llama-cpp.model }}" "$url"
+                --output "/models/{{ .model }}" "$url"
           volumeMounts:
             - name: llama-cpp-models
               mountPath: /models
       containers:
         - name: llama-cpp
-          image: {{ .Values.llama-cpp.image }}
-          imagePullPolicy: {{ .Values.llama-cpp.pullPolicy }}
+          image: {{ .image }}
+          imagePullPolicy: {{ .pullPolicy }}
           ports:
             - containerPort: 8080
           args:
             - -m
-            - /models/{{ .Values.llama-cpp.model }}
+            - /models/{{ .model }}
             - --host
             - 0.0.0.0
             - --port
@@ -81,7 +82,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.llama-cpp.storage | default "3Gi" | quote }}
+      storage: {{ .storage | default "3Gi" | quote }}
 ---
 apiVersion: v1
 kind: Service
@@ -93,4 +94,5 @@ spec:
   ports:
     - port: 8080
       targetPort: 8080
+{{- end }}
 {{- end }}

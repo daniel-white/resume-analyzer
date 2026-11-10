@@ -78,16 +78,18 @@ spec:
             - name: SECTION_MODEL_NAME
               value: {{ .Values.sections.model.name | quote }}
             {{- end }}
-            {{- if .Values.llama-cpp.enabled }}
+            {{- with index .Values "llama-cpp" }}
+{{- if .enabled }}
             - name: SUMMARY_MODEL_URL
               value: http://llama-cpp:8080/v1/chat/completions
             - name: SUMMARY_MODEL_NAME
-              value: {{ .Values.llama-cpp.model | quote }}
+              value: {{ .model | quote }}
             - name: FEEDBACK_MODEL_URL
               value: http://llama-cpp:8080/v1/chat/completions
             - name: FEEDBACK_MODEL_NAME
-              value: {{ .Values.llama-cpp.model | quote }}
+              value: {{ .model | quote }}
             {{- end }}
+{{- end }}
           readinessProbe:
             httpGet:
               path: /health
