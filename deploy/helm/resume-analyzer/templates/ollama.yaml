@@ -20,7 +20,8 @@ spec:
       # starts, so a fresh pod serves it without a download while a resume
       # uploads. llama.cpp serves the OpenAI chat completions API.
       # busybox is the fetch sidecar: it is tiny, already used by
-      # Dockerfile.model, and its wget handles redirects and retries.
+      # Dockerfile.model, and its wget handles redirects and retries. It
+      # cannot validate TLS, so the download skips certificate checks.
       initContainers:
         - name: fetch-model
           image: busybox:stable-musl
@@ -31,8 +32,8 @@ spec:
             - |
               set -eux
               mkdir -p /models
-              url="https://huggingface.co/ggml-org/llama3.2-3b-GGUF/resolve/main/{{ .model }}"
-              wget --tries=3 --timeout=30 -O "/models/{{ .model }}" "$url"
+              wget --tries=3 --timeout=30 --no-check-certificate \
+                -O "/models/{{ .model }}" "{{ .url }}"
           volumeMounts:
             - name: llama-cpp-models
               mountPath: /models
