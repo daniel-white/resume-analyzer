@@ -518,9 +518,9 @@ impl Store {
              where id = $1 and status = 'uploaded'",
         )
         .bind(version_id)
-        .bind(Json(parse))
-        .bind(sections.cloned().map(Json))
-        .bind(profile_summary.cloned().map(Json))
+        .bind(jsonb(parse)?)
+        .bind(sections.map(|sections| jsonb(sections)).transpose()?)
+        .bind(profile_summary.map(|summary| jsonb(summary)).transpose()?)
         .execute(&mut *tx)
         .await?;
         let already = sqlx::query(
@@ -829,8 +829,8 @@ impl Store {
         )
         .bind(run_id)
         .bind(plugin_id)
-        .bind(Json(parse))
-        .bind(Json(verdict))
+        .bind(jsonb(parse)?)
+        .bind(jsonb(verdict)?)
         .fetch_optional(&mut *tx)
         .await?;
         let Some(row) = row else {
@@ -951,7 +951,7 @@ async fn enqueue(
     .bind(resume_id)
     .bind(version_id)
     .bind(name.as_str())
-    .bind(Json(payload))
+    .bind(jsonb(payload)?)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -963,6 +963,29 @@ fn status(value: String) -> anyhow::Result<ResumeStatus> {
 
 fn run_status(value: String) -> anyhow::Result<RunStatus> {
     RunStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad run status {value}"))
+}
+
+/// Serialize a value for a jsonb column, removing NUL codepoints first.
+///
+/// Postgres cannot represent U+0000 in `jsonb`: the text protocol encodes it as
+/// the `\u0000` escape, and jsonb rejects that with SQLSTATE 0A000
+/// (\"unsupported Unicode escape sequence\"). NULs are common in text pulled from
+/// PDFs and DOCX numeric character references, and third-party callbacks can
+/// send them too, so strip them at the one boundary every jsonb write crosses.
+/// Every other character (including emoji and other non-ASCII text) is kept.
+fn jsonb<T: Serialize>(value: &T) -> anyhow::Result<Json<serde_json::Value>> {
+    let mut value = serde_json::to_value(value)?;
+    strip_nul(&mut value);
+    Ok(Json(value))
+}
+
+fn strip_nul(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => text.retain(|character| character != '\0'),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(strip_nul),
+        serde_json::Value::Object(fields) => fields.values_mut().for_each(strip_nul),
+        _ => {}
+    }
 }
 
 fn vote_key(vote: SectionVote) -> &'static str {
@@ -1829,16 +1852,91 @@ mod tests {
         assert_eq!(parts.first(), Some(&"Zoë"));
     }
 
-    /// Demonstrates that a raw `\u` escape with a surrogate codepoint in a
-    /// jsonb value triggers Postgres's "unsupported Unicode escape sequence" error
-    /// (SQLSTATE 0A000). This test documents the failure mode rather than
-    /// attempting to prevent it in application code.
+    /// The real trigger for "unsupported Unicode escape sequence" is U+0000:
+    /// serde_json writes it as `\u0000`, and Postgres jsonb rejects that escape
+    /// (SQLSTATE 0A000). Lone surrogates fail earlier with a different error,
+    /// so this pins the failure mode the fix has to neutralise.
     #[tokio::test]
-    async fn postgresql_rejects_surrogate_unicode_escape() {
+    async fn postgresql_rejects_nul_escape_in_jsonb_text() {
         let store = Ephemeral::start().await.unwrap();
-        let result = sqlx::query("SELECT 1::jsonb WHERE 1 = ('\\u' || 'D83D' || '\\u' || 'DE00')::text")
+        let result = sqlx::query(r#"SELECT ('{"a":"\u0000"}')::jsonb"#)
             .fetch_one(store.pool())
             .await;
-        assert!(result.is_err());
+        let err = result.expect_err("jsonb must reject a NUL escape").to_string();
+        assert!(
+            err.contains("unsupported Unicode escape sequence"),
+            "the error should name the jsonb rejection: {err}"
+        );
+    }
+
+    /// Regression for the production failure: NULs in extracted or callback
+    /// text must not reach jsonb. They are stripped on the way in, and every
+    /// other Unicode character still round-trips intact.
+    #[tokio::test]
+    async fn nul_in_stored_text_is_stripped_before_jsonb() {
+        let store = Ephemeral::start().await.unwrap();
+        let user = domain::DEMO_USER_ID;
+        let resume_id = Uuid::new_v4();
+        let version_id = Uuid::new_v4();
+        store
+            .create_resume(user, resume_id, version_id, "nul.pdf", domain::PDF, "nul-key")
+            .await
+            .unwrap();
+
+        let mut parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        parse.profile.name = Some("Ada\0 Lovelace".to_owned());
+        parse.profile.sections = vec![domain::Section {
+            heading: "Experience\0".to_owned(),
+            body: "Wrote the first\0 algorithm.".to_owned(),
+            in_table: false,
+            in_text_box: false,
+            in_header: false,
+        }];
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "alias".to_owned(),
+            sections: vec![domain::DetectedSection {
+                id: "experience-1".to_owned(),
+                kind: domain::SectionKind::Experience,
+                heading: "Experience".to_owned(),
+                body: "Analytical engine\0 notes.".to_owned(),
+                confidence: 0.9,
+                feedback: None,
+            }],
+        };
+        let summary = domain::ProfileSummary {
+            text: "Ada\0 builds engines. 🚀".to_owned(),
+            engine: "extractive".to_owned(),
+            model: "section-extract-v1".to_owned(),
+            feedback: None,
+        };
+        store
+            .save_parse(version_id, &parse, Some(&sections), Some(&summary))
+            .await
+            .expect("NUL text must be stored, not rejected by jsonb");
+
+        let detail = store.detail(user, resume_id).await.unwrap().unwrap();
+        let stored = &detail.versions[0];
+        let stored_parse = stored.parse.as_ref().expect("parse stored");
+        assert_eq!(stored_parse.profile.name.as_deref(), Some("Ada Lovelace"));
+        assert!(!stored_parse.profile.sections[0].body.contains('\0'));
+        let stored_sections = stored.sections.as_ref().expect("sections stored");
+        assert_eq!(stored_sections.sections[0].body, "Analytical engine notes.");
+        let stored_summary = stored.profile_summary.as_ref().expect("summary stored");
+        assert_eq!(stored_summary.text, "Ada builds engines. 🚀");
+    }
+
+    #[test]
+    fn jsonb_serialization_strips_nul_and_keeps_other_unicode() {
+        let value = serde_json::json!({
+            "text": "café\0 🚀",
+            "nested": ["a\0b", { "c": "d\0e" }],
+            "number": 1,
+        });
+        let Json(stripped) = jsonb(&value).unwrap();
+        assert_eq!(stripped["text"], "café 🚀");
+        assert_eq!(stripped["nested"][0], "ab");
+        assert_eq!(stripped["nested"][1]["c"], "de");
+        assert_eq!(stripped["number"], 1);
     }
 }

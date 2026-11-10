@@ -35,6 +35,11 @@ args=(
   --set-file gateway.tls.cert=.local-certs/cert.pem
   --set-file gateway.tls.key=.local-certs/key.pem
   --set "gateway.mdns.targetIp=$ip"
+  # Dev tool UIs on the tools hostname (Mailpit at /mail, pgAdmin at
+  # /pgadmin, static landing page at /). Both `just dev` and `just demo`
+  # get the full tools page; pgAdmin is opt-in in values.yaml so this is
+  # what turns it on.
+  --set pgadmin.enabled=true
 )
 
 case "$mode" in
@@ -74,7 +79,7 @@ if [[ "$mode" == "demo" ]]; then
 fi
 
 echo
-echo "https://mail.resume.local"
+echo "https://tools.resume.local"
 if [[ "$mode" == "demo" ]]; then
   echo "https://app.resume.local"
   echo "ats providers stay inside the cluster (greenline, levr, workdaye, ash, smart_resume, indy_hackers_hiring, blast_track on :8080)"

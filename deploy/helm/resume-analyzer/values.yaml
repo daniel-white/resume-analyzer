@@ -49,7 +49,7 @@ postgres:
 # ── pgAdmin (dev / debugging only) ────────────────────────────────────
 #
 # Browser UI for browsing the local Postgres. Served at
-# https://pgadmin.resume.local via the Envoy Gateway. The server entry is
+# https://tools.resume.local/pgadmin via the Envoy Gateway. The server entry is
 # auto-configured from the ConfigMap in templates/pgadmin.yaml, so opening
 # the UI lands you already connected to the `resume` database. Login is
 # PGADMIN_DEFAULT_EMAIL / PGADMIN_DEFAULT_PASSWORD below; the master

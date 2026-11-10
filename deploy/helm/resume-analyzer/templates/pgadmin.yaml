@@ -1,8 +1,8 @@
 {{- if .Values.pgadmin.enabled }}
 #
 # pgAdmin UI for browsing the local Postgres. Dev/debug helper — not part
-# of the demo flow. Serves on https://pgadmin.resume.local via the Envoy
-# Gateway.
+# of the demo flow. Serves on https://tools.resume.local/pgadmin via the
+# Envoy Gateway.
 #
 # Servers are auto-configured from the ConfigMap below, so opening the UI
 # lands you already connected to the `resume` database. Login is
@@ -79,14 +79,32 @@ spec:
               value: {{ .Values.pgadmin.password | quote }}
             - name: PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED
               value: "False"
+            # WSGI sub-path mount. SCRIPT_NAME makes pgAdmin generate every
+            # internal URL (assets, redirects, login POST) prefixed with
+            # /pgadmin, so the HTTPRoute forwards `/pgadmin/*` verbatim with
+            # no URL rewrite. It also means the health probe must carry the
+            # prefix (below) — pgAdmin rejects requests whose path doesn't
+            # start with SCRIPT_NAME.
+            - name: SCRIPT_NAME
+              value: "/pgadmin"
             - name: PGADMIN_SERVER_JSON
               valueFrom:
                 configMapKeyRef:
                   name: {{ .Release.Name }}-pgadmin-servers
                   key: servers.json
+          # First boot initialises pgAdmin's internal SQLite DB and can take
+          # 30s+; a startupProbe keeps the liveness check from killing the
+          # container mid-initialisation. Once it passes, liveness/readiness
+          # take over.
+          startupProbe:
+            httpGet:
+              path: /pgadmin/misc/ping
+              port: 80
+            periodSeconds: 5
+            failureThreshold: 30
           readinessProbe:
             httpGet:
-              path: /misc/ping
+              path: /pgadmin/misc/ping
               port: 80
             periodSeconds: 5
             failureThreshold: 3
@@ -94,7 +112,7 @@ spec:
             timeoutSeconds: 3
           livenessProbe:
             httpGet:
-              path: /misc/ping
+              path: /pgadmin/misc/ping
               port: 80
             periodSeconds: 10
             failureThreshold: 3
@@ -128,14 +146,14 @@ metadata:
 spec:
   parentRefs:
     - name: resume-analyzer
-      sectionName: https
+      sectionName: tools
   hostnames:
-    - pgadmin.resume.local
+    - tools.resume.local
   rules:
     - matches:
         - path:
             type: PathPrefix
-            value: /
+            value: /pgadmin
       backendRefs:
         - name: pgadmin
           port: {{ .Values.pgadmin.port }}

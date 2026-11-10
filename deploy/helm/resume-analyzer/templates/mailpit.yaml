@@ -20,9 +20,16 @@ spec:
           ports:
             - containerPort: 1025
             - containerPort: 8025
+          env:
+            # Serve the UI under /mail so it shares the tools hostname with
+            # pgAdmin and the landing page. Mailpit prefixes every internal
+            # URL and asset path with this value, so the HTTPRoute forwards
+            # `/mail/*` verbatim — no Envoy URL rewrite needed.
+            - name: MP_WEBROOT
+              value: "/mail"
           readinessProbe:
             httpGet:
-              path: /readyz
+              path: /mail/readyz
               port: 8025
             periodSeconds: 5
 ---
@@ -40,3 +47,25 @@ spec:
     - name: ui
       port: 8025
       targetPort: 8025
+---
+{{- if .Values.gateway.enabled }}
+# Mailpit on the tools hostname: https://tools.resume.local/mail
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mail
+spec:
+  parentRefs:
+    - name: resume-analyzer
+      sectionName: tools
+  hostnames:
+    - tools.resume.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /mail
+      backendRefs:
+        - name: mailpit
+          port: 8025
+{{- end }}

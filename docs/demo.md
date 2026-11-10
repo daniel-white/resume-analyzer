@@ -9,7 +9,9 @@ The gateway serves one HTTPS origin:
 
 - `https://app.resume.local/`: compiled web app, port 3000.
 - `https://app.resume.local/api`: Rust API, port 8080.
-- `https://mail.resume.local/`: Mailpit, for sign-in links and analysis emails.
+- `https://tools.resume.local/`: dev tools landing page.
+- `https://tools.resume.local/mail`: Mailpit, for sign-in links and analysis emails.
+- `https://tools.resume.local/pgadmin`: pgAdmin (when `pgadmin.enabled=true`).
 
 Web server functions use `API_URL=http://api:8080` inside the cluster;
 session cookies stay on the browser's own origin. Re-running `just demo`

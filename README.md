@@ -23,7 +23,8 @@ This creates/reuses the `resume-analyzer` Minikube profile, sets up local TLS
 the API, web app, simulated ATS providers, and dependencies.
 
 - App: <https://app.resume.local>
-- Sign-in emails: <https://mail.resume.local>
+- Dev tools (Mailpit, pgAdmin): <https://tools.resume.local>
+- Sign-in emails: <https://tools.resume.local/mail>
 - Dependency health: <https://app.resume.local/health>
 
 Request a sign-in link in the app, open it from Mailpit, then upload a DOCX or PDF.

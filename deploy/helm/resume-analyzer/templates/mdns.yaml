@@ -2,7 +2,9 @@
 # Announces the demo hostnames at the minikube node IP. hostNetwork is
 # required, and it only reaches macOS Bonjour when the node is on the
 # host's L2 domain (the vfkit driver). The docker driver will not.
-{{- $script := printf "#!/bin/sh\nset -eu\napk add --no-cache avahi avahi-tools dbus >/dev/null\nmkdir -p /run/dbus\ndbus-daemon --system --fork\ncat >/etc/avahi/avahi-daemon.conf <<'EOF'\n[server]\nallow-interfaces=eth0\ndeny-interfaces=lo\nuse-ipv4=yes\nuse-ipv6=no\nenable-dbus=yes\n[publish]\npublish-addresses=yes\npublish-hinfo=no\npublish-workstation=no\n[reflector]\nenable-reflector=no\nEOF\navahi-daemon --no-rlimits --daemonize\nsleep 2\navahi-publish-address -R app.resume.local %s &\navahi-publish-address -R mail.resume.local %s &\nwait\n" .Values.gateway.mdns.targetIp .Values.gateway.mdns.targetIp }}
+{{- $ip := .Values.gateway.mdns.targetIp }}
+{{- $publish := printf "avahi-publish-address -R app.resume.local %s &\navahi-publish-address -R tools.resume.local %s &\n" $ip $ip }}
+{{- $script := printf "#!/bin/sh\nset -eu\napk add --no-cache avahi avahi-tools dbus >/dev/null\nmkdir -p /run/dbus\ndbus-daemon --system --fork\ncat >/etc/avahi/avahi-daemon.conf <<'EOF'\n[server]\nallow-interfaces=eth0\ndeny-interfaces=lo\nuse-ipv4=yes\nuse-ipv6=no\nenable-dbus=yes\n[publish]\npublish-addresses=yes\npublish-hinfo=no\npublish-workstation=no\n[reflector]\nenable-reflector=no\nEOF\navahi-daemon --no-rlimits --daemonize\nsleep 2\n%swait\n" $publish }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
