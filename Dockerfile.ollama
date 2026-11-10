@@ -1,6 +1,0 @@
-# syntax=docker/dockerfile:1
-#
-# The candidate-profile model is pulled at pod startup by an initContainer,
-# not baked in. This image is just Ollama retagged under our registry so the
-# chart can use pullPolicy: Never locally. See templates/ollama.yaml.
-FROM ollama/ollama:latest

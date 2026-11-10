@@ -84,13 +84,13 @@ spec:
             - name: SUMMARY_MODEL_URL
               value: http://ollama:11434
             - name: SUMMARY_MODEL_NAME
-              value: {{ .Values.ollama.model | quote }}
+              value: {{ index .Values.ollama.models 0 | quote }}
             - name: FEEDBACK_MODEL
               value: "auto"
             - name: FEEDBACK_MODEL_URL
               value: http://ollama:11434
             - name: FEEDBACK_MODEL_NAME
-              value: {{ .Values.ollama.model | quote }}
+              value: {{ index .Values.ollama.models 0 | quote }}
             {{- end }}
           readinessProbe:
             httpGet:

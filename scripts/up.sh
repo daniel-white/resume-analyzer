@@ -47,11 +47,14 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    "$root/scripts/bake.sh" --load api web model ollama
+    "$root/scripts/bake.sh" --load api web model
     # Named :dev loads can reuse Minikube's cached archive even after a new
     # Docker build. Stream the actual daemon images to replace that cache.
-    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev resume-analyzer/ollama:dev |
+    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
       minikube image load --profile "$profile" --overwrite -
+    # The Ollama image is pulled by the pod at runtime (pullPolicy: IfNotPresent);
+    # pre-pull it into Minikube so the first deploy does not block on a download.
+    minikube image pull --profile "$profile" ollama/ollama:0.40.16
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'

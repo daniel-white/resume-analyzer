@@ -27,7 +27,9 @@ spec:
             - |
               ollama serve &
               sleep 5
-              ollama pull "{{ .Values.ollama.model }}"
+              {{- range .Values.ollama.models }}
+              ollama pull "{{ . }}"
+              {{- end }}
               pkill ollama
           volumeMounts:
             - name: ollama-models

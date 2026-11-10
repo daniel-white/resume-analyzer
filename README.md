@@ -75,13 +75,14 @@ model. Output is bounded and rendered as plain text.
 
 ### Ollama in the cluster
 
-`just demo` bakes `Dockerfile.ollama` — Ollama with `qwen2.5:0.5b` already
-pulled — and deploys it as the `ollama` pod. The API reaches it at
-`ollama:11434`, so the model loads once at startup and is never downloaded while
-a resume uploads. Turn it off with `--set ollama.enabled=false` to fall back to
-the extractive summary; the worker still parses and stores a `profile_summary`
-row either way. Override the model with `--set ollama.model=<name>` and rebuild
-the image, or point the API at a different server with `SUMMARY_MODEL_URL`.
+`just demo` deploys the official `ollama/ollama:0.40.16` image as the `ollama`
+pod. An initContainer pulls the model into a PVC before the server starts, so a
+fresh pod serves it without a download while a resume uploads. The API reaches
+it at `ollama:11434`. Turn it off with `--set ollama.enabled=false` to fall back
+to the extractive summary; the worker still parses and stores a
+`profile_summary` row either way. Add or remove models with
+`--set ollama.models[0]=<name>` (Helm list syntax), or point the API at a
+different server with `SUMMARY_MODEL_URL`.
 
 ## Checks
 

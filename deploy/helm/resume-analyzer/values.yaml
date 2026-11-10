@@ -31,15 +31,18 @@ sections:
     dir: /models
     name: BAAI/bge-small-en-v1.5
 
-# Ollama serves the candidate-profile model. The image bakes the model in, so
-# the pod serves it without a download. The API reaches it in-cluster at
+# Ollama serves the candidate-profile model. The image is the official
+# ollama/ollama build, pinned to a version; the initContainer below pulls the
+# model into the PVC before the server starts, so a fresh pod serves it
+# without a download while a resume uploads. The API reaches it in-cluster at
 # ollama:11434. Turn this off to fall back to the extractive summary; the
 # worker still parses and stores a profile_summary row either way.
 ollama:
   enabled: true
-  image: resume-analyzer/ollama:dev
-  pullPolicy: Never
-  model: qwen2.5:0.5b
+  image: ollama/ollama:0.40.16
+  pullPolicy: IfNotPresent
+  models:
+    - qwen2.5:0.5b
   # Persistent volume for the pulled model. Keeps the ~350MB model out of the
   # container's writable layer and survives pod restarts, so the initContainer
   # pull only runs once per PVC.
