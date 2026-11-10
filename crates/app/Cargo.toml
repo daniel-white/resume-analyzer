@@ -21,6 +21,7 @@ auth = { path = "../auth" }
 axum = { version = "0.8", features = ["multipart"] }
 chrono = { version = "0.4", features = ["serde"] }
 domain = { path = "../domain" }
+feedback = { path = "../models/feedback" }
 futures-util = "0.3"
 feedback = { path = "../models/feedback" }
 mail = { path = "../mail" }

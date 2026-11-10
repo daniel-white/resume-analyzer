@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    CallbackPayload, EventName, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary, ResumeDetail,
-    ResumeStatus, ResumeSummary, RunPayload, RunStatus, RunView, SectionMap, SectionVote,
+    AnalyzeFeedbackPayload, CallbackPayload, EventName, FeedbackAnalysis, GenerateMarkdownPayload,
+    PROFILE_SUMMARY_ID, ParseInput, ProfileSummary, ResumeDetail, ResumeMarkdown, ResumeStatus,
+    ResumeSummary, RunPayload, RunStatus, RunView, SectionKind, SectionMap, SectionVote,
     UploadedPayload, Verdict, VersionDetail, VersionSummary,
 };
 use serde::Serialize;
@@ -557,6 +558,7 @@ impl Store {
         section_id: &str,
         vote: Option<SectionVote>,
     ) -> anyhow::Result<bool> {
+        let mut tx = self.pool.begin().await?;
         let owned: Option<Uuid> = sqlx::query_scalar(
             "select versions.id
              from versions join resumes on resumes.id = versions.resume_id
@@ -577,7 +579,7 @@ impl Store {
         .bind(version_id)
         .bind(section_id)
         .bind(PROFILE_SUMMARY_ID)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await?;
         if owned.is_none() {
             return Ok(false);
@@ -594,7 +596,7 @@ impl Store {
                 .bind(user_id)
                 .bind(section_id)
                 .bind(vote_key(vote))
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?;
             }
             None => {
@@ -605,11 +607,221 @@ impl Store {
                 .bind(version_id)
                 .bind(user_id)
                 .bind(section_id)
-                .execute(&self.pool)
+                .execute(&mut *tx)
                 .await?;
             }
         }
+        if vote == Some(SectionVote::Down) {
+            self.enqueue_feedback_tx(&mut tx, user_id, resume_id, version_id, section_id)
+                .await?;
+        }
+        tx.commit().await?;
         Ok(true)
+    }
+
+    /// Queue the diagnosis for one down vote. The markdown is built once per
+    /// version: before it exists this queues `GenerateMarkdown`, and the
+    /// markdown handler fans out to every down vote. Afterwards it queues
+    /// `AnalyzeFeedback` for this vote directly.
+    async fn enqueue_feedback_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        user_id: Uuid,
+        resume_id: Uuid,
+        version_id: Uuid,
+        section_id: &str,
+    ) -> anyhow::Result<()> {
+        let has_markdown: bool = sqlx::query_scalar(
+            "select resume_markdown is not null from versions where id = $1",
+        )
+        .bind(version_id)
+        .fetch_one(&mut **tx)
+        .await?;
+        if !has_markdown {
+            let pending: Option<Uuid> = sqlx::query_scalar(
+                "select id from outbox
+                 where version_id = $1 and name = $2 and dispatched_at is null
+                 limit 1",
+            )
+            .bind(version_id)
+            .bind(EventName::GenerateMarkdown.as_str())
+            .fetch_optional(&mut **tx)
+            .await?;
+            if pending.is_none() {
+                let payload = GenerateMarkdownPayload { version_id };
+                enqueue(
+                    tx,
+                    resume_id,
+                    version_id,
+                    EventName::GenerateMarkdown,
+                    &payload,
+                )
+                .await?;
+            }
+            return Ok(());
+        }
+        let target = feedback_target(tx, version_id, section_id).await?;
+        let payload = AnalyzeFeedbackPayload {
+            version_id,
+            user_id,
+            section_id: target.id,
+            section_heading: target.heading,
+            section_kind: target.kind,
+        };
+        enqueue(
+            tx,
+            resume_id,
+            version_id,
+            EventName::AnalyzeFeedback,
+            &payload,
+        )
+        .await
+    }
+
+    /// After the markdown is stored, diagnose every current down vote on the
+    /// version. Called by the `GenerateMarkdown` handler.
+    pub async fn enqueue_feedback_analyses(&self, version_id: Uuid) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let resume_id: Uuid =
+            sqlx::query_scalar("select resume_id from versions where id = $1 for update")
+                .bind(version_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        let rows = sqlx::query(
+            "select feedback.user_id, feedback.section_id
+             from section_feedback feedback
+             where feedback.version_id = $1 and feedback.vote = 'down'
+               and not exists (
+                   select 1 from feedback_analysis analysis
+                   where analysis.version_id = feedback.version_id
+                     and analysis.user_id = feedback.user_id
+                     and analysis.section_id = feedback.section_id
+                     and analysis.created_at >= feedback.updated_at
+               )
+             order by feedback.updated_at",
+        )
+        .bind(version_id)
+        .fetch_all(&mut *tx)
+        .await?;
+        for row in rows {
+            let user_id: Uuid = row.try_get("user_id")?;
+            let section_id: String = row.try_get("section_id")?;
+            let target = feedback_target(&mut tx, version_id, &section_id).await?;
+            let payload = AnalyzeFeedbackPayload {
+                version_id,
+                user_id,
+                section_id: target.id,
+                section_heading: target.heading,
+                section_kind: target.kind,
+            };
+            enqueue(
+                &mut tx,
+                resume_id,
+                version_id,
+                EventName::AnalyzeFeedback,
+                &payload,
+            )
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Store the markdown rendering. Idempotent: the first build wins, so a
+    /// retried `GenerateMarkdown` does not replace the text a diagnosis used.
+    pub async fn save_resume_markdown(
+        &self,
+        version_id: Uuid,
+        markdown: &ResumeMarkdown,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query(
+            "update versions set resume_markdown = $2
+             where id = $1 and resume_markdown is null",
+        )
+        .bind(version_id)
+        .bind(jsonb(markdown)?)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    /// The stored markdown, when it has been built.
+    pub async fn resume_markdown(
+        &self,
+        version_id: Uuid,
+    ) -> anyhow::Result<Option<ResumeMarkdown>> {
+        let row = sqlx::query("select resume_markdown from versions where id = $1")
+            .bind(version_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        Ok(row
+            .try_get::<Option<Json<ResumeMarkdown>>, _>("resume_markdown")?
+            .map(|json| json.0))
+    }
+
+    /// The parse and section reading a markdown build needs. Both are written
+    /// together by `save_parse`, so either both are present or neither is.
+    pub async fn parse_and_sections(
+        &self,
+        version_id: Uuid,
+    ) -> anyhow::Result<Option<(ParseInput, SectionMap)>> {
+        let row = sqlx::query("select parse, sections from versions where id = $1")
+            .bind(version_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let parse: Option<Json<ParseInput>> = row.try_get("parse")?;
+        let sections: Option<Json<SectionMap>> = row.try_get("sections")?;
+        Ok(match (parse, sections) {
+            (Some(parse), Some(sections)) => Some((parse.0, sections.0)),
+            _ => None,
+        })
+    }
+
+    /// Store one model diagnosis. Every thumbs down keeps its own row.
+    pub async fn save_feedback_analysis(
+        &self,
+        payload: &AnalyzeFeedbackPayload,
+        engine: &str,
+        model: &str,
+        diagnosis: &str,
+    ) -> anyhow::Result<FeedbackAnalysis> {
+        let id = Uuid::new_v4();
+        let created_at: DateTime<Utc> = sqlx::query_scalar(
+            "insert into feedback_analysis
+                 (id, version_id, user_id, section_id, section_heading, section_kind,
+                  model, engine, diagnosis)
+             values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             returning created_at",
+        )
+        .bind(id)
+        .bind(payload.version_id)
+        .bind(payload.user_id)
+        .bind(&payload.section_id)
+        .bind(&payload.section_heading)
+        .bind(payload.section_kind.label().to_lowercase())
+        .bind(model)
+        .bind(engine)
+        .bind(diagnosis)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(FeedbackAnalysis {
+            id,
+            version_id: payload.version_id,
+            user_id: payload.user_id,
+            section_id: payload.section_id.clone(),
+            section_heading: payload.section_heading.clone(),
+            section_kind: payload.section_kind,
+            model: model.to_owned(),
+            engine: engine.to_owned(),
+            diagnosis: diagnosis.to_owned(),
+            created_at,
+        })
     }
 
     pub async fn fanout(&self, version_id: Uuid, plugin_ids: &[&str]) -> anyhow::Result<()> {
@@ -959,6 +1171,76 @@ async fn enqueue(
 
 fn status(value: String) -> anyhow::Result<ResumeStatus> {
     ResumeStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad resume status {value}"))
+}
+
+/// Serialize a value for a jsonb column, removing NUL codepoints first.
+///
+/// Postgres cannot represent U+0000 in `jsonb`: the text protocol encodes it as
+/// the `\u0000` escape, and jsonb rejects that with SQLSTATE 0A000
+/// ("unsupported Unicode escape sequence"). NULs are common in text pulled from
+/// PDFs and DOCX numeric character references, and third-party callbacks can
+/// send them too, so strip them at the one boundary every jsonb write crosses.
+/// Every other character (including emoji and other non-ASCII text) is kept.
+fn jsonb<T: Serialize>(value: &T) -> anyhow::Result<Json<serde_json::Value>> {
+    let mut value = serde_json::to_value(value)?;
+    strip_nul(&mut value);
+    Ok(Json(value))
+}
+
+fn strip_nul(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::String(text) => text.retain(|character| character != '\0'),
+        serde_json::Value::Array(items) => items.iter_mut().for_each(strip_nul),
+        serde_json::Value::Object(fields) => fields.values_mut().for_each(strip_nul),
+        _ => {}
+    }
+}
+
+/// The heading and kind a diagnosis needs for one rejected reading. The
+/// generated impression is not in the section map, so it gets a synthetic
+/// heading that the model can still point at.
+struct FeedbackTarget {
+    id: String,
+    heading: String,
+    kind: SectionKind,
+}
+
+async fn feedback_target(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    version_id: Uuid,
+    section_id: &str,
+) -> anyhow::Result<FeedbackTarget> {
+    if section_id == PROFILE_SUMMARY_ID {
+        return Ok(FeedbackTarget {
+            id: section_id.to_owned(),
+            heading: "Profile impression".to_owned(),
+            kind: SectionKind::Summary,
+        });
+    }
+    let row = sqlx::query(
+        "select section ->> 'heading' as heading, section ->> 'kind' as kind
+         from versions,
+              jsonb_array_elements(coalesce(versions.sections -> 'sections', '[]'::jsonb))
+                  as section
+         where versions.id = $1 and section ->> 'id' = $2",
+    )
+    .bind(version_id)
+    .bind(section_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Ok(FeedbackTarget {
+            id: section_id.to_owned(),
+            heading: section_id.to_owned(),
+            kind: SectionKind::Other,
+        });
+    };
+    let kind: String = row.try_get("kind")?;
+    Ok(FeedbackTarget {
+        id: section_id.to_owned(),
+        heading: row.try_get::<Option<String>, _>("heading")?.unwrap_or_default(),
+        kind: SectionKind::parse(&kind).unwrap_or(SectionKind::Other),
+    })
 }
 
 fn run_status(value: String) -> anyhow::Result<RunStatus> {
@@ -1938,5 +2220,173 @@ mod tests {
         assert_eq!(stripped["nested"][0], "ab");
         assert_eq!(stripped["nested"][1]["c"], "de");
         assert_eq!(stripped["number"], 1);
+    }
+
+    /// A thumbs down queues the markdown build once, then a diagnosis for every
+    /// down vote on the version. A later thumbs down on the same version queues
+    /// only a diagnosis, and the stored history keeps each diagnosis.
+    #[tokio::test]
+    async fn thumbs_down_queues_markdown_then_one_diagnosis_per_vote() {
+        use domain::{DetectedSection, SectionKind};
+
+        let store = Ephemeral::start().await.unwrap();
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+        sqlx::query(
+            "insert into users (id, email) values ($1, 'owner@example.com'), ($2, 'other@example.com')",
+        )
+        .bind(owner)
+        .bind(other)
+        .execute(store.pool())
+        .await
+        .unwrap();
+        let resume = Uuid::new_v4();
+        let version = Uuid::new_v4();
+        store
+            .create_resume(owner, resume, version, "resume.pdf", domain::PDF, "file")
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Inferred);
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "alias".to_owned(),
+            sections: vec![DetectedSection {
+                id: "experience-1".to_owned(),
+                kind: SectionKind::Experience,
+                heading: "Experience".to_owned(),
+                body: "Built analytical engines.".to_owned(),
+                confidence: 0.9,
+                feedback: None,
+            }],
+        };
+        let summary = domain::ProfileSummary {
+            text: "A candidate.".to_owned(),
+            engine: "extractive".to_owned(),
+            model: "section-extract-v1".to_owned(),
+            feedback: None,
+        };
+        store
+            .save_parse(version, &parse, Some(&sections), Some(&summary))
+            .await
+            .unwrap();
+
+        // `save_parse` enqueues `ResumeParsed`, so drain it before the thumbs down.
+        let parsed = store.claim().await.unwrap().unwrap();
+        assert_eq!(parsed.name, EventName::ResumeParsed);
+        store.finish(parsed.id, parsed.token).await.unwrap();
+        assert!(store.claim().await.unwrap().is_none());
+
+        // The first thumbs down queues the markdown build, not a diagnosis.
+        store
+            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .await
+            .unwrap();
+        assert!(store.resume_markdown(version).await.unwrap().is_none());
+        let pending = store.claim().await.unwrap().unwrap();
+        assert_eq!(pending.name, EventName::GenerateMarkdown);
+        assert!(store.claim().await.unwrap().is_none());
+        store.finish(pending.id, pending.token).await.unwrap();
+
+        // A second thumbs down on the same version, before the markdown exists,
+        // queues another build rather than a diagnosis.
+        store
+            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .await
+            .unwrap();
+        let second = store.claim().await.unwrap().unwrap();
+        assert_eq!(second.name, EventName::GenerateMarkdown);
+        store.finish(second.id, second.token).await.unwrap();
+
+        // The worker builds the markdown once, then fans out to every pending
+        // down vote. The build is idempotent: a second write is a no-op.
+        let markdown = ResumeMarkdown {
+            text: "# Ada\n\n## Experience\n\nBuilt analytical engines.".to_owned(),
+            engine: "test".to_owned(),
+            model: "alias".to_owned(),
+        };
+        assert!(store.save_resume_markdown(version, &markdown).await.unwrap());
+        assert!(!store.save_resume_markdown(version, &markdown).await.unwrap());
+        let queued = store.claim().await.unwrap().unwrap();
+        assert_eq!(queued.name, EventName::AnalyzeFeedback);
+        let payload: AnalyzeFeedbackPayload =
+            serde_json::from_value(queued.payload.clone()).unwrap();
+        assert_eq!(payload.section_id, "experience-1");
+        assert_eq!(payload.section_heading, "Experience");
+        assert_eq!(payload.section_kind, SectionKind::Experience);
+        assert_eq!(payload.user_id, owner);
+        store.finish(queued.id, queued.token).await.unwrap();
+        assert!(store.claim().await.unwrap().is_none());
+
+        // Once the markdown exists, a thumbs down queues only a diagnosis.
+        store
+            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .await
+            .unwrap();
+        let later = store.claim().await.unwrap().unwrap();
+        assert_eq!(later.name, EventName::AnalyzeFeedback);
+        let later_payload: AnalyzeFeedbackPayload =
+            serde_json::from_value(later.payload.clone()).unwrap();
+        assert_eq!(later_payload.section_id, "experience-1");
+        assert_eq!(later_payload.section_heading, "Experience");
+        assert_eq!(later_payload.section_kind, SectionKind::Experience);
+        store.finish(later.id, later.token).await.unwrap();
+
+        // The impression thumbs down is diagnosed too, with a synthetic heading.
+        store
+            .vote_section(owner, resume, version, domain::PROFILE_SUMMARY_ID, Some(SectionVote::Down))
+            .await
+            .unwrap();
+        let impression_event = store.claim().await.unwrap().unwrap();
+        assert_eq!(impression_event.name, EventName::AnalyzeFeedback);
+        let impression: AnalyzeFeedbackPayload =
+            serde_json::from_value(impression_event.payload.clone()).unwrap();
+        assert_eq!(impression.section_id, domain::PROFILE_SUMMARY_ID);
+        assert_eq!(impression.section_heading, "Profile impression");
+        assert_eq!(impression.section_kind, SectionKind::Summary);
+        store.finish(impression_event.id, impression_event.token).await.unwrap();
+
+        // A different user's down vote is queued for its own diagnosis.
+        store
+            .vote_section(other, resume, version, "experience-1", Some(SectionVote::Down))
+            .await
+            .unwrap();
+        let other_event = store.claim().await.unwrap().unwrap();
+        assert_eq!(other_event.name, EventName::AnalyzeFeedback);
+        let other_payload: AnalyzeFeedbackPayload =
+            serde_json::from_value(other_event.payload.clone()).unwrap();
+        assert_eq!(other_payload.user_id, other);
+        assert_eq!(other_payload.section_id, "experience-1");
+        store.finish(other_event.id, other_event.token).await.unwrap();
+
+        assert!(store.claim().await.unwrap().is_none());
+
+        // Each stored diagnosis keeps its own row, keyed by user and section. The
+        // detail view does not carry these to the user-facing frontend; the
+        // worker reads them directly here.
+        store
+            .save_feedback_analysis(&impression, "extractive", "feedback-extract-v1", "Looks right.")
+            .await
+            .unwrap();
+        store
+            .save_feedback_analysis(
+                &payload,
+                "extractive",
+                "feedback-extract-v1",
+                "The heading is fine; the body stops too early.",
+            )
+            .await
+            .unwrap();
+        let analyses: Vec<(String, String)> = sqlx::query_as(
+            "select section_id, user_id from feedback_analysis where version_id = $1",
+        )
+        .bind(version)
+        .fetch_all(store.pool())
+        .await
+        .unwrap();
+        assert_eq!(analyses.len(), 2);
+        assert!(analyses.iter().any(|(section, _)| section == "experience-1"));
+        assert!(
+            analyses.iter().any(|(section, _)| section == domain::PROFILE_SUMMARY_ID)
+        );
     }
 }

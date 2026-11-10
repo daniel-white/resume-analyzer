@@ -145,12 +145,16 @@ pub async fn serve() {
     let summarizer = summary::SummaryGenerator::from_env();
     let warming = summarizer.clone();
     tokio::task::spawn_blocking(move || warming.warm());
+    let analyzer = feedback::FeedbackAnalyzer::from_env();
+    let warming = analyzer.clone();
+    tokio::task::spawn_blocking(move || warming.warm());
     let worker = Arc::new(
         Worker::new(store, objects, plugins, bus, callback)
             .endpoints(fleet.endpoints)
             .notifications(api.mail.clone(), &config.app_origin)
             .detector(detector)
-            .summarizer(summarizer),
+            .summarizer(summarizer)
+            .feedback(analyzer),
     );
     worker.spawn();
     let cleanup_api = api.clone();

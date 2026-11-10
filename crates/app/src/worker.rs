@@ -7,7 +7,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine;
-use domain::{AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile, RunPayload, UploadedPayload};
+use domain::{
+    AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
+    RunPayload, UploadedPayload,
+};
 use feedback::FeedbackAnalyzer;
 use plugins::structure;
 use sections::SectionDetector;
@@ -29,6 +32,7 @@ pub struct Worker {
     notifications: Option<(mail::Smtp, String)>,
     detector: SectionDetector,
     summarizer: SummaryGenerator,
+    feedback: FeedbackAnalyzer,
 }
 
 impl Worker {
@@ -50,6 +54,7 @@ impl Worker {
             notifications: None,
             detector: SectionDetector::heuristic(),
             summarizer: SummaryGenerator::extractive(),
+            feedback: FeedbackAnalyzer::extractive(),
         }
     }
 
@@ -63,6 +68,13 @@ impl Worker {
     /// The profile summary generator. Tests default to the offline extractor.
     pub fn summarizer(mut self, summarizer: SummaryGenerator) -> Self {
         self.summarizer = summarizer;
+        self
+    }
+
+    /// The feedback analyzer that diagnoses thumbs downs. Tests default to the
+    /// offline extractor.
+    pub fn feedback(mut self, feedback: FeedbackAnalyzer) -> Self {
+        self.feedback = feedback;
         self
     }
 
@@ -224,23 +236,60 @@ impl Worker {
         self.store.fanout(event.version_id, &ids).await
     }
 
+    /// Build the markdown rendering once, then diagnose every down vote that
+    /// was waiting for it.
     async fn generate_markdown(&self, event: &EventRecord) -> anyhow::Result<()> {
-        let parse = event.payload.clone();
-        let payload: GenerateMarkdownPayload = serde_json::from_value(parse)?;
-        let parse = self.summarizer.generate(&parse, &self.detector.detect_document(&self.objects.get(&payload.object_key).await?));
-        let markdown = self.feedback.markdown(&parse, &self.detector.detect_document(&self.objects.get(&payload.object_key).await?));
-        self.feedback.save_resume_markdown(payload.version_id, &markdown).await?;
-        self.feedback.enqueue_feedback_analyses(payload.version_id).await?;
-        Ok(())
+        let payload: GenerateMarkdownPayload = serde_json::from_value(event.payload.clone())?;
+        let Some((parse, sections)) = self.store.parse_and_sections(payload.version_id).await?
+        else {
+            return Ok(());
+        };
+        let analyzer = self.feedback.clone();
+        let markdown = tokio::task::spawn_blocking(move || analyzer.markdown(&parse, &sections))
+            .await?;
+        self.store
+            .save_resume_markdown(payload.version_id, &markdown)
+            .await?;
+        self.store
+            .enqueue_feedback_analyses(payload.version_id)
+            .await
     }
 
+    /// Compare the stored markdown with the original resume and store the
+    /// model's diagnosis of one rejected reading.
     async fn analyze_feedback(&self, event: &EventRecord) -> anyhow::Result<()> {
-        let parse = event.payload.clone();
-        let payload: AnalyzeFeedbackPayload = serde_json::from_value(parse)?;
-        let sections = self.detector.detect_document(&self.objects.get(&payload.section_id).await?);
-        let markdown = self.feedback.markdown(&payload, &sections);
-        self.feedback.save_resume_markdown(payload.version_id, &markdown).await?;
-        self.feedback.enqueue_feedback_analyses(payload.version_id).await?;
+        let payload: AnalyzeFeedbackPayload = serde_json::from_value(event.payload.clone())?;
+        let Some(markdown) = self.store.resume_markdown(payload.version_id).await? else {
+            // The markdown build has not run yet. Fail so the event is released
+            // and retried after it exists instead of diagnosing nothing.
+            anyhow::bail!("markdown not ready for version {}", payload.version_id);
+        };
+        let (object_key, media_type) = self.store.file_of(payload.version_id).await?;
+        let bytes = self.objects.get(&object_key).await?;
+        let original = plugins::document_lines(&ResumeFile {
+            media_type: &media_type,
+            bytes: &bytes,
+        })
+        .into_iter()
+        .map(|line| line.text)
+        .collect::<Vec<_>>()
+        .join("\n");
+        let analyzer = self.feedback.clone();
+        let section_id = payload.section_id.clone();
+        let heading = payload.section_heading.clone();
+        let kind = payload.section_kind;
+        let diagnosis = tokio::task::spawn_blocking(move || {
+            analyzer.analyze(&markdown.text, &original, &section_id, &heading, kind)
+        })
+        .await?;
+        self.store
+            .save_feedback_analysis(
+                &payload,
+                &diagnosis.engine,
+                &diagnosis.model,
+                &diagnosis.text,
+            )
+            .await?;
         Ok(())
     }
 
