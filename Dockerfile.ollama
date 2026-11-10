@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+#
+# Bake the default candidate-profile model into the Ollama image so the API pod
+# never downloads one while a resume is uploading. The Helm chart runs this
+# image directly; no initContainer or emptyDir is needed. Ollama stores the
+# pulled model under its default models directory, so a fresh container serves
+# it immediately.
+#
+# CPU only. qwen2.5:0.5b is the default SUMMARY_MODEL_NAME; override with
+# `docker buildx bake --set*` or the ollama.model value in values.yaml.
+ARG MODEL=qwen2.5:0.5b
+FROM ollama/ollama:latest
+ARG MODEL
+RUN ollama serve & sleep 5 && ollama pull "${MODEL}"

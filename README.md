@@ -73,6 +73,16 @@ UI. Resume text stays on the configured Ollama server; it is sent as JSON user
 data separate from fixed system instructions, with no tools available to the
 model. Output is bounded and rendered as plain text.
 
+### Ollama in the cluster
+
+`just demo` bakes `Dockerfile.ollama` — Ollama with `qwen2.5:0.5b` already
+pulled — and deploys it as the `ollama` pod. The API reaches it at
+`ollama:11434`, so the model loads once at startup and is never downloaded while
+a resume uploads. Turn it off with `--set ollama.enabled=false` to fall back to
+the extractive summary; the worker still parses and stores a `profile_summary`
+row either way. Override the model with `--set ollama.model=<name>` and rebuild
+the image, or point the API at a different server with `SUMMARY_MODEL_URL`.
+
 ## Checks
 
 ```sh

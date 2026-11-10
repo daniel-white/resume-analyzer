@@ -78,6 +78,14 @@ spec:
             - name: SECTION_MODEL_NAME
               value: {{ .Values.sections.model.name | quote }}
             {{- end }}
+            {{- if .Values.ollama.enabled }}
+            - name: SUMMARY_MODEL
+              value: "auto"
+            - name: SUMMARY_MODEL_URL
+              value: http://ollama:11434
+            - name: SUMMARY_MODEL_NAME
+              value: {{ .Values.ollama.model | quote }}
+            {{- end }}
           readinessProbe:
             httpGet:
               path: /health

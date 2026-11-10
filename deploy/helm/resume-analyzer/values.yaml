@@ -31,6 +31,16 @@ sections:
     dir: /models
     name: BAAI/bge-small-en-v1.5
 
+# Ollama serves the candidate-profile model. The image bakes the model in, so
+# the pod serves it without a download. The API reaches it in-cluster at
+# ollama:11434. Turn this off to fall back to the extractive summary; the
+# worker still parses and stores a profile_summary row either way.
+ollama:
+  enabled: true
+  image: resume-analyzer/ollama:dev
+  pullPolicy: Never
+  model: qwen2.5:0.5b
+
 gateway:
   enabled: true
   mdns:

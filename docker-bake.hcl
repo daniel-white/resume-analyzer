@@ -15,7 +15,7 @@ group "default" {
 }
 
 group "all" {
-  targets = ["api", "web", "providers", "model"]
+  targets = ["api", "web", "providers", "model", "ollama"]
 }
 
 target "api" {
@@ -28,6 +28,12 @@ target "model" {
   context    = "."
   dockerfile = "Dockerfile.model"
   tags       = ["${REGISTRY}/model:${TAG}"]
+}
+
+target "ollama" {
+  context    = "."
+  dockerfile = "Dockerfile.ollama"
+  tags       = ["${REGISTRY}/ollama:${TAG}"]
 }
 
 target "web" {

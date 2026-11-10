@@ -47,10 +47,10 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    "$root/scripts/bake.sh" --load api web model
+    "$root/scripts/bake.sh" --load api web model ollama
     # Named :dev loads can reuse Minikube's cached archive even after a new
     # Docker build. Stream the actual daemon images to replace that cache.
-    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
+    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev resume-analyzer/ollama:dev |
       minikube image load --profile "$profile" --overwrite -
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
