@@ -37,10 +37,15 @@ spec:
           volumeMounts:
             - name: llama-cpp-models
               mountPath: /models
-      # This image's server mode is `--server` with `--port`/`-m`/`-c`/`-ngl`
-      # below; it listens on :8080 and serves the OpenAI chat completions
-      # API. -ngl 0 keeps the 3B model on CPU, where it answers in well under
-      # a second.
+      # This image IS the llama.cpp server (entrypoint /app/llama-server); it
+      # serves the OpenAI chat completions API on :8080. --host 0.0.0.0 is
+      # required because the default is 127.0.0.1 and the Service reaches it by
+      # pod IP. -ngl 0 keeps the 3B model on CPU, where it answers in well
+      # under a second. GET /health returns 200 {"status":"ok"} once the model
+      # is loaded and 503 while it is still loading, which the readinessProbe
+      # below treats as "not ready" - the initContainer guarantees the GGUF is
+      # present before this container starts, so the server never exits for a
+      # missing model.
       containers:
         - name: llama-cpp
           image: {{ .image }}
@@ -48,9 +53,10 @@ spec:
           ports:
             - containerPort: 8080
           args:
-            - --server
             - -m
             - /models/{{ .model }}
+            - --host
+            - 0.0.0.0
             - --port
             - "8080"
             - -c

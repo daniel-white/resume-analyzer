@@ -31,9 +31,9 @@ sections:
     dir: /models
     name: BAAI/bge-small-en-v1.5
 
-# llama.cpp serves the candidate-profile model. The image is interpause/llama.cpp
-# (the ggml-org/llama.cpp name does not exist on Docker Hub); the initContainer
-# below downloads the GGUF into
+# llama.cpp serves the candidate-profile model. The image is the official
+# ghcr.io/ggml-org/llama.cpp:server build; the initContainer below downloads
+# the GGUF into
 # the PVC before the server starts, so a fresh pod serves it without a
 # download while a resume uploads. A quantized 3B model answers in well under
 # a second on one core, versus minutes for the Ollama build it replaces. The
@@ -41,10 +41,12 @@ sections:
 # path. The worker still parses and stores a profile_summary row either way.
 llama-cpp:
   enabled: true
-  # ggml-org/llama.cpp does not exist on Docker Hub. This image runs a real
-  # llama.cpp server on :8080 (verified: "HTTP server is listening") and is
-  # pulled by the pod at runtime; pre-pull it in up.sh.
-  image: interpause/llama.cpp:latest
+  # The official llama.cpp server image, published on GHCR. It IS the server
+  # (entrypoint /app/llama-server) and speaks the OpenAI chat completions API
+  # on :8080. Verified end-to-end against a live model: /v1/chat/completions
+  # returns choices[0].message.content exactly as the worker expects.
+  # ggml-org/llama.cpp does not exist on Docker Hub - only on GHCR.
+  image: ghcr.io/ggml-org/llama.cpp:server
   pullPolicy: IfNotPresent
   # The GGUF filename is also the model the server loads, so the container
   # args and the initContainer download target both use this value.
