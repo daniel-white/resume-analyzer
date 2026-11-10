@@ -52,9 +52,9 @@ case "$mode" in
     # Docker build. Stream the actual daemon images to replace that cache.
     docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
       minikube image load --profile "$profile" --overwrite -
-    # The Ollama image is pulled by the pod at runtime (pullPolicy: IfNotPresent);
+    # The llama.cpp image is pulled by the pod at runtime (pullPolicy: IfNotPresent);
     # pre-pull it into Minikube so the first deploy does not block on a download.
-    minikube image pull --profile "$profile" ollama/ollama:0.40.16
+    minikube image pull --profile "$profile" ggml-org/llama.cpp:latest
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'

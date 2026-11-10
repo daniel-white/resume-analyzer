@@ -15,7 +15,7 @@ group "default" {
 }
 
 group "all" {
-  targets = ["api", "web", "providers", "model", "ollama"]
+  targets = ["api", "web", "providers", "model"]
 }
 
 target "api" {

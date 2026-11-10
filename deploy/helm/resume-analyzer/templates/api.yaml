@@ -78,19 +78,15 @@ spec:
             - name: SECTION_MODEL_NAME
               value: {{ .Values.sections.model.name | quote }}
             {{- end }}
-            {{- if .Values.ollama.enabled }}
-            - name: SUMMARY_MODEL
-              value: "auto"
+            {{- if .Values.llama-cpp.enabled }}
             - name: SUMMARY_MODEL_URL
-              value: http://ollama:11434
+              value: http://llama-cpp:8080/v1/chat/completions
             - name: SUMMARY_MODEL_NAME
-              value: {{ index .Values.ollama.models 0 | quote }}
-            - name: FEEDBACK_MODEL
-              value: "auto"
+              value: {{ .Values.llama-cpp.model | quote }}
             - name: FEEDBACK_MODEL_URL
-              value: http://ollama:11434
+              value: http://llama-cpp:8080/v1/chat/completions
             - name: FEEDBACK_MODEL_NAME
-              value: {{ index .Values.ollama.models 0 | quote }}
+              value: {{ .Values.llama-cpp.model | quote }}
             {{- end }}
           readinessProbe:
             httpGet:
