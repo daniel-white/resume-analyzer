@@ -55,19 +55,15 @@ case "$mode" in
     # The llama.cpp image and the busybox fetch sidecar are pulled by the pod at
     # runtime (pullPolicy: IfNotPresent); pre-load both into Minikube so the
     # first deploy does not block on a download. The Minikube daemon cannot
-    # pull new blobs (containerd snapshotter), so stream them in via save|load.
-    # Only save images the host actually has: busybox:stable-musl is usually
-    # already in Minikube from a previous run, and docker save errors on a
-    # missing image.
-    to_load=()
-    for img in interpause/llama.cpp:latest busybox:stable-musl; do
-      if docker image inspect "$img" >/dev/null 2>&1; then
-        to_load+=("$img")
+    # pull new blobs (containerd snapshotter), so pull on the host and stream
+    # them in via save|load. Skip images already present in Minikube.
+    for img in ghcr.io/ggml-org/llama.cpp:server busybox:stable-musl; do
+      if minikube image list -p "$profile" 2>/dev/null | grep -q "$img"; then
+        continue
       fi
+      docker pull "$img"
+      docker save "$img" | minikube image load --profile "$profile" --overwrite -
     done
-    if ((${#to_load[@]} > 0)); then
-      docker save "${to_load[@]}" | minikube image load --profile "$profile" --overwrite -
-    fi
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
