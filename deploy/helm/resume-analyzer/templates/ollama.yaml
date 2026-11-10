@@ -1,5 +1,39 @@
 {{- with index .Values "llama-cpp" }}
 {{- if .enabled }}
+# The GGUF is baked into the model-llama image and loaded into the PVC by the
+# load-model Job below, so the server pod starts with the file already present
+# and never downloads it. The image is the official llama.cpp server build;
+# it serves the OpenAI chat completions API on :8080.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llama-cpp-load-model
+  labels:
+    app: llama-cpp
+spec:
+  # Restartable: re-run after a PVC swap or a failed download loads the GGUF
+  # again without touching the server. A second run is a no-op when the file is
+  # already present (cp -n skips it), so a re-deploy does not re-download.
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: llama-cpp
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: load-model
+          image: {{ .loadImage }}
+          imagePullPolicy: {{ .loadPullPolicy }}
+          command:
+            - /bin/cp
+            - -n
+            - /model/{{ .model }}
+            - {{ .dir }}/{{ .model }}
+          volumeMounts:
+            - name: llama-cpp-models
+              mountPath: {{ .dir }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,36 +50,8 @@ spec:
       labels:
         app: llama-cpp
     spec:
-      # Download the GGUF once into a shared emptyDir before the server
-      # starts, so a fresh pod serves it without a download while a resume
-      # uploads. llama.cpp serves the OpenAI chat completions API.
-      # busybox is the fetch sidecar: it is tiny, already used by
-      # Dockerfile.model, and its wget handles redirects and retries. It
-      # cannot validate TLS, so the download skips certificate checks.
-      initContainers:
-        - name: fetch-model
-          image: busybox:stable-musl
-          imagePullPolicy: IfNotPresent
-          command:
-            - sh
-            - -c
-            - |
-              set -eux
-              mkdir -p /models
-              wget --tries=3 --timeout=30 --no-check-certificate \
-                -O "/models/{{ .model }}" "{{ .url }}"
-          volumeMounts:
-            - name: llama-cpp-models
-              mountPath: /models
-      # This image IS the llama.cpp server (entrypoint /app/llama-server); it
-      # serves the OpenAI chat completions API on :8080. --host 0.0.0.0 is
-      # required because the default is 127.0.0.1 and the Service reaches it by
-      # pod IP. -ngl 0 keeps the 3B model on CPU, where it answers in well
-      # under a second. GET /health returns 200 {"status":"ok"} once the model
-      # is loaded and 503 while it is still loading, which the readinessProbe
-      # below treats as "not ready" - the initContainer guarantees the GGUF is
-      # present before this container starts, so the server never exits for a
-      # missing model.
+      # The server pod does not download anything. The load-model Job fills the
+      # PVC first; the readinessProbe below waits until the model is loaded.
       containers:
         - name: llama-cpp
           image: {{ .image }}
@@ -54,7 +60,7 @@ spec:
             - containerPort: 8080
           args:
             - -m
-            - /models/{{ .model }}
+            - {{ .dir }}/{{ .model }}
             - --host
             - 0.0.0.0
             - --port
@@ -71,8 +77,12 @@ spec:
             failureThreshold: 30
           volumeMounts:
             - name: llama-cpp-models
-              mountPath: /models
-              readOnly: true
+              mountPath: {{ .dir }}
+            {{- if .context }}
+          resources:
+            requests:
+              cpu: {{ .context | quote }}
+            {{- end }}
       volumes:
         - name: llama-cpp-models
           persistentVolumeClaim:

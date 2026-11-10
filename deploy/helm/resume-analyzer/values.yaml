@@ -55,6 +55,14 @@ llama-cpp:
   # quantized 3B file is ~2GB; the default keeps it out of the writable
   # layer and survives pod restarts.
   url: https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf
+  # Per-slot KV-cache budget, set via --kv-unified-per-slot. Was a shared
+  # pool of 2048, which is smaller than the system prompt alone (~1200
+  # tokens) and far smaller under concurrency: the "Context size has been
+  # exceeded" errors came from three slots holding ~1400/200/900 tokens =
+  # 2500 > 2048. 8192 is the model's native context and comfortably holds
+  # the prompt plus a full 12-section résumé. -np 2 gives two isolated slots;
+  # a third queues instead of erroring.
+  context: 8192
   storage: 3Gi
 
 gateway:
