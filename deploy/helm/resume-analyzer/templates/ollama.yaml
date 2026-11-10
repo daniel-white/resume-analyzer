@@ -15,6 +15,23 @@ spec:
       labels:
         app: ollama
     spec:
+      # Pull the model once into a shared emptyDir before the server starts,
+      # so a fresh pod serves it without a download while a resume uploads.
+      initContainers:
+        - name: pull-model
+          image: {{ .Values.ollama.image }}
+          imagePullPolicy: {{ .Values.ollama.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              ollama serve &
+              sleep 5
+              ollama pull "{{ .Values.ollama.model }}"
+              pkill ollama
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
       containers:
         - name: ollama
           image: {{ .Values.ollama.image }}
@@ -30,6 +47,12 @@ spec:
               port: 11434
             periodSeconds: 5
             failureThreshold: 30
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+      volumes:
+        - name: models
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
