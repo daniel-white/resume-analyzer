@@ -30,7 +30,7 @@ spec:
               ollama pull "{{ .Values.ollama.model }}"
               pkill ollama
           volumeMounts:
-            - name: models
+            - name: ollama-models
               mountPath: /root/.ollama
       containers:
         - name: ollama
@@ -48,11 +48,29 @@ spec:
             periodSeconds: 5
             failureThreshold: 30
           volumeMounts:
-            - name: models
+            - name: ollama-models
               mountPath: /root/.ollama
       volumes:
-        - name: models
-          emptyDir: {}
+        - name: ollama-models
+          persistentVolumeClaim:
+            claimName: ollama-models
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ollama-models
+  labels:
+    app: ollama
+  annotations:
+    # Keep the pulled model across `helm uninstall`/`helm install` cycles so a
+    # re-deploy does not force a re-download.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.ollama.storage | default "2Gi" | quote }}
 ---
 apiVersion: v1
 kind: Service

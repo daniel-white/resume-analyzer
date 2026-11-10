@@ -40,6 +40,10 @@ ollama:
   image: resume-analyzer/ollama:dev
   pullPolicy: Never
   model: qwen2.5:0.5b
+  # Persistent volume for the pulled model. Keeps the ~350MB model out of the
+  # container's writable layer and survives pod restarts, so the initContainer
+  # pull only runs once per PVC.
+  storage: 2Gi
 
 gateway:
   enabled: true
