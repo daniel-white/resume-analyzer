@@ -163,6 +163,10 @@ pub enum EventName {
     ResumeParsed,
     AtsRunRequested,
     AtsCallbackReceived,
+    /// Build the version's markdown rendering, once after the first thumbs down.
+    GenerateMarkdown,
+    /// Diagnose one thumbs down with the markdown and the original resume.
+    AnalyzeFeedback,
 }
 
 impl EventName {
@@ -172,6 +176,8 @@ impl EventName {
             Self::ResumeParsed => "ResumeParsed",
             Self::AtsRunRequested => "AtsRunRequested",
             Self::AtsCallbackReceived => "AtsCallbackReceived",
+            Self::GenerateMarkdown => "GenerateMarkdown",
+            Self::AnalyzeFeedback => "AnalyzeFeedback",
         }
     }
 
@@ -181,6 +187,8 @@ impl EventName {
             "ResumeParsed" => Self::ResumeParsed,
             "AtsRunRequested" => Self::AtsRunRequested,
             "AtsCallbackReceived" => Self::AtsCallbackReceived,
+            "GenerateMarkdown" => Self::GenerateMarkdown,
+            "AnalyzeFeedback" => Self::AnalyzeFeedback,
             _ => return None,
         })
     }
@@ -383,6 +391,27 @@ impl SectionKind {
             Self::Other => "Other",
         }
     }
+
+    /// Read the stored snake_case form. Unknown labels become `Other` so a
+    /// stored feedback row never fails to load.
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value {
+            "summary" => Self::Summary,
+            "experience" => Self::Experience,
+            "education" => Self::Education,
+            "skills" => Self::Skills,
+            "projects" => Self::Projects,
+            "certifications" => Self::Certifications,
+            "awards" => Self::Awards,
+            "languages" => Self::Languages,
+            "publications" => Self::Publications,
+            "volunteer" => Self::Volunteer,
+            "interests" => Self::Interests,
+            "contact" => Self::Contact,
+            "other" => Self::Other,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -425,6 +454,50 @@ pub struct ProfileSummary {
     /// The calling user's vote. Not stored inside the generated summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub feedback: Option<SectionVote>,
+}
+
+/// A markdown rendering of the detected sections. Built once per version,
+/// after the first thumbs down, so a feedback analysis reads the same sections
+/// the user saw instead of re-parsing the file.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResumeMarkdown {
+    pub text: String,
+    pub engine: String,
+    pub model: String,
+}
+
+/// Build a version's markdown rendering. Enqueued once per version.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateMarkdownPayload {
+    pub version_id: Uuid,
+}
+
+/// Diagnose one rejected reading. The worker pairs this with the stored
+/// markdown and the original resume text.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalyzeFeedbackPayload {
+    pub version_id: Uuid,
+    pub user_id: Uuid,
+    pub section_id: String,
+    pub section_heading: String,
+    pub section_kind: SectionKind,
+}
+
+/// One model diagnosis for a single thumbs down. A later thumbs down on the
+/// same version stores a new row; the history is kept so a user can see every
+/// diagnosis the model gave for every item they rejected.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeedbackAnalysis {
+    pub id: Uuid,
+    pub version_id: Uuid,
+    pub user_id: Uuid,
+    pub section_id: String,
+    pub section_heading: String,
+    pub section_kind: SectionKind,
+    pub model: String,
+    pub engine: String,
+    pub diagnosis: String,
+    pub created_at: DateTime<Utc>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

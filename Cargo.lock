@@ -105,6 +105,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "domain",
+ "feedback",
  "futures-util",
  "http-body-util",
  "mail",
@@ -1895,6 +1896,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e6853b52649d4ac5c0bd02320cddc5ba956bdb407c4b75a2c6b75bf51500f8c"
 dependencies = [
  "simd-adler32",
+]
+
+[[package]]
+name = "feedback"
+version = "0.1.0"
+dependencies = [
+ "domain",
+ "reqwest",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

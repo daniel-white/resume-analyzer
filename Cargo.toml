@@ -7,6 +7,7 @@ members = [
     "crates/storage",
     "crates/auth",
     "crates/mail",
+    "crates/models/feedback",
     "crates/models/sections",
     "crates/models/summary",
 ]

@@ -7,7 +7,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use base64::Engine;
-use domain::{Ats, EventName, EventRecord, ResumeFile, RunPayload, UploadedPayload};
+use domain::{AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile, RunPayload, UploadedPayload};
+use feedback::FeedbackAnalyzer;
 use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
@@ -141,6 +142,8 @@ impl Worker {
             EventName::ResumeParsed => self.parsed(event).await,
             EventName::AtsRunRequested => self.requested(event).await,
             EventName::AtsCallbackReceived => Ok(()),
+            EventName::GenerateMarkdown => self.generate_markdown(event).await,
+            EventName::AnalyzeFeedback => self.analyze_feedback(event).await,
         }
     }
 
@@ -219,6 +222,26 @@ impl Worker {
     async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {
         let ids: Vec<&str> = self.plugins.iter().map(|plugin| plugin.id()).collect();
         self.store.fanout(event.version_id, &ids).await
+    }
+
+    async fn generate_markdown(&self, event: &EventRecord) -> anyhow::Result<()> {
+        let parse = event.payload.clone();
+        let payload: GenerateMarkdownPayload = serde_json::from_value(parse)?;
+        let parse = self.summarizer.generate(&parse, &self.detector.detect_document(&self.objects.get(&payload.object_key).await?));
+        let markdown = self.feedback.markdown(&parse, &self.detector.detect_document(&self.objects.get(&payload.object_key).await?));
+        self.feedback.save_resume_markdown(payload.version_id, &markdown).await?;
+        self.feedback.enqueue_feedback_analyses(payload.version_id).await?;
+        Ok(())
+    }
+
+    async fn analyze_feedback(&self, event: &EventRecord) -> anyhow::Result<()> {
+        let parse = event.payload.clone();
+        let payload: AnalyzeFeedbackPayload = serde_json::from_value(parse)?;
+        let sections = self.detector.detect_document(&self.objects.get(&payload.section_id).await?);
+        let markdown = self.feedback.markdown(&payload, &sections);
+        self.feedback.save_resume_markdown(payload.version_id, &markdown).await?;
+        self.feedback.enqueue_feedback_analyses(payload.version_id).await?;
+        Ok(())
     }
 
     async fn requested(&self, event: &EventRecord) -> anyhow::Result<()> {
