@@ -53,10 +53,11 @@ case "$mode" in
     docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
       minikube image load --profile "$profile" --overwrite -
     # The llama.cpp image and the busybox fetch sidecar are pulled by the pod at
-    # runtime (pullPolicy: IfNotPresent); pre-pull both into Minikube so the
-    # first deploy does not block on a download.
-    minikube image pull --profile "$profile" ggml-org/llama.cpp:latest
-    minikube image pull --profile "$profile" busybox:stable-musl
+    # runtime (pullPolicy: IfNotPresent); pre-load both into Minikube so the
+    # first deploy does not block on a download. The Minikube daemon cannot
+    # pull new blobs (containerd snapshotter), so stream them in via save|load.
+    docker save interpause/llama.cpp:latest busybox:stable-musl |
+      minikube image load --profile "$profile" --overwrite -
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'

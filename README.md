@@ -75,13 +75,13 @@ text.
 
 ### llama.cpp in the cluster
 
-`just demo` deploys the official `ggml-org/llama.cpp` image as the `llama-cpp`
-pod. An initContainer downloads the GGUF into a PVC before the server starts,
-so a fresh pod serves it without a download while a resume uploads. A
-quantized 3B model answers in well under a second on one core. The API reaches
-it at `llama-cpp:8080` on the OpenAI chat completions path. The worker still
-parses and stores a `profile_summary` row either way. Point the API at a
-different server with `SUMMARY_MODEL_URL`.
+`just demo` deploys the `interpause/llama.cpp` image as the `llama-cpp` pod.
+(The `ggml-org/llama.cpp` name does not exist on Docker Hub.) An initContainer
+downloads the GGUF into a PVC before the server starts, so a fresh pod serves it
+without a download while a resume uploads. A quantized 3B model answers in well
+under a second on one core. The API reaches it at `llama-cpp:8080` on the OpenAI
+chat completions path. The worker still parses and stores a `profile_summary`
+row either way. Point the API at a different server with `SUMMARY_MODEL_URL`.
 
 ## Checks
 
