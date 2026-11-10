@@ -19,9 +19,11 @@ spec:
       # Download the GGUF once into a shared emptyDir before the server
       # starts, so a fresh pod serves it without a download while a resume
       # uploads. llama.cpp serves the OpenAI chat completions API.
+      # busybox is the fetch sidecar: it is tiny, already used by
+      # Dockerfile.model, and its wget handles redirects and retries.
       initContainers:
         - name: fetch-model
-          image: curlimages/curl:8.14.0
+          image: busybox:stable-musl
           imagePullPolicy: IfNotPresent
           command:
             - sh
@@ -30,8 +32,7 @@ spec:
               set -eux
               mkdir -p /models
               url="https://huggingface.co/ggml-org/llama3.2-3b-GGUF/resolve/main/{{ .model }}"
-              curl --fail --location --retry 3 --retry-delay 2 \
-                --output "/models/{{ .model }}" "$url"
+              wget --tries=3 --timeout=30 -O "/models/{{ .model }}" "$url"
           volumeMounts:
             - name: llama-cpp-models
               mountPath: /models

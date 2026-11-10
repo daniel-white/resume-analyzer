@@ -52,9 +52,11 @@ case "$mode" in
     # Docker build. Stream the actual daemon images to replace that cache.
     docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
       minikube image load --profile "$profile" --overwrite -
-    # The llama.cpp image is pulled by the pod at runtime (pullPolicy: IfNotPresent);
-    # pre-pull it into Minikube so the first deploy does not block on a download.
+    # The llama.cpp image and the busybox fetch sidecar are pulled by the pod at
+    # runtime (pullPolicy: IfNotPresent); pre-pull both into Minikube so the
+    # first deploy does not block on a download.
     minikube image pull --profile "$profile" ggml-org/llama.cpp:latest
+    minikube image pull --profile "$profile" busybox:stable-musl
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
