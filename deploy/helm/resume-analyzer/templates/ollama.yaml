@@ -1,19 +1,43 @@
 {{- with index .Values "llama-cpp" }}
 {{- if .enabled }}
 # The GGUF is baked into the model-llama image and loaded into the PVC by the
-# load-model Job below, so the server pod starts with the file already present
-# and never downloads it. The image is the official llama.cpp server build;
-# it serves the OpenAI chat completions API on :8080.
+# Job below, so the server pod starts with the file already present and never
+# downloads it. The image is the official llama.cpp server build; it serves
+# the OpenAI chat completions API on :8080.
+#
+# Ordering is hook-based: the PVC is created first (weight 10), then the
+# load-model Job runs (weight 20) and waits for it before the Deployment is
+# created (weight 30). `helm install`/`helm upgrade --wait` blocks until the
+# Job completes, so a fresh install does not start the server on an empty
+# volume. The Job is restartable: `cp -n` skips an already-present file, so a
+# re-deploy is a no-op rather than a re-download.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llama-cpp-models
+  labels:
+    app: llama-cpp
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .storage | default "3Gi" | quote }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
   name: llama-cpp-load-model
   labels:
     app: llama-cpp
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "20"
 spec:
-  # Restartable: re-run after a PVC swap or a failed download loads the GGUF
-  # again without touching the server. A second run is a no-op when the file is
-  # already present (cp -n skips it), so a re-deploy does not re-download.
   backoffLimit: 3
   template:
     metadata:
@@ -40,6 +64,9 @@ metadata:
   name: llama-cpp
   labels:
     app: llama-cpp
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "30"
 spec:
   replicas: 1
   selector:
@@ -78,37 +105,17 @@ spec:
           volumeMounts:
             - name: llama-cpp-models
               mountPath: {{ .dir }}
-            {{- if .context }}
-          resources:
-            requests:
-              cpu: {{ .context | quote }}
-            {{- end }}
       volumes:
         - name: llama-cpp-models
           persistentVolumeClaim:
             claimName: llama-cpp-models
 ---
 apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: llama-cpp-models
-  labels:
-    app: llama-cpp
-  annotations:
-    # Keep the downloaded GGUF across `helm uninstall`/`helm install` cycles
-    # so a re-deploy does not force a ~2GB re-download.
-    helm.sh/resource-policy: keep
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: {{ .storage | default "3Gi" | quote }}
----
-apiVersion: v1
 kind: Service
 metadata:
   name: llama-cpp
+  labels:
+    app: llama-cpp
 spec:
   selector:
     app: llama-cpp

@@ -30,6 +30,14 @@ target "model" {
   tags       = ["${REGISTRY}/model:${TAG}"]
 }
 
+# The candidate-profile GGUF. Baked once, then a Job loads it into the llama-cpp
+# PVC so the server pod never downloads it. See Dockerfile.model-llama.
+target "model-llama" {
+  context    = "."
+  dockerfile = "Dockerfile.model-llama"
+  tags       = ["${REGISTRY}/model-llama:${TAG}"]
+}
+
 target "web" {
   context    = "."
   dockerfile = "Dockerfile.web"

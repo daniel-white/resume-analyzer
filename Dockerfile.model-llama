@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1
+
+# The candidate-profile GGUF is baked into this image so a Job can load it into
+# the llama-cpp PVC once, instead of an initContainer downloading it on every
+# pod start. The section detector (Dockerfile.model) bakes its small ONNX files
+# the same way; this is the same pattern for the one large file. The Job runs
+# this image's /bin/cp into the volume, so a fresh pod serves the model without
+# a download while a resume uploads.
+FROM debian:bookworm-slim AS fetch
+ARG MODEL_REPO=hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF
+ARG MODEL_REVISION=main
+ARG MODEL_FILE=llama-3.2-3b-instruct-q4_k_m.gguf
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /model
+RUN set -eux; \
+    curl --fail --location --retry 3 --retry-delay 2 \
+      --output "${MODEL_FILE}" \
+      "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}"; \
+    test -s "${MODEL_FILE}"
+
+# The final image holds only the model file and a static cp. The Job runs it to
+# fill the PVC, so a full Debian userland would be dead weight.
+FROM busybox:stable-musl AS tool
+
+FROM scratch
+COPY --from=tool /bin/busybox /bin/cp
+COPY --from=fetch /model /model
