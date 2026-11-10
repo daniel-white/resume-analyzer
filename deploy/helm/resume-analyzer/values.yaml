@@ -40,7 +40,10 @@ sections:
 # path. The worker still parses and stores a profile_summary row either way.
 llama-cpp:
   enabled: true
-  image: ggml-org/llama.cpp:latest
+  # ggml-org/llama.cpp does not exist on Docker Hub. This image runs a real
+  # llama.cpp server on :8080 (verified: "HTTP server is listening") and is
+  # pulled by the pod at runtime; pre-pull it in up.sh.
+  image: interpause/llama.cpp:latest
   pullPolicy: IfNotPresent
   # The GGUF filename is also the model the server loads, so the container
   # args and the initContainer download target both use this value.

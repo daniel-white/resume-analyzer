@@ -37,6 +37,10 @@ spec:
           volumeMounts:
             - name: llama-cpp-models
               mountPath: /models
+      # This image's server mode is `--server` with `--port`/`-m`/`-c`/`-ngl`
+      # below; it listens on :8080 and serves the OpenAI chat completions
+      # API. -ngl 0 keeps the 3B model on CPU, where it answers in well under
+      # a second.
       containers:
         - name: llama-cpp
           image: {{ .image }}
@@ -44,10 +48,9 @@ spec:
           ports:
             - containerPort: 8080
           args:
+            - --server
             - -m
             - /models/{{ .model }}
-            - --host
-            - 0.0.0.0
             - --port
             - "8080"
             - -c
