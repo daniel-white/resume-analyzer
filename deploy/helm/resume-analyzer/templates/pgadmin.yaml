@@ -1,0 +1,142 @@
+{{- if .Values.pgadmin.enabled }}
+#
+# pgAdmin UI for browsing the local Postgres. Dev/debug helper — not part
+# of the demo flow. Serves on https://pgadmin.resume.local via the Envoy
+# Gateway.
+#
+# Servers are auto-configured from the ConfigMap below, so opening the UI
+# lands you already connected to the `resume` database. Login is
+# PGADMIN_DEFAULT_EMAIL / PGADMIN_DEFAULT_PASSWORD (values.yaml); the
+# master password gate is skipped via PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED
+# = false, so saved-server passwords unlock without a separate prompt.
+#
+# Uses the official dpage/pgadmin4 image, pulled at runtime like
+# postgres:17-alpine — no Helm-time dependency, no sub-chart.
+
+# ── server definitions ────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-pgadmin-servers
+  labels:
+    app: pgadmin
+    app.kubernetes.io/name: resume-analyzer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: pgadmin
+data:
+  servers.json: |
+    {
+      "Servers": {
+        {{ .Values.pgadmin.server.name | quote }}: {
+          "Name": {{ .Values.pgadmin.server.name | quote }},
+          "Group": "Servers",
+          "Host": {{ .Values.pgadmin.server.host | quote }},
+          "Port": {{ .Values.pgadmin.server.port }},
+          "SSLMode": "prefer",
+          "MaintenanceDB": {{ .Values.pgadmin.server.database | quote }},
+          "Username": {{ .Values.pgadmin.server.username | quote }},
+          "Password": {{ .Values.pgadmin.server.password | quote }}
+        }
+      }
+    }
+---
+# ── deployment ────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgadmin
+  labels:
+    app: pgadmin
+    app.kubernetes.io/name: resume-analyzer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: pgadmin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pgadmin
+  template:
+    metadata:
+      labels:
+        app: pgadmin
+        app.kubernetes.io/name: resume-analyzer
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: pgadmin
+    spec:
+      containers:
+        - name: pgadmin
+          image: {{ .Values.pgadmin.image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          env:
+            # dpage/pgadmin4 requires these exact var names (PGADMIN_EMAIL /
+            # PGADMIN_PASSWORD are the old names and no longer work).
+            - name: PGADMIN_DEFAULT_EMAIL
+              value: {{ .Values.pgadmin.email | quote }}
+            - name: PGADMIN_DEFAULT_PASSWORD
+              value: {{ .Values.pgadmin.password | quote }}
+            - name: PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED
+              value: "False"
+            - name: PGADMIN_SERVER_JSON
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ .Release.Name }}-pgadmin-servers
+                  key: servers.json
+          readinessProbe:
+            httpGet:
+              path: /misc/ping
+              port: 80
+            periodSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /misc/ping
+              port: 80
+            periodSeconds: 10
+            failureThreshold: 3
+            successThreshold: 1
+            timeoutSeconds: 3
+          resources: {}
+---
+# ── service ───────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgadmin
+  labels:
+    app: pgadmin
+spec:
+  selector:
+    app: pgadmin
+  ports:
+    - name: http
+      port: {{ .Values.pgadmin.port }}
+      targetPort: 80
+---
+# ── gateway route ─────────────────────────────────────────────────────
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: pgadmin
+  labels:
+    app.kubernetes.io/name: resume-analyzer
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  parentRefs:
+    - name: resume-analyzer
+      sectionName: https
+  hostnames:
+    - pgadmin.resume.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: pgadmin
+          port: {{ .Values.pgadmin.port }}
+{{- end }}

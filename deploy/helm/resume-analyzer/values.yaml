@@ -46,6 +46,33 @@ postgres:
   password: resume
   database: resume
 
+# ── pgAdmin (dev / debugging only) ────────────────────────────────────
+#
+# Browser UI for browsing the local Postgres. Served at
+# https://pgadmin.resume.local via the Envoy Gateway. The server entry is
+# auto-configured from the ConfigMap in templates/pgadmin.yaml, so opening
+# the UI lands you already connected to the `resume` database. Login is
+# PGADMIN_DEFAULT_EMAIL / PGADMIN_DEFAULT_PASSWORD below; the master
+# password gate is skipped via PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=false,
+# so saved-server passwords unlock without a separate prompt.
+#
+# Off by default — turn it on with `--set pgadmin.enabled=true`. The image
+# is pulled at runtime like postgres:17-alpine; no sub-chart, no Helm-time
+# dependency.
+pgadmin:
+  enabled: false
+  image: docker.io/dpage/pgadmin4:latest
+  port: 8080
+  email: admin@resume.dev
+  password: admin
+  server:
+    name: "Postgres (resume)"
+    host: postgres
+    port: 5432
+    database: resume
+    username: resume
+    password: resume
+
 localstack:
   image: localstack/localstack:4
 
