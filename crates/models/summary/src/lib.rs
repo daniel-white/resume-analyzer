@@ -1,9 +1,9 @@
 //! A small candidate-profile summary generated after the resume is parsed.
 //!
-//! Ollama loads a local instruction-tuned model on demand. The resume is sent
-//! as JSON in a user message, never interpolated into the system instructions.
-//! The model has no tools and its response is returned only as display text.
-//! An extractive fallback keeps the feature useful offline and in tests.
+//! A chat server generates the impression. The resume is sent as JSON in a
+//! user message, never interpolated into the system instructions. The model
+//! has no tools and its response is returned only as display text. An
+//! extractive fallback keeps the feature useful offline and in tests.
 
 use std::env;
 use std::sync::{Arc, OnceLock};
@@ -14,7 +14,13 @@ use serde::{Deserialize, Serialize};
 
 const ENGINE: &str = "extractive";
 const FALLBACK_MODEL: &str = "section-extract-v1";
-const DEFAULT_MODEL: &str = "qwen2.5:0.5b";
+/// The default chat endpoint is a llama.cpp server, which speaks the OpenAI
+/// chat completions API and serves a quantized model from one core in well
+/// under a second. `SUMMARY_MODEL_URL` is the full endpoint, base and path
+/// together; `SUMMARY_MODEL_NAME` overrides the model. There is no off
+/// switch: the summary always comes from the chat server.
+const DEFAULT_MODEL: &str = "llama3.2-3b-q4_k_m";
+const DEFAULT_URL: &str = "http://127.0.0.1:8080/v1/chat/completions";
 const MAX_OUTPUT_CHARS: usize = 2_000;
 const MAX_SECTION_CHARS: usize = 2_000;
 const MAX_SECTIONS: usize = 12;
@@ -76,8 +82,11 @@ inside a name. Do not add fake names; only use names supported by the document."
 #[derive(Clone)]
 enum Mode {
     Extractive,
-    Ollama {
-        url: String,
+    /// One standard chat interface. The endpoint and model both come from
+    /// configuration, so the same code talks to llama.cpp, Ollama, or any
+    /// other OpenAI-compatible server without a branch per provider.
+    Chat {
+        endpoint: String,
         model: String,
         client: reqwest::blocking::Client,
     },
@@ -91,7 +100,8 @@ pub struct SummaryGenerator {
 }
 
 impl SummaryGenerator {
-    /// Offline generation used by tests and when `SUMMARY_MODEL=off`.
+    /// Offline generation used by tests and by the default build, which has no
+    /// chat endpoint to reach.
     pub fn extractive() -> Self {
         Self {
             mode: Mode::Extractive,
@@ -99,28 +109,25 @@ impl SummaryGenerator {
         }
     }
 
-    /// Read `SUMMARY_MODEL`, `SUMMARY_MODEL_NAME`, and `SUMMARY_MODEL_URL`.
-    /// `auto` uses a local Ollama server and falls back if it cannot load.
+    /// Read `SUMMARY_MODEL_NAME` and `SUMMARY_MODEL_URL`. The summary always
+    /// comes from the configured chat endpoint, falling back to extraction
+    /// only when the endpoint cannot load. There is no off switch.
     pub fn from_env() -> Self {
-        let choice = env::var("SUMMARY_MODEL").unwrap_or_else(|_| "auto".to_owned());
-        if matches!(
-            choice.trim().to_ascii_lowercase().as_str(),
-            "off" | "none" | "extractive" | "disabled"
-        ) {
-            return Self::extractive();
-        }
-        let url =
-            env::var("SUMMARY_MODEL_URL").unwrap_or_else(|_| "http://127.0.0.1:11434".to_owned());
-        let model = env::var("SUMMARY_MODEL_NAME").unwrap_or_else(|_| DEFAULT_MODEL.to_owned());
+        let endpoint = env::var("SUMMARY_MODEL_URL")
+            .unwrap_or_else(|_| DEFAULT_URL.to_owned());
+        let model = env::var("SUMMARY_MODEL_NAME")
+            .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
+            .trim()
+            .to_owned();
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(120))
             .build();
         match client {
             Ok(client) => Self {
-                mode: Mode::Ollama {
-                    url: url.trim_end_matches('/').to_owned(),
-                    model: model.trim().to_owned(),
+                mode: Mode::Chat {
+                    endpoint,
+                    model,
                     client,
                 },
                 loaded: Arc::new(OnceLock::new()),
@@ -132,7 +139,8 @@ impl SummaryGenerator {
         }
     }
 
-    /// Ask Ollama to load and keep the model warm before the first upload.
+    /// Ask the chat server to load and keep the model warm before the first
+    /// upload, so the first request is not also the cold one.
     pub fn warm(&self) {
         let _ = self.model_available();
     }
@@ -147,53 +155,64 @@ impl SummaryGenerator {
         parse: &ParseInput,
         sections: &SectionMap,
     ) -> Option<ProfileSummary> {
-        if self.model_available()
-            && let Mode::Ollama { url, model, client } = &self.mode
-        {
-            let content = chat_request(parse, sections);
-            let raw = match infer(client, url, model, &content) {
-                Ok(raw) => raw,
-                Err(err) => {
-                    eprintln!("summary model request failed: {err}; using extraction");
-                    return None;
-                }
-            };
-            let (is_resume, text) = match model_reply(&raw) {
-                Some((is_resume, text)) => (is_resume, text),
-                // Tolerate a model that ignores the JSON instruction.
-                None => (None, clean_output(&raw)),
-            };
-            if !usable_summary(&text, is_resume) {
-                eprintln!(
-                    "summary model output rejected (is_resume={is_resume:?}, words={}): {}",
-                    text.split_whitespace().count(),
-                    preview(&text),
-                );
+        let Mode::Chat {
+            endpoint,
+            model,
+            client,
+        } = &self.mode
+        else {
+            return None;
+        };
+        if !self.model_available() {
+            return None;
+        }
+        let content = chat_request(parse, sections);
+        let raw = match infer(client, endpoint, model, &content) {
+            Ok(raw) => raw,
+            Err(err) => {
+                eprintln!("summary model request failed: {err}; using extraction");
                 return None;
             }
-            // The card keys its "not a résumé" layout off this sentence.
-            let text = if is_resume == Some(false) && !text.starts_with(DECLINE_PREFIX) {
-                format!("{DECLINE_PREFIX} {text}")
-            } else {
-                text
-            };
-            return Some(ProfileSummary {
-                text,
-                engine: "ollama".to_owned(),
-                model: model.clone(),
-                feedback: None,
-            });
+        };
+        let (is_resume, text) = match model_reply(&raw) {
+            Some((is_resume, text)) => (is_resume, text),
+            // Tolerate a model that ignores the JSON instruction.
+            None => (None, clean_output(&raw)),
+        };
+        if !usable_summary(&text, is_resume) {
+            eprintln!(
+                "summary model output rejected (is_resume={is_resume:?}, words={}): {}",
+                text.split_whitespace().count(),
+                preview(&text),
+            );
+            return None;
         }
-        None
+        // The card keys its "not a résumé" layout off this sentence.
+        let text = if is_resume == Some(false) && !text.starts_with(DECLINE_PREFIX) {
+            format!("{DECLINE_PREFIX} {text}")
+        } else {
+            text
+        };
+        Some(ProfileSummary {
+            text,
+            engine: "chat".to_owned(),
+            model: model.clone(),
+            feedback: None,
+        })
     }
 
     fn model_available(&self) -> bool {
-        let Mode::Ollama { url, model, client } = &self.mode else {
+        let Mode::Chat {
+            endpoint,
+            model,
+            client,
+        } = &self.mode
+        else {
             return false;
         };
         *self.loaded.get_or_init(|| {
             let content = "{\"resume\":{\"name\":\"Model warmup\",\"sections\":[]}}".to_owned();
-            match infer(client, url, model, &content) {
+            match infer(client, endpoint, model, &content) {
                 Ok(_) => true,
                 Err(err) => {
                     eprintln!("summary model unavailable: {err}; using extraction");
@@ -218,9 +237,9 @@ impl std::fmt::Debug for SummaryGenerator {
                 .field("engine", &ENGINE)
                 .field("model", &FALLBACK_MODEL)
                 .finish(),
-            Mode::Ollama { model, .. } => f
+            Mode::Chat { model, .. } => f
                 .debug_struct("SummaryGenerator")
-                .field("engine", &"ollama")
+                .field("engine", &"chat")
                 .field("model", model)
                 .finish(),
         }
@@ -245,13 +264,15 @@ struct SectionContent<'a> {
     text: String,
 }
 
+/// The standard OpenAI chat completions request. llama.cpp, Ollama's
+/// `/api/chat`, and any other compatible server all accept this shape; the
+/// only per-server difference is the endpoint, which comes from
+/// configuration.
 #[derive(Serialize)]
-struct OllamaChatRequest {
+struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
-    keep_alive: &'static str,
-    format: &'static str,
     options: ChatOptions,
 }
 
@@ -268,7 +289,12 @@ struct ChatOptions {
 }
 
 #[derive(Deserialize)]
-struct OllamaChatResponse {
+struct ChatResponse {
+    choices: Vec<ChatChoice>,
+}
+
+#[derive(Deserialize)]
+struct ChatChoice {
     message: ChatResponseMessage,
 }
 
@@ -300,11 +326,11 @@ fn chat_request(parse: &ParseInput, sections: &SectionMap) -> String {
 
 fn infer(
     client: &reqwest::blocking::Client,
-    url: &str,
+    endpoint: &str,
     model: &str,
     content: &str,
 ) -> Result<String, String> {
-    let request = OllamaChatRequest {
+    let request = ChatRequest {
         model: model.to_owned(),
         messages: vec![
             ChatMessage {
@@ -317,23 +343,24 @@ fn infer(
             },
         ],
         stream: false,
-        keep_alive: "30m",
-        format: "json",
         options: ChatOptions {
             temperature: 0.2,
             num_predict: 512,
         },
     };
     let response = client
-        .post(format!("{url}/api/chat"))
+        .post(endpoint)
         .json(&request)
         .send()
         .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|err| format!("Ollama chat: {err}"))?;
-    let response: OllamaChatResponse = response
+        .map_err(|err| format!("chat request to {endpoint}: {err}"))?;
+    let response: ChatResponse = response
         .json()
-        .map_err(|err| format!("decode Ollama chat: {err}"))?;
-    Ok(response.message.content)
+        .map_err(|err| format!("decode chat response from {endpoint}: {err}"))?;
+    let Some(choice) = response.choices.into_iter().next() else {
+        return Err(format!("chat response from {endpoint} had no choices"));
+    };
+    Ok(choice.message.content)
 }
 
 /// Extract `is_resume` and `profile_text` from the model response. Ollama is

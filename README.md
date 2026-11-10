@@ -57,31 +57,29 @@ After parsing, the worker creates a short candidate profile and stores it with
 that resume version. The details page labels it as a model impression and lets
 the signed-in user vote it up or down. Model code lives under `crates/models`.
 
-For local LLM summaries, install [Ollama](https://ollama.com/), pull the small
-default model, and start its server before the API:
+For local LLM summaries, run a llama.cpp server, which speaks the OpenAI chat
+completions API, and point the API at it:
 
 ```sh
-ollama pull qwen2.5:0.5b
-ollama serve
+llama-server -m llama3.2-3b-q4_k_m.gguf --host 127.0.0.1 --port 8080
 ```
 
-The API warms `qwen2.5:0.5b` at `http://127.0.0.1:11434` by default. Set
-`SUMMARY_MODEL_NAME` or `SUMMARY_MODEL_URL` to change that, or
-`SUMMARY_MODEL=off` to always use the deterministic extractive fallback. If the
-model cannot load or generate, the same fallback is used and identified in the
-UI. Resume text stays on the configured Ollama server; it is sent as JSON user
-data separate from fixed system instructions, with no tools available to the
-model. Output is bounded and rendered as plain text.
+The API warms `llama3.2-3b-q4_k_m` at `http://127.0.0.1:8080/v1/chat/completions`
+by default. Set `SUMMARY_MODEL_NAME` or `SUMMARY_MODEL_URL` to change that.
+If the model cannot load or generate, the deterministic extractive fallback
+is used and identified in the UI. Resume text stays on the configured chat
+server; it is sent as JSON user data separate from fixed system instructions,
+with no tools available to the model. Output is bounded and rendered as plain
+text.
 
-### Ollama in the cluster
+### llama.cpp in the cluster
 
-`just demo` deploys the official `ollama/ollama:0.40.16` image as the `ollama`
-pod. An initContainer pulls the model into a PVC before the server starts, so a
-fresh pod serves it without a download while a resume uploads. The API reaches
-it at `ollama:11434`. Turn it off with `--set ollama.enabled=false` to fall back
-to the extractive summary; the worker still parses and stores a
-`profile_summary` row either way. Add or remove models with
-`--set ollama.models[0]=<name>` (Helm list syntax), or point the API at a
+`just demo` deploys the official `ggml-org/llama.cpp` image as the `llama-cpp`
+pod. An initContainer downloads the GGUF into a PVC before the server starts,
+so a fresh pod serves it without a download while a resume uploads. A
+quantized 3B model answers in well under a second on one core. The API reaches
+it at `llama-cpp:8080` on the OpenAI chat completions path. The worker still
+parses and stores a `profile_summary` row either way. Point the API at a
 different server with `SUMMARY_MODEL_URL`.
 
 ## Checks

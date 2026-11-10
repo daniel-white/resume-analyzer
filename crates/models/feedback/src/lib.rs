@@ -1,10 +1,10 @@
 //! Diagnoses a thumbs down on a model reading.
 //!
 //! The worker builds a markdown rendering of the detected sections, then asks
-//! a local Ollama model to compare that rendering with the original resume and
-//! explain what the reading got wrong. The resume is sent as JSON data, never
-//! interpolated into the system instructions. An offline fallback keeps the
-//! feature useful in tests and without a model.
+//! a chat server to compare that rendering with the original resume and
+//! explain what the reading got wrong. The resume is sent as JSON data,
+//! never interpolated into the system instructions. An offline fallback keeps
+//! the feature useful in tests and without a model.
 
 use std::env;
 use std::sync::{Arc, OnceLock};
@@ -15,7 +15,13 @@ use serde::{Deserialize, Serialize};
 
 const ENGINE: &str = "extractive";
 const FALLBACK_MODEL: &str = "feedback-extract-v1";
-const DEFAULT_MODEL: &str = "qwen2.5:0.5b";
+/// The default chat endpoint is a llama.cpp server, which speaks the OpenAI
+/// chat completions API and serves a quantized model from one core in well
+/// under a second. `FEEDBACK_MODEL_URL` is the full endpoint, base and path
+/// together; `FEEDBACK_MODEL_NAME` overrides the model. There is no off
+/// switch: the diagnosis always comes from the chat server.
+const DEFAULT_MODEL: &str = "llama3.2-3b-q4_k_m";
+const DEFAULT_URL: &str = "http://127.0.0.1:8080/v1/chat/completions";
 const MAX_OUTPUT_CHARS: usize = 4_000;
 const MAX_SECTION_CHARS: usize = 4_000;
 const MAX_SECTIONS: usize = 20;
@@ -37,8 +43,11 @@ is accurate and the rejection looks subjective, say so plainly. Always spell \
 #[derive(Clone)]
 enum Mode {
     Extractive,
-    Ollama {
-        url: String,
+    /// One standard chat interface. The endpoint and model both come from
+    /// configuration, so the same code talks to llama.cpp, Ollama, or any
+    /// other OpenAI-compatible server without a branch per provider.
+    Chat {
+        endpoint: String,
         model: String,
         client: reqwest::blocking::Client,
     },
@@ -60,7 +69,8 @@ pub struct FeedbackAnalyzer {
 }
 
 impl FeedbackAnalyzer {
-    /// Offline diagnosis used by tests and when `FEEDBACK_MODEL=off`.
+    /// Offline diagnosis used by tests and by the default build, which has no
+    /// chat endpoint to reach.
     pub fn extractive() -> Self {
         Self {
             mode: Mode::Extractive,
@@ -68,28 +78,25 @@ impl FeedbackAnalyzer {
         }
     }
 
-    /// Read `FEEDBACK_MODEL`, `FEEDBACK_MODEL_NAME`, and `FEEDBACK_MODEL_URL`.
-    /// `auto` uses a local Ollama server and falls back if it cannot load.
+    /// Read `FEEDBACK_MODEL_NAME` and `FEEDBACK_MODEL_URL`. The diagnosis
+    /// always comes from the configured chat endpoint, falling back to
+    /// extraction only when the endpoint cannot load. There is no off switch.
     pub fn from_env() -> Self {
-        let choice = env::var("FEEDBACK_MODEL").unwrap_or_else(|_| "auto".to_owned());
-        if matches!(
-            choice.trim().to_ascii_lowercase().as_str(),
-            "off" | "none" | "extractive" | "disabled"
-        ) {
-            return Self::extractive();
-        }
-        let url =
-            env::var("FEEDBACK_MODEL_URL").unwrap_or_else(|_| "http://127.0.0.1:11434".to_owned());
-        let model = env::var("FEEDBACK_MODEL_NAME").unwrap_or_else(|_| DEFAULT_MODEL.to_owned());
+        let endpoint = env::var("FEEDBACK_MODEL_URL")
+            .unwrap_or_else(|_| DEFAULT_URL.to_owned());
+        let model = env::var("FEEDBACK_MODEL_NAME")
+            .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
+            .trim()
+            .to_owned();
         let client = reqwest::blocking::Client::builder()
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(90))
             .build();
         match client {
             Ok(client) => Self {
-                mode: Mode::Ollama {
-                    url: url.trim_end_matches('/').to_owned(),
-                    model: model.trim().to_owned(),
+                mode: Mode::Chat {
+                    endpoint,
+                    model,
                     client,
                 },
                 loaded: Arc::new(OnceLock::new()),
@@ -101,7 +108,8 @@ impl FeedbackAnalyzer {
         }
     }
 
-    /// Ask Ollama to load and keep the model warm before the first thumbs down.
+    /// Ask the chat server to load and keep the model warm before the first
+    /// thumbs down, so the first diagnosis is not also the cold one.
     pub fn warm(&self) {
         let _ = self.model_available();
     }
@@ -158,29 +166,50 @@ impl FeedbackAnalyzer {
         section_heading: &str,
         section_kind: SectionKind,
     ) -> Diagnosis {
-        if self.model_available()
-            && let Mode::Ollama { url, model, client } = &self.mode
-        {
-            let request =
-                chat_request(model, markdown, original, section_id, section_heading, section_kind);
-            match infer(client, url, request) {
-                Ok(raw) => {
-                    if let Some(text) = usable(&raw) {
-                        return Diagnosis {
-                            text,
-                            engine: "ollama".to_owned(),
-                            model: model.clone(),
-                        };
-                    }
-                    eprintln!(
-                        "feedback model output rejected for section {section_id} ({section_heading}, {}): {}",
-                        section_kind.label(),
-                        preview(&raw),
-                    );
+        let Mode::Chat {
+            endpoint,
+            model,
+            client,
+        } = &self.mode
+        else {
+            return Diagnosis {
+                text: extract(markdown, original, section_heading, section_kind),
+                engine: ENGINE.to_owned(),
+                model: FALLBACK_MODEL.to_owned(),
+            };
+        };
+        if !self.model_available() {
+            return Diagnosis {
+                text: extract(markdown, original, section_heading, section_kind),
+                engine: ENGINE.to_owned(),
+                model: FALLBACK_MODEL.to_owned(),
+            };
+        }
+        let request = chat_request(
+            model,
+            markdown,
+            original,
+            section_id,
+            section_heading,
+            section_kind,
+        );
+        match infer(client, endpoint, request) {
+            Ok(raw) => {
+                if let Some(text) = usable(&raw) {
+                    return Diagnosis {
+                        text,
+                        engine: "chat".to_owned(),
+                        model: model.clone(),
+                    };
                 }
-                Err(err) => {
-                    eprintln!("feedback model request failed for section {section_id}: {err}; using extraction");
-                }
+                eprintln!(
+                    "feedback model output rejected for section {section_id} ({section_heading}, {}): {}",
+                    section_kind.label(),
+                    preview(&raw),
+                );
+            }
+            Err(err) => {
+                eprintln!("feedback model request failed for section {section_id}: {err}; using extraction");
             }
         }
         Diagnosis {
@@ -191,31 +220,24 @@ impl FeedbackAnalyzer {
     }
 
     fn model_available(&self) -> bool {
-        let Mode::Ollama { url, model, client } = &self.mode else {
+        let Mode::Chat {
+            endpoint,
+            model,
+            client,
+        } = &self.mode
+        else {
             return false;
         };
         *self.loaded.get_or_init(|| {
-            let request = OllamaChatRequest {
-                model: model.clone(),
-                messages: vec![
-                    ChatMessage {
-                        role: "system".to_owned(),
-                        content: SYSTEM_PROMPT.to_owned(),
-                    },
-                    ChatMessage {
-                        role: "user".to_owned(),
-                        content: "{\"markdown\":\"\",\"original\":\"\",\"rejected\":{\"heading\":\"warmup\"}}"
-                            .to_owned(),
-                    },
-                ],
-                stream: false,
-                keep_alive: "30m",
-                options: ChatOptions {
-                    temperature: 0.0,
-                    num_predict: 1,
-                },
-            };
-            match infer(client, url, request) {
+            let request = chat_request(
+                model,
+                "",
+                "",
+                "warmup",
+                "warmup",
+                SectionKind::Summary,
+            );
+            match infer(client, endpoint, request) {
                 Ok(_) => true,
                 Err(err) => {
                     eprintln!("feedback model unavailable: {err}; using extraction");
@@ -240,9 +262,9 @@ impl std::fmt::Debug for FeedbackAnalyzer {
                 .field("engine", &ENGINE)
                 .field("model", &FALLBACK_MODEL)
                 .finish(),
-            Mode::Ollama { model, .. } => f
+            Mode::Chat { model, .. } => f
                 .debug_struct("FeedbackAnalyzer")
-                .field("engine", &"ollama")
+                .field("engine", &"chat")
                 .field("model", model)
                 .finish(),
         }
@@ -263,12 +285,15 @@ struct Rejected<'a> {
     kind: SectionKind,
 }
 
+/// The standard OpenAI chat completions request. llama.cpp, Ollama's
+/// `/api/chat`, and any other compatible server all accept this shape; the
+/// only per-server difference is the endpoint, which comes from
+/// configuration.
 #[derive(Serialize)]
-struct OllamaChatRequest {
+struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     stream: bool,
-    keep_alive: &'static str,
     options: ChatOptions,
 }
 
@@ -285,7 +310,12 @@ struct ChatOptions {
 }
 
 #[derive(Deserialize)]
-struct OllamaChatResponse {
+struct ChatResponse {
+    choices: Vec<ChatChoice>,
+}
+
+#[derive(Deserialize)]
+struct ChatChoice {
     message: ChatResponseMessage,
 }
 
@@ -301,7 +331,7 @@ fn chat_request(
     section_id: &str,
     section_heading: &str,
     section_kind: SectionKind,
-) -> OllamaChatRequest {
+) -> ChatRequest {
     let data = FeedbackData {
         markdown: truncate(markdown, MAX_SECTION_CHARS * 4),
         original: truncate(original, MAX_SECTION_CHARS * 4),
@@ -312,7 +342,7 @@ fn chat_request(
         },
     };
     let content = serde_json::to_string(&data).expect("feedback data serializes");
-    OllamaChatRequest {
+    ChatRequest {
         model: model.to_owned(),
         messages: vec![
             ChatMessage {
@@ -325,7 +355,6 @@ fn chat_request(
             },
         ],
         stream: false,
-        keep_alive: "30m",
         options: ChatOptions {
             temperature: 0.2,
             num_predict: 300,
@@ -335,19 +364,22 @@ fn chat_request(
 
 fn infer(
     client: &reqwest::blocking::Client,
-    url: &str,
-    request: OllamaChatRequest,
+    endpoint: &str,
+    request: ChatRequest,
 ) -> Result<String, String> {
     let response = client
-        .post(format!("{url}/api/chat"))
+        .post(endpoint)
         .json(&request)
         .send()
         .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|err| format!("Ollama chat: {err}"))?;
-    let response: OllamaChatResponse = response
+        .map_err(|err| format!("chat request to {endpoint}: {err}"))?;
+    let response: ChatResponse = response
         .json()
-        .map_err(|err| format!("decode Ollama chat: {err}"))?;
-    Ok(clean_output(&response.message.content))
+        .map_err(|err| format!("decode chat response from {endpoint}: {err}"))?;
+    let Some(choice) = response.choices.into_iter().next() else {
+        return Err(format!("chat response from {endpoint} had no choices"));
+    };
+    Ok(clean_output(&choice.message.content))
 }
 
 fn clean_output(output: &str) -> String {

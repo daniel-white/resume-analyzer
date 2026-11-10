@@ -1,87 +1,96 @@
-{{- if .Values.ollama.enabled }}
+{{- if .Values.llama-cpp.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ollama
+  name: llama-cpp
   labels:
-    app: ollama
+    app: llama-cpp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ollama
+      app: llama-cpp
   template:
     metadata:
       labels:
-        app: ollama
+        app: llama-cpp
     spec:
-      # Pull the model once into a shared emptyDir before the server starts,
-      # so a fresh pod serves it without a download while a resume uploads.
+      # Download the GGUF once into a shared emptyDir before the server
+      # starts, so a fresh pod serves it without a download while a resume
+      # uploads. llama.cpp serves the OpenAI chat completions API.
       initContainers:
-        - name: pull-model
-          image: {{ .Values.ollama.image }}
-          imagePullPolicy: {{ .Values.ollama.pullPolicy }}
+        - name: fetch-model
+          image: curlimages/curl:8.14.0
+          imagePullPolicy: IfNotPresent
           command:
             - sh
             - -c
             - |
-              ollama serve &
-              sleep 5
-              {{- range .Values.ollama.models }}
-              ollama pull "{{ . }}"
-              {{- end }}
-              pkill ollama
+              set -eux
+              mkdir -p /models
+              url="https://huggingface.co/ggml-org/llama3.2-3b-GGUF/resolve/main/{{ .Values.llama-cpp.model }}"
+              curl --fail --location --retry 3 --retry-delay 2 \
+                --output "/models/{{ .Values.llama-cpp.model }}" "$url"
           volumeMounts:
-            - name: ollama-models
-              mountPath: /root/.ollama
+            - name: llama-cpp-models
+              mountPath: /models
       containers:
-        - name: ollama
-          image: {{ .Values.ollama.image }}
-          imagePullPolicy: {{ .Values.ollama.pullPolicy }}
+        - name: llama-cpp
+          image: {{ .Values.llama-cpp.image }}
+          imagePullPolicy: {{ .Values.llama-cpp.pullPolicy }}
           ports:
-            - containerPort: 11434
-          env:
-            - name: OLLAMA_HOST
-              value: 0.0.0.0:11434
+            - containerPort: 8080
+          args:
+            - -m
+            - /models/{{ .Values.llama-cpp.model }}
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8080"
+            - -c
+            - "2048"
+            - -ngl
+            - "0"
           readinessProbe:
             httpGet:
-              path: /api/tags
-              port: 11434
+              path: /health
+              port: 8080
             periodSeconds: 5
             failureThreshold: 30
           volumeMounts:
-            - name: ollama-models
-              mountPath: /root/.ollama
+            - name: llama-cpp-models
+              mountPath: /models
+              readOnly: true
       volumes:
-        - name: ollama-models
+        - name: llama-cpp-models
           persistentVolumeClaim:
-            claimName: ollama-models
+            claimName: llama-cpp-models
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ollama-models
+  name: llama-cpp-models
   labels:
-    app: ollama
+    app: llama-cpp
   annotations:
-    # Keep the pulled model across `helm uninstall`/`helm install` cycles so a
-    # re-deploy does not force a re-download.
+    # Keep the downloaded GGUF across `helm uninstall`/`helm install` cycles
+    # so a re-deploy does not force a ~2GB re-download.
     helm.sh/resource-policy: keep
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: {{ .Values.ollama.storage | default "2Gi" | quote }}
+      storage: {{ .Values.llama-cpp.storage | default "3Gi" | quote }}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: ollama
+  name: llama-cpp
 spec:
   selector:
-    app: ollama
+    app: llama-cpp
   ports:
-    - port: 11434
-      targetPort: 11434
+    - port: 8080
+      targetPort: 8080
 {{- end }}
