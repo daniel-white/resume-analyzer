@@ -2270,10 +2270,13 @@ mod tests {
             .await
             .unwrap();
 
-        // `save_parse` enqueues `ResumeParsed`, so drain it before the thumbs down.
-        let parsed = store.claim().await.unwrap().unwrap();
-        assert_eq!(parsed.name, EventName::ResumeParsed);
-        store.finish(parsed.id, parsed.token).await.unwrap();
+        // `create_resume` enqueues `ResumeUploaded` and `save_parse` enqueues
+        // `ResumeParsed`, so drain both before the thumbs down.
+        for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
+            let claimed = store.claim().await.unwrap().unwrap();
+            assert_eq!(claimed.name, expected);
+            store.finish(claimed.id, claimed.token).await.unwrap();
+        }
         assert!(store.claim().await.unwrap().is_none());
 
         // The first thumbs down queues the markdown build, not a diagnosis.
@@ -2306,6 +2309,8 @@ mod tests {
         };
         assert!(store.save_resume_markdown(version, &markdown).await.unwrap());
         assert!(!store.save_resume_markdown(version, &markdown).await.unwrap());
+        // The worker's markdown handler fans out to every pending down vote.
+        store.enqueue_feedback_analyses(version).await.unwrap();
         let queued = store.claim().await.unwrap().unwrap();
         assert_eq!(queued.name, EventName::AnalyzeFeedback);
         let payload: AnalyzeFeedbackPayload =
@@ -2345,9 +2350,34 @@ mod tests {
         assert_eq!(impression.section_kind, SectionKind::Summary);
         store.finish(impression_event.id, impression_event.token).await.unwrap();
 
-        // A different user's down vote is queued for its own diagnosis.
+        // A different user's down vote is queued for its own diagnosis. The resume
+        // belongs to that user, so the vote records and the worker diagnoses it.
+        let other_resume = Uuid::new_v4();
+        let other_version = Uuid::new_v4();
         store
-            .vote_section(other, resume, version, "experience-1", Some(SectionVote::Down))
+            .create_resume(other, other_resume, other_version, "other.pdf", domain::PDF, "other-key")
+            .await
+            .unwrap();
+        store
+            .save_parse(
+                other_version,
+                &parse,
+                Some(&sections),
+                Some(&summary),
+            )
+            .await
+            .unwrap();
+        for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
+            let claimed = store.claim().await.unwrap().unwrap();
+            assert_eq!(claimed.name, expected);
+            store.finish(claimed.id, claimed.token).await.unwrap();
+        }
+        store
+            .save_resume_markdown(other_version, &markdown)
+            .await
+            .unwrap();
+        store
+            .vote_section(other, other_resume, other_version, "experience-1", Some(SectionVote::Down))
             .await
             .unwrap();
         let other_event = store.claim().await.unwrap().unwrap();
@@ -2376,17 +2406,17 @@ mod tests {
             )
             .await
             .unwrap();
-        let analyses: Vec<(String, String)> = sqlx::query_as(
-            "select section_id, user_id from feedback_analysis where version_id = $1",
+        let analyses: Vec<String> = sqlx::query_scalar(
+            "select section_id from feedback_analysis where version_id = $1",
         )
         .bind(version)
         .fetch_all(store.pool())
         .await
         .unwrap();
         assert_eq!(analyses.len(), 2);
-        assert!(analyses.iter().any(|(section, _)| section == "experience-1"));
+        assert!(analyses.iter().any(|section| section == "experience-1"));
         assert!(
-            analyses.iter().any(|(section, _)| section == domain::PROFILE_SUMMARY_ID)
+            analyses.iter().any(|section| section == domain::PROFILE_SUMMARY_ID)
         );
     }
 }
