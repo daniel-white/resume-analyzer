@@ -20,7 +20,7 @@ const FALLBACK_MODEL: &str = "feedback-extract-v1";
 /// under a second. `FEEDBACK_MODEL_URL` is the full endpoint, base and path
 /// together; `FEEDBACK_MODEL_NAME` overrides the model. There is no off
 /// switch: the diagnosis always comes from the chat server.
-const DEFAULT_MODEL: &str = "llama3.2-3b-q4_k_m";
+const DEFAULT_MODEL: &str = "llama-3.2-3b-instruct-q4_k_m";
 const DEFAULT_URL: &str = "http://127.0.0.1:8080/v1/chat/completions";
 const MAX_OUTPUT_CHARS: usize = 4_000;
 const MAX_SECTION_CHARS: usize = 4_000;

@@ -61,11 +61,12 @@ For local LLM summaries, run a llama.cpp server, which speaks the OpenAI chat
 completions API, and point the API at it:
 
 ```sh
-llama-server -m llama3.2-3b-q4_k_m.gguf --host 127.0.0.1 --port 8080
+llama-server -m llama-3.2-3b-instruct-q4_k_m.gguf --host 127.0.0.1 --port 8080
 ```
 
-The API warms `llama3.2-3b-q4_k_m` at `http://127.0.0.1:8080/v1/chat/completions`
-by default. Set `SUMMARY_MODEL_NAME` or `SUMMARY_MODEL_URL` to change that.
+The API warms `llama-3.2-3b-instruct-q4_k_m` at
+`http://127.0.0.1:8080/v1/chat/completions` by default. Set
+`SUMMARY_MODEL_NAME` or `SUMMARY_MODEL_URL` to change that.
 If the model cannot load or generate, the deterministic extractive fallback
 is used and identified in the UI. Resume text stays on the configured chat
 server; it is sent as JSON user data separate from fixed system instructions,
