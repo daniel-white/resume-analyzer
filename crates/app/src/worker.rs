@@ -11,7 +11,7 @@ use domain::{
     AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
     RunPayload, UploadedPayload,
 };
-use feedback::FeedbackAnalyzer;
+use feedback::{markdown, FeedbackAnalyzer};
 use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
@@ -54,8 +54,8 @@ impl Worker {
             client: reqwest::Client::new(),
             notifications: None,
             detector: SectionDetector::heuristic(),
-            summarizer: SummaryGenerator::extractive(),
-            feedback: FeedbackAnalyzer::extractive(),
+            summarizer: SummaryGenerator::from_env(),
+            feedback: FeedbackAnalyzer::from_env(),
         }
     }
 
@@ -229,10 +229,11 @@ impl Worker {
         let _enter = span.enter();
         let (sections, profile_summary) = tokio::task::spawn_blocking(move || {
             let sections = detector.detect_document(&lines);
-            let summary = summarizer.generate(&summary_parse, &sections);
-            (sections, summary)
+            let summary = summarizer.generate(&summary_parse, &sections)?;
+            Ok::<_, anyhow::Error>((sections, summary))
         })
-        .await?;
+        .await?
+        .map_err(|err| anyhow::anyhow!("summary generation failed: {err}"))?;
         span.record("engine", &profile_summary.engine);
         span.record("model", &profile_summary.model);
         info!("profile summary generated");
@@ -259,9 +260,8 @@ impl Worker {
         else {
             return Ok(());
         };
-        let analyzer = self.feedback.clone();
         let markdown =
-            tokio::task::spawn_blocking(move || analyzer.markdown(&parse, &sections)).await?;
+            tokio::task::spawn_blocking(move || markdown(&parse, &sections)).await?;
         self.store
             .save_resume_markdown(payload.version_id, &markdown)
             .await?;
@@ -304,19 +304,19 @@ impl Worker {
             model = field::Empty,
         );
         let _enter = span.enter();
-        let diagnosis = tokio::task::spawn_blocking(move || {
+        let diagnosis_result = tokio::task::spawn_blocking(move || {
             analyzer.analyze(&markdown.text, &original, &section_id, &heading, kind)
         })
-        .await?;
-        span.record("engine", &diagnosis.engine);
-        span.record("model", &diagnosis.model);
+        .await??;
+        span.record("engine", &diagnosis_result.engine);
+        span.record("model", &diagnosis_result.model);
         info!("feedback diagnosis generated");
         self.store
             .save_feedback_analysis(
                 &payload,
-                &diagnosis.engine,
-                &diagnosis.model,
-                &diagnosis.text,
+                &diagnosis_result.engine,
+                &diagnosis_result.model,
+                &diagnosis_result.text,
             )
             .await?;
         Ok(())
