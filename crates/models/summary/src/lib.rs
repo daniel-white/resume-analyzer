@@ -139,8 +139,7 @@ impl SummaryGenerator {
     /// comes from the configured chat endpoint, falling back to extraction
     /// only when the endpoint cannot load. There is no off switch.
     pub fn from_env() -> Self {
-        let endpoint = env::var("SUMMARY_MODEL_URL")
-            .unwrap_or_else(|_| DEFAULT_URL.to_owned());
+        let endpoint = env::var("SUMMARY_MODEL_URL").unwrap_or_else(|_| DEFAULT_URL.to_owned());
         let model = env::var("SUMMARY_MODEL_NAME")
             .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
             .trim()
@@ -190,11 +189,7 @@ impl SummaryGenerator {
         summary
     }
 
-    fn infer_output(
-        &self,
-        parse: &ParseInput,
-        sections: &SectionMap,
-    ) -> Option<ProfileSummary> {
+    fn infer_output(&self, parse: &ParseInput, sections: &SectionMap) -> Option<ProfileSummary> {
         let Mode::Chat {
             endpoint,
             model,
@@ -496,8 +491,8 @@ fn usable_summary(text: &str, is_resume: Option<bool>) -> bool {
     if lowercase.contains("this candidate") || lowercase.contains("is presented") {
         return false;
     }
-    let decline = is_resume == Some(false)
-        || (is_resume.is_none() && text.starts_with(DECLINE_PREFIX));
+    let decline =
+        is_resume == Some(false) || (is_resume.is_none() && text.starts_with(DECLINE_PREFIX));
     if decline {
         // A non-résumé document must decline explicitly and stay short.
         (30..=110).contains(&words)
@@ -542,12 +537,11 @@ fn extract(parse: &ParseInput, sections: &SectionMap) -> ProfileSummary {
         .map(|section| section.kind.label().to_lowercase())
         .collect();
     if !present.is_empty() {
-        lines.push(format!(
-            "The document has {}.",
-            join_list(&present),
-        ));
+        lines.push(format!("The document has {}.", join_list(&present),));
     }
-    lines.push("Upload another version or check the model setup if you want a fuller summary.".to_owned());
+    lines.push(
+        "Upload another version or check the model setup if you want a fuller summary.".to_owned(),
+    );
     ProfileSummary {
         text: lines.join(" "),
         engine: ENGINE.to_owned(),
@@ -721,7 +715,7 @@ mod tests {
         // Non-résumé responses must decline explicitly with 45-70 words.
         let decline = "This does not look like a résumé. Could not find enough work experience education skills or project information to build a grounded professional profile for review. Please upload a document that includes those details for a clear summary based on actual work history and qualifications.";
         assert!(usable_summary(decline, Some(false)));
-        assert!(usable_summary(decline, None));        // The flag, not the wording, decides which range applies.
+        assert!(usable_summary(decline, None)); // The flag, not the wording, decides which range applies.
         assert!(!usable_summary(&fixture_summary(120), Some(false)));
     }
 

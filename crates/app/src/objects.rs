@@ -1,8 +1,7 @@
 //! Object storage behind the same trait the tests use in memory.
 
 use async_trait::async_trait;
-use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3::primitives::ByteStream;
+use s3::Client as S3Client;
 use storage::Objects;
 
 pub struct S3Objects {
@@ -23,32 +22,24 @@ impl S3Objects {
 impl Objects for S3Objects {
     async fn put(&self, key: &str, bytes: &[u8]) -> anyhow::Result<()> {
         self.client
-            .put_object()
-            .bucket(&self.bucket)
-            .key(key)
-            .body(ByteStream::from(bytes.to_vec()))
+            .objects()
+            .put(&self.bucket, key)
+            .body_bytes(bytes.to_vec())
             .send()
             .await?;
         Ok(())
     }
 
     async fn get(&self, key: &str) -> anyhow::Result<Vec<u8>> {
-        let object = self
-            .client
-            .get_object()
-            .bucket(&self.bucket)
-            .key(key)
-            .send()
-            .await?;
-        let bytes = object.body.collect().await?.into_bytes();
+        let object = self.client.objects().get(&self.bucket, key).send().await?;
+        let bytes = object.bytes().await?;
         Ok(bytes.to_vec())
     }
 
     async fn delete(&self, key: &str) -> anyhow::Result<()> {
         self.client
-            .delete_object()
-            .bucket(&self.bucket)
-            .key(key)
+            .objects()
+            .delete(&self.bucket, key)
             .send()
             .await?;
         Ok(())

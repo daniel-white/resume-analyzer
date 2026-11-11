@@ -260,8 +260,8 @@ impl Worker {
             return Ok(());
         };
         let analyzer = self.feedback.clone();
-        let markdown = tokio::task::spawn_blocking(move || analyzer.markdown(&parse, &sections))
-            .await?;
+        let markdown =
+            tokio::task::spawn_blocking(move || analyzer.markdown(&parse, &sections)).await?;
         self.store
             .save_resume_markdown(payload.version_id, &markdown)
             .await?;
