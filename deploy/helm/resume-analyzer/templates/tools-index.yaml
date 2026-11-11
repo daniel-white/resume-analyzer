@@ -9,10 +9,10 @@
 #     by mailpit.yaml and pgadmin.yaml (each next to its backend Service)
 #     and win for those paths because Gateway API ranks more-specific
 #     matches first.
-#
+
 # Same pattern as the engops stack's tools landing page.
-#
 # Docs: https://gateway.envoyproxy.io/latest/tasks/traffic/direct-response/
+
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: HTTPRouteFilter
 metadata:
@@ -31,6 +31,7 @@ spec:
           {{- if .Values.pgadmin.enabled }}
           <li><a href="/pgadmin">pgAdmin</a> — browse the Postgres database</li>
           {{- end }}
+          <li><a href="/volumes">Volume Viewer</a> — view Kubernetes volumes</li>
         </ul>
 ---
 apiVersion: gateway.networking.k8s.io/v1

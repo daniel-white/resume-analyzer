@@ -1,0 +1,17 @@
+dashboard:
+  enabled: true
+  image:
+    repository: ghcr.io/kubernetes-dashboard/dashboard
+    tag: v0.16.2
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: true
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: tools.resume.local
+        paths:
+          - path: /
+            pathType: Prefix

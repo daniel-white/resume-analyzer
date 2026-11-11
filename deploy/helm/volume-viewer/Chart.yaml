@@ -1,0 +1,6 @@
+apiVersion: v2
+name: volume-viewer
+description: Off-the-shelf Kubernetes Dashboard for viewing volumes (PVCs/PVs) at tools.resume.local
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

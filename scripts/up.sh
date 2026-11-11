@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # deps:  dependencies + gateway + hostnames, API still runs on the host.
-# demo:  bake the API, the compiled web app, and the section model, load them,
+# demo:  bake the API, the compiled web app, and the models, load them,
 #        and serve both on https://app.resume.local. /api stays on Rust; / is
-#        the web pod. The ATS stubs are a separate chart. ClusterIP only,
-#        never a gateway route.
+#        the web pod. The ATS stubs and llama.cpp are separate charts.
+#        ClusterIP only, never a gateway route.
 set -euo pipefail
 
 mode=${1:-deps}
@@ -20,6 +20,24 @@ profile=${MINIKUBE_PROFILE:-resume-analyzer}
 
 ip=$(minikube ip --profile "$profile")
 
+if [[ "$mode" == "demo" ]]; then
+  # The LLM release installs before anything else that could wait on it:
+  # its own chart, its own PVC, its own Deployment, no hooks. The bake/load
+  # above must run first (the GGUF rides in the model-llama image, the server
+  # image is preloaded into Minikube), then the release goes in before the
+  # provider refresh and before the app upgrade, so the app never starts a
+  # pod that has no model to serve and never rolls back the model.
+  "$root/scripts/bake.sh" --load api web model model-llama
+  docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev resume-analyzer/model-llama:dev |
+    minikube image load --profile "$profile" --overwrite -
+  img=ghcr.io/ggml-org/llama.cpp:server
+  if ! minikube image list -p "$profile" 2>/dev/null | grep -q "$img"; then
+    docker pull "$img"
+    docker save "$img" | minikube image load --profile "$profile" --overwrite -
+  fi
+  helm upgrade --install llama-cpp deploy/helm/llama-cpp --wait --timeout 5m
+fi
+
 "$root/scripts/bake.sh" --load providers
 docker save resume-analyzer/ats:dev | minikube image load --profile "$profile" --overwrite -
 helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 5m
@@ -28,6 +46,17 @@ helm upgrade --install ats-providers deploy/helm/ats-providers --wait --timeout 
 # and wait before the API can hand off any new work.
 kubectl rollout restart deployment -l app.kubernetes.io/name=ats-providers
 kubectl rollout status deployment -l app.kubernetes.io/name=ats-providers --timeout=5m
+
+# llama-cpp is its own chart below, installed before the app upgrade so the
+# model server starts independently and a failed app upgrade never takes the
+# model down. Re-runs patch the Deployment in place, which does not restart
+# the pod.
+
+# Volume viewer (off-the-shelf Kubernetes Dashboard) for viewing PVCs/PVs
+# at https://tools.resume.local/volumes
+if [[ "$mode" == "demo" ]]; then
+  helm upgrade --install volume-viewer deploy/helm/volume-viewer --wait --timeout 5m
+fi
 
 args=(
   upgrade --install resume-analyzer deploy/helm/resume-analyzer
@@ -47,23 +76,6 @@ case "$mode" in
     args+=(--set api.enabled=false --set web.enabled=false)
     ;;
   demo)
-    "$root/scripts/bake.sh" --load api web model
-    # Named :dev loads can reuse Minikube's cached archive even after a new
-    # Docker build. Stream the actual daemon images to replace that cache.
-    docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |
-      minikube image load --profile "$profile" --overwrite -
-    # The llama.cpp image and the busybox fetch sidecar are pulled by the pod at
-    # runtime (pullPolicy: IfNotPresent); pre-load both into Minikube so the
-    # first deploy does not block on a download. The Minikube daemon cannot
-    # pull new blobs (containerd snapshotter), so pull on the host and stream
-    # them in via save|load. Skip images already present in Minikube.
-    for img in ghcr.io/ggml-org/llama.cpp:server busybox:stable-musl; do
-      if minikube image list -p "$profile" 2>/dev/null | grep -q "$img"; then
-        continue
-      fi
-      docker pull "$img"
-      docker save "$img" | minikube image load --profile "$profile" --overwrite -
-    done
     args+=(--set api.enabled=true --set web.enabled=true)
     mkdir -p "$root/.run"
     cat >"$root/.run/api-providers.yaml" <<'EOF'
@@ -95,6 +107,7 @@ echo "https://tools.resume.local"
 if [[ "$mode" == "demo" ]]; then
   echo "https://app.resume.local"
   echo "ats providers stay inside the cluster (greenline, levr, workdaye, ash, smart_resume, indy_hackers_hiring, blast_track on :8080)"
+  echo "llama.cpp is its own release (llama-cpp on :8080); app redeploys leave it running"
 else
   echo "API is on the host. https://app.resume.local serves it only in demo mode."
 fi
