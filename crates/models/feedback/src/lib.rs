@@ -83,8 +83,7 @@ impl FeedbackAnalyzer {
     /// always comes from the configured chat endpoint, falling back to
     /// extraction only when the endpoint cannot load. There is no off switch.
     pub fn from_env() -> Self {
-        let endpoint = env::var("FEEDBACK_MODEL_URL")
-            .unwrap_or_else(|_| DEFAULT_URL.to_owned());
+        let endpoint = env::var("FEEDBACK_MODEL_URL").unwrap_or_else(|_| DEFAULT_URL.to_owned());
         let model = env::var("FEEDBACK_MODEL_NAME")
             .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
             .trim()
@@ -244,14 +243,7 @@ impl FeedbackAnalyzer {
             return false;
         };
         *self.loaded.get_or_init(|| {
-            let request = chat_request(
-                model,
-                "",
-                "",
-                "warmup",
-                "warmup",
-                SectionKind::Summary,
-            );
+            let request = chat_request(model, "", "", "warmup", "warmup", SectionKind::Summary);
             match infer(client, endpoint, request) {
                 Ok(_) => true,
                 Err(err) => {

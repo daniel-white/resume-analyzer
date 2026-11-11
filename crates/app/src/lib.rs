@@ -41,7 +41,7 @@ pub fn init_tracing() {
 #[derive(Clone)]
 struct HealthState {
     config: Config,
-    s3: aws_sdk_s3::Client,
+    s3: s3::Client,
 }
 
 fn health_router(state: HealthState) -> Router {

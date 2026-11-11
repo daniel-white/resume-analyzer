@@ -631,12 +631,11 @@ impl Store {
         version_id: Uuid,
         section_id: &str,
     ) -> anyhow::Result<()> {
-        let has_markdown: bool = sqlx::query_scalar(
-            "select resume_markdown is not null from versions where id = $1",
-        )
-        .bind(version_id)
-        .fetch_one(&mut **tx)
-        .await?;
+        let has_markdown: bool =
+            sqlx::query_scalar("select resume_markdown is not null from versions where id = $1")
+                .bind(version_id)
+                .fetch_one(&mut **tx)
+                .await?;
         if !has_markdown {
             let pending: Option<Uuid> = sqlx::query_scalar(
                 "select id from outbox
@@ -1215,7 +1214,9 @@ async fn feedback_target(
     let kind: String = row.try_get("kind")?;
     Ok(FeedbackTarget {
         id: section_id.to_owned(),
-        heading: row.try_get::<Option<String>, _>("heading")?.unwrap_or_default(),
+        heading: row
+            .try_get::<Option<String>, _>("heading")?
+            .unwrap_or_default(),
         kind: SectionKind::parse(&kind).unwrap_or(SectionKind::Other),
     })
 }
@@ -2041,7 +2042,14 @@ mod tests {
         let resume_id = Uuid::new_v4();
         let version_id = Uuid::new_v4();
         store
-            .create_resume(user, resume_id, version_id, "uni.pdf", domain::PDF, "uni-key")
+            .create_resume(
+                user,
+                resume_id,
+                version_id,
+                "uni.pdf",
+                domain::PDF,
+                "uni-key",
+            )
             .await
             .unwrap();
 
@@ -2104,7 +2112,9 @@ mod tests {
         assert!(stored.summary.contains('🚀'));
         let parts: Vec<&str> = stored
             .summary
-            .split(|character: char| character.is_whitespace() || character == '—' || character == '\u{2028}')
+            .split(|character: char| {
+                character.is_whitespace() || character == '—' || character == '\u{2028}'
+            })
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .collect();
@@ -2121,7 +2131,9 @@ mod tests {
         let result = sqlx::query(r#"SELECT ('{"a":"\u0000"}')::jsonb"#)
             .fetch_one(store.pool())
             .await;
-        let err = result.expect_err("jsonb must reject a NUL escape").to_string();
+        let err = result
+            .expect_err("jsonb must reject a NUL escape")
+            .to_string();
         assert!(
             err.contains("unsupported Unicode escape sequence"),
             "the error should name the jsonb rejection: {err}"
@@ -2138,7 +2150,14 @@ mod tests {
         let resume_id = Uuid::new_v4();
         let version_id = Uuid::new_v4();
         store
-            .create_resume(user, resume_id, version_id, "nul.pdf", domain::PDF, "nul-key")
+            .create_resume(
+                user,
+                resume_id,
+                version_id,
+                "nul.pdf",
+                domain::PDF,
+                "nul-key",
+            )
             .await
             .unwrap();
 
@@ -2258,7 +2277,13 @@ mod tests {
 
         // The first thumbs down queues the markdown build, not a diagnosis.
         store
-            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .vote_section(
+                owner,
+                resume,
+                version,
+                "experience-1",
+                Some(SectionVote::Down),
+            )
             .await
             .unwrap();
         assert!(store.resume_markdown(version).await.unwrap().is_none());
@@ -2270,7 +2295,13 @@ mod tests {
         // A second thumbs down on the same version, before the markdown exists,
         // queues another build rather than a diagnosis.
         store
-            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .vote_section(
+                owner,
+                resume,
+                version,
+                "experience-1",
+                Some(SectionVote::Down),
+            )
             .await
             .unwrap();
         let second = store.claim().await.unwrap().unwrap();
@@ -2284,8 +2315,18 @@ mod tests {
             engine: "test".to_owned(),
             model: "alias".to_owned(),
         };
-        assert!(store.save_resume_markdown(version, &markdown).await.unwrap());
-        assert!(!store.save_resume_markdown(version, &markdown).await.unwrap());
+        assert!(
+            store
+                .save_resume_markdown(version, &markdown)
+                .await
+                .unwrap()
+        );
+        assert!(
+            !store
+                .save_resume_markdown(version, &markdown)
+                .await
+                .unwrap()
+        );
         // The worker's markdown handler fans out to every pending down vote.
         store.enqueue_feedback_analyses(version).await.unwrap();
         let queued = store.claim().await.unwrap().unwrap();
@@ -2301,7 +2342,13 @@ mod tests {
 
         // Once the markdown exists, a thumbs down queues only a diagnosis.
         store
-            .vote_section(owner, resume, version, "experience-1", Some(SectionVote::Down))
+            .vote_section(
+                owner,
+                resume,
+                version,
+                "experience-1",
+                Some(SectionVote::Down),
+            )
             .await
             .unwrap();
         let later = store.claim().await.unwrap().unwrap();
@@ -2315,7 +2362,13 @@ mod tests {
 
         // The impression thumbs down is diagnosed too, with a synthetic heading.
         store
-            .vote_section(owner, resume, version, domain::PROFILE_SUMMARY_ID, Some(SectionVote::Down))
+            .vote_section(
+                owner,
+                resume,
+                version,
+                domain::PROFILE_SUMMARY_ID,
+                Some(SectionVote::Down),
+            )
             .await
             .unwrap();
         let impression_event = store.claim().await.unwrap().unwrap();
@@ -2325,23 +2378,28 @@ mod tests {
         assert_eq!(impression.section_id, domain::PROFILE_SUMMARY_ID);
         assert_eq!(impression.section_heading, "Profile impression");
         assert_eq!(impression.section_kind, SectionKind::Summary);
-        store.finish(impression_event.id, impression_event.token).await.unwrap();
+        store
+            .finish(impression_event.id, impression_event.token)
+            .await
+            .unwrap();
 
         // A different user's down vote is queued for its own diagnosis. The resume
         // belongs to that user, so the vote records and the worker diagnoses it.
         let other_resume = Uuid::new_v4();
         let other_version = Uuid::new_v4();
         store
-            .create_resume(other, other_resume, other_version, "other.pdf", domain::PDF, "other-key")
+            .create_resume(
+                other,
+                other_resume,
+                other_version,
+                "other.pdf",
+                domain::PDF,
+                "other-key",
+            )
             .await
             .unwrap();
         store
-            .save_parse(
-                other_version,
-                &parse,
-                Some(&sections),
-                Some(&summary),
-            )
+            .save_parse(other_version, &parse, Some(&sections), Some(&summary))
             .await
             .unwrap();
         for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
@@ -2354,7 +2412,13 @@ mod tests {
             .await
             .unwrap();
         store
-            .vote_section(other, other_resume, other_version, "experience-1", Some(SectionVote::Down))
+            .vote_section(
+                other,
+                other_resume,
+                other_version,
+                "experience-1",
+                Some(SectionVote::Down),
+            )
             .await
             .unwrap();
         let other_event = store.claim().await.unwrap().unwrap();
@@ -2363,7 +2427,10 @@ mod tests {
             serde_json::from_value(other_event.payload.clone()).unwrap();
         assert_eq!(other_payload.user_id, other);
         assert_eq!(other_payload.section_id, "experience-1");
-        store.finish(other_event.id, other_event.token).await.unwrap();
+        store
+            .finish(other_event.id, other_event.token)
+            .await
+            .unwrap();
 
         assert!(store.claim().await.unwrap().is_none());
 
@@ -2371,7 +2438,12 @@ mod tests {
         // detail view does not carry these to the user-facing frontend; the
         // worker reads them directly here.
         store
-            .save_feedback_analysis(&impression, "extractive", "feedback-extract-v1", "Looks right.")
+            .save_feedback_analysis(
+                &impression,
+                "extractive",
+                "feedback-extract-v1",
+                "Looks right.",
+            )
             .await
             .unwrap();
         store
@@ -2383,17 +2455,18 @@ mod tests {
             )
             .await
             .unwrap();
-        let analyses: Vec<String> = sqlx::query_scalar(
-            "select section_id from feedback_analysis where version_id = $1",
-        )
-        .bind(version)
-        .fetch_all(store.pool())
-        .await
-        .unwrap();
+        let analyses: Vec<String> =
+            sqlx::query_scalar("select section_id from feedback_analysis where version_id = $1")
+                .bind(version)
+                .fetch_all(store.pool())
+                .await
+                .unwrap();
         assert_eq!(analyses.len(), 2);
         assert!(analyses.iter().any(|section| section == "experience-1"));
         assert!(
-            analyses.iter().any(|section| section == domain::PROFILE_SUMMARY_ID)
+            analyses
+                .iter()
+                .any(|section| section == domain::PROFILE_SUMMARY_ID)
         );
     }
 }

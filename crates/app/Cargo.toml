@@ -10,9 +10,7 @@ name = "resume-analyzer"
 path = "src/main.rs"
 
 [dependencies]
-aws-config = { version = "1", features = ["behavior-version-latest"] }
-aws-sdk-s3 = "1"
-aws-smithy-types = "1"
+s3 = { version = "0.1", features = ["async", "rustls"] }
 anyhow = "1"
 base64 = "0.22"
 tracing = "0.1"

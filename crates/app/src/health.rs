@@ -4,9 +4,6 @@
 
 use std::time::Duration;
 
-use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3::config::timeout::TimeoutConfig;
-use aws_smithy_types::retry::RetryConfig;
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
 use tokio::io::AsyncReadExt;
@@ -54,7 +51,7 @@ impl Report {
     }
 }
 
-pub async fn report_for(config: &Config, s3: &S3Client) -> Report {
+pub async fn report_for(config: &Config, s3: &s3::Client) -> Report {
     let (postgres, s3_check, smtp) = tokio::join!(
         probe_postgres(&config.database_url),
         probe_s3(s3, &config.s3_bucket),
@@ -67,31 +64,21 @@ pub async fn report_for(config: &Config, s3: &S3Client) -> Report {
     })
 }
 
-pub async fn s3_client(config: &Config) -> S3Client {
-    let shared = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_config::Region::new(config.s3_region.clone()))
-        .credentials_provider(aws_sdk_s3::config::Credentials::new(
-            config.s3_access_key.clone(),
-            config.s3_secret_key.clone(),
-            None,
-            None,
-            "resume-analyzer",
-        ))
-        .endpoint_url(&config.s3_endpoint)
-        .load()
-        .await;
+pub async fn s3_client(config: &Config) -> s3::Client {
+    let auth = s3::Auth::Static(
+        s3::Credentials::new(config.s3_access_key.clone(), config.s3_secret_key.clone())
+            .expect("valid static credentials"),
+    );
 
-    let conf = aws_sdk_s3::config::Builder::from(&shared)
-        .force_path_style(true)
-        .timeout_config(
-            TimeoutConfig::builder()
-                .connect_timeout(Duration::from_millis(400))
-                .operation_attempt_timeout(Duration::from_secs(2))
-                .build(),
-        )
-        .retry_config(RetryConfig::standard().with_max_attempts(1))
-        .build();
-    S3Client::from_conf(conf)
+    s3::Client::builder(&config.s3_endpoint)
+        .expect("valid endpoint")
+        .region(config.s3_region.clone())
+        .auth(auth)
+        .addressing_style(s3::AddressingStyle::Path)
+        .timeout(Duration::from_secs(2))
+        .max_attempts(1)
+        .build()
+        .expect("valid client")
 }
 
 async fn probe_postgres(database_url: &str) -> Check {
@@ -109,17 +96,17 @@ async fn probe_postgres(database_url: &str) -> Check {
     }
 }
 
-async fn bucket_exists(s3: &S3Client, bucket: &str) -> bool {
-    s3.head_bucket().bucket(bucket).send().await.is_ok()
+async fn bucket_exists(s3: &s3::Client, bucket: &str) -> bool {
+    s3.buckets().head(bucket).send().await.is_ok()
 }
 
-async fn probe_s3(s3: &S3Client, bucket: &str) -> Check {
+async fn probe_s3(s3: &s3::Client, bucket: &str) -> Check {
     if bucket_exists(s3, bucket).await {
         return Check::Ok;
     }
     // The bucket is created on the way up, so a readiness retry succeeds once
     // LocalStack is accepting requests. A bucket that already exists is fine.
-    let _ = s3.create_bucket().bucket(bucket).send().await;
+    let _ = s3.buckets().create(bucket).send().await;
     if bucket_exists(s3, bucket).await {
         Check::Ok
     } else {
