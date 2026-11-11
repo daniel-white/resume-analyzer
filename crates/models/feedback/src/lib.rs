@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use domain::{ParseInput, ResumeMarkdown, SectionKind, SectionMap};
 use serde::{Deserialize, Serialize};
+use tracing::{Level, field, info, span, warn};
 
 const ENGINE: &str = "extractive";
 const FALLBACK_MODEL: &str = "feedback-extract-v1";
@@ -172,18 +173,26 @@ impl FeedbackAnalyzer {
             client,
         } = &self.mode
         else {
-            return Diagnosis {
-                text: extract(markdown, original, section_heading, section_kind),
-                engine: ENGINE.to_owned(),
-                model: FALLBACK_MODEL.to_owned(),
-            };
+            return self.extract_diagnosis(markdown, original, section_heading, section_kind);
         };
+        // One span per diagnosis, so a request, its latency, and its outcome
+        // are visible together in any subscriber that reads the trace.
+        let span = span!(
+            Level::INFO,
+            "feedback.chat",
+            model = %model,
+            endpoint = %endpoint,
+            section_id = %section_id,
+            section_heading = %section_heading,
+            section_kind = section_kind.label(),
+            outcome = field::Empty,
+            engine = field::Empty,
+        );
+        let _enter = span.enter();
         if !self.model_available() {
-            return Diagnosis {
-                text: extract(markdown, original, section_heading, section_kind),
-                engine: ENGINE.to_owned(),
-                model: FALLBACK_MODEL.to_owned(),
-            };
+            span.record("outcome", "unavailable");
+            span.record("engine", "extraction");
+            return self.extract_diagnosis(markdown, original, section_heading, section_kind);
         }
         let request = chat_request(
             model,
@@ -196,27 +205,33 @@ impl FeedbackAnalyzer {
         match infer(client, endpoint, request) {
             Ok(raw) => {
                 if let Some(text) = usable(&raw) {
+                    span.record("outcome", "accepted");
+                    span.record("engine", "chat");
+                    info!("feedback diagnosis generated");
                     return Diagnosis {
                         text,
                         engine: "chat".to_owned(),
                         model: model.clone(),
                     };
                 }
-                eprintln!(
+                span.record("outcome", "rejected");
+                span.record("engine", "extraction");
+                warn!(
                     "feedback model output rejected for section {section_id} ({section_heading}, {}): {}",
                     section_kind.label(),
                     preview(&raw),
                 );
             }
             Err(err) => {
-                eprintln!("feedback model request failed for section {section_id}: {err}; using extraction");
+                span.record("outcome", "failed");
+                span.record("engine", "extraction");
+                warn!(
+                    "feedback model request failed for section {section_id}: {err}; using extraction",
+                    err = &err,
+                );
             }
         }
-        Diagnosis {
-            text: extract(markdown, original, section_heading, section_kind),
-            engine: ENGINE.to_owned(),
-            model: FALLBACK_MODEL.to_owned(),
-        }
+        self.extract_diagnosis(markdown, original, section_heading, section_kind)
     }
 
     fn model_available(&self) -> bool {
@@ -240,11 +255,29 @@ impl FeedbackAnalyzer {
             match infer(client, endpoint, request) {
                 Ok(_) => true,
                 Err(err) => {
-                    eprintln!("feedback model unavailable: {err}; using extraction");
+                    warn!(
+                        "feedback model unavailable: {err}; using extraction",
+                        err = &err,
+                    );
                     false
                 }
             }
         })
+    }
+
+    /// The extractive diagnosis, with the engine and model the worker stores.
+    fn extract_diagnosis(
+        &self,
+        markdown: &str,
+        original: &str,
+        section_heading: &str,
+        section_kind: SectionKind,
+    ) -> Diagnosis {
+        Diagnosis {
+            text: extract(markdown, original, section_heading, section_kind),
+            engine: ENGINE.to_owned(),
+            model: FALLBACK_MODEL.to_owned(),
+        }
     }
 }
 
@@ -367,12 +400,22 @@ fn infer(
     endpoint: &str,
     request: ChatRequest,
 ) -> Result<String, String> {
+    // One span per HTTP call, so the warmup and the real diagnosis are each
+    // traceable even though they share the same code path.
+    let span = span!(
+        Level::DEBUG,
+        "feedback.chat.request",
+        endpoint = %endpoint,
+        status = field::Empty,
+    );
+    let _enter = span.enter();
     let response = client
         .post(endpoint)
         .json(&request)
         .send()
         .and_then(reqwest::blocking::Response::error_for_status)
         .map_err(|err| format!("chat request to {endpoint}: {err}"))?;
+    span.record("status", response.status().as_u16());
     let response: ChatResponse = response
         .json()
         .map_err(|err| format!("decode chat response from {endpoint}: {err}"))?;

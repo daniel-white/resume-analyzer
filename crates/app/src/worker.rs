@@ -17,6 +17,7 @@ use sections::SectionDetector;
 use serde::Serialize;
 use storage::{Objects, Store};
 use summary::SummaryGenerator;
+use tracing::{Level, field, info, span};
 use uuid::Uuid;
 
 use crate::bus::Bus;
@@ -215,12 +216,26 @@ impl Worker {
         let detector = self.detector.clone();
         let summarizer = self.summarizer.clone();
         let summary_parse = parse.clone();
+        // One span per upload, so every summary.chat span below is attributable
+        // to the resume and version that triggered it.
+        let span = span!(
+            Level::INFO,
+            "resume.upload.summary",
+            resume_id = %event.resume_id,
+            version_id = %event.version_id,
+            engine = field::Empty,
+            model = field::Empty,
+        );
+        let _enter = span.enter();
         let (sections, profile_summary) = tokio::task::spawn_blocking(move || {
             let sections = detector.detect_document(&lines);
             let summary = summarizer.generate(&summary_parse, &sections);
             (sections, summary)
         })
         .await?;
+        span.record("engine", &profile_summary.engine);
+        span.record("model", &profile_summary.model);
+        info!("profile summary generated");
         self.store
             .save_parse(
                 event.version_id,
@@ -278,10 +293,24 @@ impl Worker {
         let section_id = payload.section_id.clone();
         let heading = payload.section_heading.clone();
         let kind = payload.section_kind;
+        // One span per diagnosis, so the feedback.chat span below is
+        // attributable to the version and section that triggered it.
+        let span = span!(
+            Level::INFO,
+            "resume.feedback",
+            version_id = %payload.version_id,
+            section_id = %section_id,
+            engine = field::Empty,
+            model = field::Empty,
+        );
+        let _enter = span.enter();
         let diagnosis = tokio::task::spawn_blocking(move || {
             analyzer.analyze(&markdown.text, &original, &section_id, &heading, kind)
         })
         .await?;
+        span.record("engine", &diagnosis.engine);
+        span.record("model", &diagnosis.model);
+        info!("feedback diagnosis generated");
         self.store
             .save_feedback_analysis(
                 &payload,

@@ -26,6 +26,18 @@ pub use crate::api::Api;
 pub use crate::bus::Bus;
 pub use crate::worker::{Worker, compiled_plugins};
 
+/// Install the tracing subscriber for the whole process. `RUST_LOG` controls
+/// the filter; when it is unset the default is `info`, so the summary model's
+/// request, latency, and outcome are visible without configuration.
+pub fn init_tracing() {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_env("RUST_LOG")
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let _ = tracing_subscriber::fmt()
+        .with_writer(std::io::stdout)
+        .with_env_filter(env_filter)
+        .try_init();
+}
+
 #[derive(Clone)]
 struct HealthState {
     config: Config,
@@ -96,6 +108,7 @@ pub fn callback_url(address: SocketAddr) -> String {
 }
 
 pub async fn serve() {
+    init_tracing();
     let config = Config::from_env();
     if config.auth_secret.len() < 16 {
         panic!("AUTH_SECRET must be at least 16 characters");
