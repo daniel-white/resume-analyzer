@@ -97,6 +97,10 @@ test("admin dashboard triage: filters, handles, and reopens", async ({ page }) =
   await page.getByRole("button", { name: /Reopen/ }).first().click();
   await expect(page.getByRole("button", { name: /Mark handled/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Handled/ })).toHaveText(/Handled\s*1/);
+
+  await page.getByRole("button", { name: /Rerun/ }).first().click();
+  await expect(page.getByText("Rerun:")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Handled/ })).toHaveText(/Handled\s*1/);
 });
 
 test("non-admins cannot open the admin page", async ({ page }) => {

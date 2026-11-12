@@ -6,6 +6,7 @@ import { fetchAccount } from "../server/auth";
 import {
   fetchAdminFeedback,
   setAnalysisHandled,
+  rerunAnalysis,
   NotAdmin,
   type AdminFeedback,
   type HandledResult,
@@ -59,6 +60,20 @@ export const setFeedbackAnalysisHandled = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<HandledResult> => {
     try {
       return await setAnalysisHandled(apiBase(), data.id, data.handled, cookie());
+    } catch (error) {
+      if (error instanceof SignedOut) signIn();
+      throw error;
+    }
+  });
+
+export const rerunFeedbackAnalysis = createServerFn({ method: "POST" })
+  .validator((data: { id: string }) => {
+    if (!data.id) throw new Error("missing analysis");
+    return { id: data.id };
+  })
+  .handler(async ({ data }): Promise<HandledResult> => {
+    try {
+      return await rerunAnalysis(apiBase(), data.id, cookie());
     } catch (error) {
       if (error instanceof SignedOut) signIn();
       throw error;

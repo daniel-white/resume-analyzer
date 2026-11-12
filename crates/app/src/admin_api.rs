@@ -7,7 +7,7 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -30,6 +30,10 @@ pub fn routes() -> axum::Router<Arc<Api>> {
             "/api/admin/feedback/analyses/{id}",
             put(set_analysis_handled),
         )
+        .route(
+            "/api/admin/feedback/analyses/{id}",
+            post(rerun_analysis),
+        )
 }
 
 async fn list_feedback(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {
@@ -40,6 +44,24 @@ async fn list_feedback(State(api): State<Arc<Api>>, headers: HeaderMap) -> Respo
         Ok(feedback) => Json(AdminFeedbackList { feedback }).into_response(),
         Err(err) => {
             eprintln!("admin feedback: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+async fn rerun_analysis(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path(id): Path<Uuid>,
+) -> Response {
+    if let Err(status) = crate::auth_api::current_admin(&api, &headers).await {
+        return status.into_response();
+    }
+    match api.store.rerun_feedback_analysis(id).await {
+        Ok(true) => StatusCode::ACCEPTED.into_response(),
+        Ok(false) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("admin feedback rerun: {err}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }

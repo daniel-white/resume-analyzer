@@ -5,7 +5,7 @@ use std::sync::Arc;
 use app::{Api, Bus, api_router, compiled_plugins};
 use domain::{
     AnalyzeFeedbackPayload, DetectedSection, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary,
-    SectionKind, SectionMap, SectionVote,
+    ResumeMarkdown, SectionKind, SectionMap, SectionVote,
 };
 use storage::MemoryObjects;
 use testcontainers_modules::postgres::Postgres;
@@ -348,6 +348,56 @@ async fn admins_triage_downvoted_feedback_without_deleting_it() {
         reqwest::StatusCode::NOT_FOUND
     );
 
+    // Rerunning drops the stored diagnosis and asks the worker to regenerate
+    // it. The worker is not running in this test, so the row is gone and an
+    // outbox event is enqueued; the downvote itself stays.
+    store
+        .save_resume_markdown(
+            version_id,
+            &ResumeMarkdown {
+                text: "# Ada\n\n## Experience\n\nBuilt analytical engines.".to_owned(),
+                engine: "test".to_owned(),
+                model: "alias".to_owned(),
+            },
+        )
+        .await
+        .expect("markdown");
+    let rerun = client
+        .post(format!(
+            "{base}/api/admin/feedback/analyses/{}",
+            experience.id
+        ))
+        .header("cookie", &admin_cookie)
+        .send()
+        .await
+        .expect("rerun");
+    assert_eq!(rerun.status(), reqwest::StatusCode::ACCEPTED);
+    let remaining: i64 = sqlx::query_scalar("select count(*) from feedback_analysis")
+        .fetch_one(store.pool())
+        .await
+        .expect("count after rerun");
+    assert_eq!(remaining, 1, "rerun deletes the diagnosis it regenerates");
+    let pending: i64 = sqlx::query_scalar(
+        "select count(*) from outbox where name = 'AnalyzeFeedback' and dispatched_at is null",
+    )
+    .fetch_one(store.pool())
+    .await
+    .expect("pending outbox");
+    assert_eq!(pending, 1, "rerun enqueues a fresh diagnosis");
+    assert_eq!(
+        client
+            .post(format!(
+                "{base}/api/admin/feedback/analyses/{}",
+                uuid::Uuid::new_v4()
+            ))
+            .header("cookie", &admin_cookie)
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        reqwest::StatusCode::NOT_FOUND
+    );
+
     // A later up vote hides the item from the admin list but keeps the
     // analysis row and its handling history.
     assert!(
@@ -377,6 +427,6 @@ async fn admins_triage_downvoted_feedback_without_deleting_it() {
         .fetch_one(store.pool())
         .await
         .expect("count after up vote");
-    assert_eq!(rows, 2);
+    assert_eq!(rows, 1, "rerun deleted the experience diagnosis; the profile one stays");
     let _ = profile.id;
 }

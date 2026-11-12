@@ -78,3 +78,28 @@ export async function setAnalysisHandled(
   }
   return { ok: true };
 }
+
+/// Delete one stored diagnosis and ask the worker to regenerate it. The
+/// model still has the version's markdown and raw file, so the new diagnosis
+/// arrives as a fresh row.
+export async function rerunAnalysis(
+  baseUrl: string,
+  id: string,
+  cookie: string | undefined,
+): Promise<HandledResult> {
+  const result = await apiFetch(
+    baseUrl,
+    `/api/admin/feedback/analyses/${encodeURIComponent(id)}`,
+    cookie,
+    { method: "POST" },
+  );
+  if (!result.ok) {
+    return {
+      ok: false,
+      message: result.status === 404
+        ? "That diagnosis is no longer here. Refresh and try again."
+        : "Could not rerun the diagnosis. Please try again.",
+    };
+  }
+  return { ok: true };
+}

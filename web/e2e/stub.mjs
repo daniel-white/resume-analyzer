@@ -192,6 +192,18 @@ const server = createServer(async (request, response) => {
       return send(response, 204, "");
     }
 
+    if (adminAnalysis && method === "POST") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      if (!scenario.admin) return sendJson(response, 403, { error: "forbidden" });
+      const found = (scenario.adminFeedback ?? []).flatMap((item) => item.analyses).find((analysis) => analysis.id === adminAnalysis[1]);
+      if (!found) return sendJson(response, 404, { error: "missing" });
+      found.diagnosis = "Rerun: the heading is present, but the body reads as a fragment.";
+      found.created_at = "2026-11-08T00:00:00Z";
+      delete found.handled_at;
+      delete found.handled_by;
+      return send(response, 202, "");
+    }
+
     const sectionVote = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/sections\/([^/]+)$/);
     if (sectionVote && method === "PUT") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });

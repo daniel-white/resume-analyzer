@@ -6,9 +6,10 @@ import {
   Search,
   ShieldCheck,
   ThumbsDown,
+  Zap,
 } from "lucide-react";
 
-import { setFeedbackAnalysisHandled } from "~/fns/admin.functions";
+import { getAdminFeedback, rerunFeedbackAnalysis, setFeedbackAnalysisHandled } from "~/fns/admin.functions";
 import {
   adminStats,
   analysisHandled,
@@ -65,6 +66,39 @@ export function AdminFeedbackDashboard({
       setError("Could not update the diagnosis. Please try again.");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function rerun(analysis: AdminFeedbackAnalysis) {
+    if (busyId) return;
+    setBusyId(analysis.id);
+    setError(null);
+    try {
+      const result = await rerunFeedbackAnalysis({ data: { id: analysis.id } });
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setItems((current) => removeAnalysis(current, analysis.id));
+      // The worker enqueues a new diagnosis asynchronously; poll for it.
+      const poll = window.setInterval(() => {
+        void refresh();
+      }, 1500);
+      window.setTimeout(() => window.clearInterval(poll), 12000);
+    } catch {
+      setError("Could not rerun the diagnosis. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function refresh() {
+    try {
+      const view = await getAdminFeedback();
+      setItems(view.feedback);
+    } catch {
+      // A poll failure is not worth surfacing; the next poll or navigation
+      // will pick up the new diagnosis.
     }
   }
 
@@ -139,6 +173,7 @@ export function AdminFeedbackDashboard({
               item={item}
               busyId={busyId}
               onToggle={(analysis) => void toggle(analysis)}
+              onRerun={(analysis) => void rerun(analysis)}
             />
           ))}
         </div>
@@ -151,10 +186,12 @@ function FeedbackCard({
   item,
   busyId,
   onToggle,
+  onRerun,
 }: {
   item: AdminFeedback;
   busyId: string | null;
   onToggle: (analysis: AdminFeedbackAnalysis) => void;
+  onRerun: (analysis: AdminFeedbackAnalysis) => void;
 }) {
   const open = feedbackOpen(item);
   return (
@@ -213,15 +250,27 @@ function FeedbackCard({
                   ) : (
                     <span className="admin-handled-note is-open">Waiting for review</span>
                   )}
-                  <button
-                    type="button"
-                    className={cn("admin-handle-button", handled && "is-reopen")}
-                    disabled={busyId !== null}
-                    onClick={() => onToggle(analysis)}
-                  >
-                    {handled ? <RotateCcw size={14} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
-                    {busy ? "Saving" : handled ? "Reopen" : "Mark handled"}
-                  </button>
+                  <span className="admin-analysis-buttons">
+                    <button
+                      type="button"
+                      className={cn("admin-rerun-button", busy && "is-busy")}
+                      disabled={busyId !== null}
+                      onClick={() => onRerun(analysis)}
+                      title="Delete this diagnosis and ask the model to regenerate it"
+                    >
+                      <Zap size={14} aria-hidden="true" />
+                      {busy ? "Rerunning" : "Rerun"}
+                    </button>
+                    <button
+                      type="button"
+                      className={cn("admin-handle-button", handled && "is-reopen")}
+                      disabled={busyId !== null}
+                      onClick={() => onToggle(analysis)}
+                    >
+                      {handled ? <RotateCcw size={14} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+                      {busy ? "Saving" : handled ? "Reopen" : "Mark handled"}
+                    </button>
+                  </span>
                 </div>
               </div>
             );
@@ -278,6 +327,17 @@ function markHandled(
         : analysis,
     ),
   }));
+}
+
+/// Drop one diagnosis from the local list after a rerun. The worker enqueues
+/// a new diagnosis; the list refreshes from the server when it lands.
+function removeAnalysis(items: AdminFeedback[], id: string): AdminFeedback[] {
+  return items
+    .map((item) => ({
+      ...item,
+      analyses: item.analyses.filter((analysis) => analysis.id !== id),
+    }))
+    .filter((item) => item.analyses.length > 0);
 }
 
 function formatDate(value: string): string {

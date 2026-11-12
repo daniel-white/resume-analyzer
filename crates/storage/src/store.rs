@@ -959,6 +959,70 @@ impl Store {
         Ok(result.rows_affected() == 1)
     }
 
+    /// Drop one stored diagnosis and ask the worker to regenerate it. The
+    /// model still has the version's markdown and raw file, so the new
+    /// diagnosis arrives as a fresh row. Returns false when the id is unknown
+    /// or the version no longer has the text it was built from.
+    pub async fn rerun_feedback_analysis(
+        &self,
+        id: Uuid,
+    ) -> anyhow::Result<bool> {
+        let mut tx = self.pool.begin().await?;
+        let row: Option<(
+            Uuid,
+            Uuid,
+            String,
+            String,
+            String,
+        )> = sqlx::query_as(
+            "select version_id, user_id, section_id, section_heading, section_kind
+             from feedback_analysis where id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some((version_id, user_id, section_id, section_heading, section_kind)) = row else {
+            return Ok(false);
+        };
+        let has_markdown: bool = sqlx::query_scalar(
+            "select resume_markdown is not null from versions where id = $1",
+        )
+        .bind(version_id)
+        .fetch_one(&mut *tx)
+        .await?;
+        if !has_markdown {
+            tx.rollback().await?;
+            return Ok(false);
+        }
+        sqlx::query("delete from feedback_analysis where id = $1")
+            .bind(id)
+            .execute(&mut *tx)
+            .await?;
+        let resume_id: Uuid =
+            sqlx::query_scalar("select resume_id from versions where id = $1")
+                .bind(version_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        let kind = SectionKind::parse(&section_kind).unwrap_or(SectionKind::Other);
+        let payload = AnalyzeFeedbackPayload {
+            version_id,
+            user_id,
+            section_id,
+            section_heading,
+            section_kind: kind,
+        };
+        enqueue(
+            &mut tx,
+            resume_id,
+            version_id,
+            EventName::AnalyzeFeedback,
+            &payload,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(true)
+    }
+
     pub async fn fanout(&self, version_id: Uuid, plugin_ids: &[&str]) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
         let resume_id: Uuid = sqlx::query_scalar("select resume_id from versions where id = $1")
