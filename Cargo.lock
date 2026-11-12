@@ -1283,12 +1283,8 @@ name = "feedback"
 version = "0.1.0"
 dependencies = [
  "domain",
-<<<<<<< HEAD
  "once_cell",
- "reqwest",
-=======
  "reqwest 0.13.5",
->>>>>>> 37248f5 (deps: bump Cargo and npm dependencies; adapt to new APIs)
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4134,7 +4130,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn 2.0.119",
- "thiserror",
+ "thiserror 2.0.21",
  "tokio",
  "url",
 ]
@@ -4162,12 +4158,7 @@ dependencies = [
  "sha1",
  "sha2 0.11.1",
  "sqlx-core",
-<<<<<<< HEAD
- "stringprep",
  "thiserror 2.0.21",
-=======
- "thiserror",
->>>>>>> 37248f5 (deps: bump Cargo and npm dependencies; adapt to new APIs)
  "time",
  "tracing",
  "uuid",
@@ -4318,12 +4309,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "domain",
-<<<<<<< HEAD
  "once_cell",
- "reqwest",
-=======
  "reqwest 0.13.5",
->>>>>>> 37248f5 (deps: bump Cargo and npm dependencies; adapt to new APIs)
  "serde",
  "serde_json",
  "tracing",
