@@ -346,6 +346,7 @@ function removeAnalysis(items: AdminFeedback[], id: string): AdminFeedback[] {
 }
 
 function formatDate(value: string, timezone?: string): string {
+  const date = new Date(value);
   const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
@@ -354,7 +355,18 @@ function formatDate(value: string, timezone?: string): string {
     minute: "2-digit",
     timeZone: timezone ?? "UTC",
   };
-  const formatted = new Intl.DateTimeFormat("en-US", options).format(new Date(value));
+  // Build the string from parts so the output is identical on the server and
+  // the client regardless of which ICU version each side runs. Node may emit
+  // "Nov 7, 2026, 6:00 PM" while Chrome emits "Nov 7, 2026 at 6:00 PM" for the
+  // same options; assembling ourselves avoids that hydration mismatch.
+  const parts = new Intl.DateTimeFormat("en-US", options).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const hour = get("hour");
+  const minute = get("minute");
+  const dayPeriod = get("dayPeriod");
+  const time = dayPeriod ? `${hour}:${minute} ${dayPeriod}` : `${hour}:${minute}`;
+  const datePart = `${get("month")} ${get("day")}, ${get("year")}`;
+  const formatted = `${datePart}, ${time}`;
   // Show "(UTC)" when the backend could not determine the user's timezone.
   return timezone ? formatted : `${formatted} (UTC)`;
 }
