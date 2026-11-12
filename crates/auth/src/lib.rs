@@ -5,8 +5,7 @@
 
 mod store;
 
-use hmac::Mac;
-use rand::RngCore;
+use hmac::{KeyInit, Mac};
 use sha2::Digest;
 
 pub use store::{IssuedLink, ListedSession, Session};
@@ -150,7 +149,7 @@ pub async fn delete_account(pool: &sqlx::PgPool, user_id: Uuid) -> Result<(), Au
 
 fn random_token() -> [u8; 32] {
     let mut bytes = [0_u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    let _ = getrandom::getrandom(&mut bytes);
     bytes
 }
 

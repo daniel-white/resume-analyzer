@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 s3 = { version = "0.1", features = ["async", "rustls"] }
 anyhow = "1"
-base64 = "0.22"
+base64 = "0.23"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
 async-stream = "0.3"
@@ -25,19 +25,19 @@ feedback = { path = "../models/feedback" }
 futures-util = "0.3"
 mail = { path = "../mail" }
 plugins = { path = "../plugins" }
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
 sections = { path = "../models/sections" }
 summary = { path = "../models/summary" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "tls-rustls", "postgres"] }
 storage = { path = "../storage" }
 time = { version = "0.3", features = ["serde", "serde-well-known"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util", "sync"] }
 tower = "0.5"
 tower-resilience = { version = "0.13", features = ["retry", "circuitbreaker"] }
 uuid = { version = "1", features = ["serde", "v4"] }
-zip = "2.2"
+zip = "9"
 
 [dev-dependencies]
 auth = { path = "../auth" }
@@ -46,11 +46,11 @@ domain = { path = "../domain" }
 futures-util = "0.3"
 http-body-util = "0.1"
 mail = { path = "../mail" }
-reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
 serde_json = "1"
 storage = { path = "../storage" }
 testcontainers-modules = { version = "0.15", features = ["postgres"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }
 tower = { version = "0.5", features = ["util"] }
 uuid = { version = "1", features = ["serde", "v4"] }
-zip = "2.2"
+zip = "9"

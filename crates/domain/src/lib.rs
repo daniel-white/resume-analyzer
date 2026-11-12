@@ -2,7 +2,7 @@
 //! types directly so a second shape cannot sneak in beside the contract.
 
 use chrono::{DateTime, Utc};
-use hmac::Mac;
+use hmac::{KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

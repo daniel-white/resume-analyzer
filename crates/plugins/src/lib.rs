@@ -130,7 +130,10 @@ fn docx_lines(bytes: &[u8]) -> Vec<domain::DocumentLine> {
         let Ok(mut file) = archive.by_index(index) else {
             continue;
         };
-        let name = file.name().to_owned();
+        let Ok(name) = file.name() else {
+            continue;
+        };
+        let name = name.to_string();
         let mut xml = String::new();
         if file.read_to_string(&mut xml).is_err() {
             continue;
@@ -413,7 +416,7 @@ fn read_docx(bytes: &[u8]) -> Option<ParseInput> {
     let mut header = String::new();
     for index in 0..archive.len() {
         let mut file = archive.by_index(index).ok()?;
-        let name = file.name().to_owned();
+        let name = file.name().ok()?.to_string();
         let mut xml = String::new();
         file.read_to_string(&mut xml).ok()?;
         if name == "word/document.xml" {
