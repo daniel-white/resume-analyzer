@@ -15,6 +15,12 @@ driver=${MINIKUBE_DRIVER:-vfkit}
 # what made decode retries so slow.
 memory=${MINIKUBE_MEMORY:-24g}
 cpus=${MINIKUBE_CPUS:-4}
+# 60g: the llama-cpp model-llama OCI image (~2 GiB of weights) is loaded into
+# the node's container runtime, and the built stack (api, web, ats, postgres,
+# localstack) takes several more. Docker's default minikube disk is 20g, which
+# runs out during image loads; 60g leaves headroom for container layers and
+# page cache spill. Only read at cluster creation.
+disk=${MINIKUBE_DISK:-60g}
 # Kubernetes 1.35 enables the ImageVolume feature by default (Beta in 1.35,
 # GA in 1.36). minikube 1.38.1 ships this as its stable version and bundles
 # containerd 2.x, which is required to mount an OCI image as a pod volume.
@@ -62,6 +68,7 @@ else
     --driver "$driver" \
     --memory "$memory" \
     --cpus "$cpus" \
+    --disk-size "$disk" \
     --kubernetes-version "$k8s_version" \
     --container-runtime "$runtime" \
     "${gpu_args[@]}" \
