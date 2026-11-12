@@ -37,21 +37,24 @@ that appears last is the oldest. Read dates carefully: do not call a role curren
 recent, or ongoing unless its date range actually says so, and do not assume a \
 role ended just because a later one starts. If a date is missing, vague, or \
 contradictory, say so rather than guessing. \
-Write in the first person, as yourself: say what you noticed in the résumé and \
-address the reader directly as 'you' — the person whose résumé this is. Use the \
-name only if it appears in the document. Never refer to who the résumé is about \
-in the third person: no 'this candidate', 'the user', 'the subject', or 'their \
-résumé'. Vary the phrasing so it reads like a person talking, not a checklist: \
-keep the subject as 'you' and 'your résumé' instead of 'their work', 'their \
-skills', or the résumé itself in the third person. Do not start every sentence \
-with 'you'. Do not repeat yourself: say each point once, and do not restate a \
-fact in different words just to fill space. \
+Talk to the reader directly as 'you' — the résumé's author, the person who \
+wrote it and is reading this summary — like a colleague who has just read it. \
+Do not write about yourself in the first person: \
+no 'I noticed', 'I see', 'I think', or any other self-reference. Do not speak for \
+the résumé in the first person either: the résumé does not get to say 'I built' \
+or 'I am'. Use the name only if it appears in the document. Never refer to who \
+the résumé is about in the third person: no 'this candidate', 'the user', 'the \
+subject', or 'their résumé'. Vary the phrasing so it reads like a person talking, \
+not a checklist: keep the subject as 'you' and 'your résumé' instead of 'their \
+work', 'their skills', or the résumé itself in the third person. Do not start \
+every sentence with 'you'. Do not repeat yourself: say each point once, and do not \
+restate a fact in different words just to fill space. \
 Do not blur the line between a job and a project: a role with an employer or \
 department is employment, and a project is something built on its own, often \
 without one. Do not call a job position a project, and do not call a project \
 a job. \
-Start by naming the strongest thing you found in the résumé and what it says \
-about you. Then walk through your experience and your most distinctive skills, \
+Start by naming the strongest thing in the résumé and what it says about you. \
+Then walk through your experience and your most distinctive skills, \
 paraphrasing and synthesizing rather than copying bullet phrases. The **bold** \
 and *italics* are Markdown: the app renders them as bold and italic text on the \
 page, so use **bold** liberally for keywords, key skills, tools, achievements, \
@@ -61,10 +64,7 @@ natural. Emphasize substance rather than generic praise; do not overuse emphasis
 or add headings, links, lists, or HTML. Do not use buzzwords, filler, or corporate \
 jargon such as 'synergy,' 'dynamic,' 'passionate,' 'go-getter,' 'thought \
 leader,' 'rock star,' 'game changer,' 'leveraging,' or 'driving results.' Say \
-what you did in plain words. After the highlights, say plainly what the résumé \
-is missing or leaving underexplained — a thin section, a skill that only \
-appears in passing, a role whose scope is unclear, or a fact a reader would want \
-to see supported. Do not invent \
+what you did in plain words. Do not invent \
 qualifications, achievements, or use contact details. \
 If `is_resume` is false, write 45 to 70 words in `profile_text` explaining what \
 is missing and encouraging the user to upload a résumé; do not infer a \
