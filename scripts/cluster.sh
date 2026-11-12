@@ -7,8 +7,14 @@ set -euo pipefail
 
 profile=${MINIKUBE_PROFILE:-resume-analyzer}
 driver=${MINIKUBE_DRIVER:-vfkit}
-memory=${MINIKUBE_MEMORY:-6g}
-cpus=${MINIKUBE_CPUS:-2}
+# 24g: llama.cpp reserves the whole KV pool up front. The llama-cpp chart
+# uses -c 16384 (~1.75 GiB of KV) on top of ~2 GiB of model weights, and the
+# rest of the stack (postgres, localstack, envoy, dashboard, provider stubs)
+# needs a few GiB too, with room for page cache under load. 4 cpus:
+# llama-server uses every core it gets, and prompt processing on 2 vCPUs is
+# what made decode retries so slow.
+memory=${MINIKUBE_MEMORY:-24g}
+cpus=${MINIKUBE_CPUS:-4}
 # Kubernetes 1.35 enables the ImageVolume feature by default (Beta in 1.35,
 # GA in 1.36). minikube 1.38.1 ships this as its stable version and bundles
 # containerd 2.x, which is required to mount an OCI image as a pod volume.
@@ -16,7 +22,10 @@ k8s_version=${MINIKUBE_K8S_VERSION:-v1.35.1}
 
 export MINIKUBE_PROFILE=$profile
 
-if minikube status --profile "$profile" --format '{{.Host}}' 2>/dev/null | grep -q Running; then
+# Host alone is not enough: an interrupted start/stop can leave the VM up
+# while kubelet and the apiserver are still down. Only skip `minikube start`
+# when every component is up; otherwise fall through and start (idempotent).
+if minikube status --profile "$profile" --format '{{.Host}} {{.Kubelet}} {{.APIServer}}' 2>/dev/null | grep -q '^Running Running Running$'; then
   echo "minikube profile $profile already running"
   # An existing profile keeps the runtime it was created with. Image volumes
   # need containerd; the old docker/cri-dockerd runtime cannot mount them, so

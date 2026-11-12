@@ -48,7 +48,21 @@ spec:
             - --port
             - "8080"
             - -c
-            - {{ .Values.context | default "2048" | quote }}
+            - {{ .Values.context | default 16384 | quote }}
+            # One unified KV pool shared by all slots, with a hard per-slot
+            # cap. -np is explicit, so -kvu is too: otherwise llama.cpp only
+            # defaults to unified when the slot count is auto.
+            - -np
+            - {{ .Values.parallel | default 4 | quote }}
+            - -kvu
+            - --kv-unified-per-slot
+            - {{ .Values.perSlotContext | default 4096 | quote }}
+            # Cap the tokens submitted per decode. A 2048-token batch could
+            # equal the whole old pool and make one request fatal for all.
+            - -b
+            - {{ .Values.batch | default 512 | quote }}
+            - -ub
+            - {{ .Values.ubatch | default 512 | quote }}
             - -ngl
             - "0"
           readinessProbe:

@@ -20,6 +20,28 @@ modelImagePullPolicy: Never
 model: llama-3.2-3b-instruct-q4_k_m.gguf
 dir: /models
 
-# Total KV-cache tokens. 2048 is the current setting; the 3B model's native
-# context is 8192 if summaries ever hit "context size exceeded" again.
-context: 2048
+# Total KV-cache pool, shared across all parallel slots (kv-unified).
+# Sized as parallel * perSlotContext so every slot can run at its cap at once.
+# At f16 a 3B Llama costs ~112 KiB/token, so 16384 tokens is roughly 1.75 GiB
+# on top of the ~2 GiB of model weights. The old value of 2048 was one pool
+# shared by four slots: any request could start, but the slots collectively
+# overcommitted it, and decode then failed and tore down every active request.
+context: 16384
+
+# Concurrent requests llama.cpp will serve. Extra HTTP requests wait for a
+# free slot instead of being rejected.
+parallel: 4
+
+# Hard per-request cap. A prompt larger than this is rejected before it is
+# admitted, with a clear "exceeds the available context size" error, rather
+# than failing mid-decode and taking the other slots down with it. Must be
+# <= context / parallel (the pool is sized to parallel * perSlotContext).
+perSlotContext: 4096
+
+# Logical and physical batch sizes. Keeping both at 512 means a decode never
+# asks the KV pool for more than 512 cells at once. The old logical default
+# (2048) matched the entire pool, so one oversized prefill failed the whole
+# server; smaller batches also make llama.cpp's "retry with a smaller batch"
+# fallback take far fewer attempts.
+batch: 512
+ubatch: 512
