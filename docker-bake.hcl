@@ -1,6 +1,7 @@
 # Versions are still pinned in the Dockerfiles. The follow-up in
 # docs/plan.md moves RUST_VERSION and NODEJS_VERSION here, with no
-# default, fed by the flake devShell.
+# default, fed by the flake devShell. An unset value must fail the build
+# instead of pulling a floating tag.
 
 variable "REGISTRY" {
   default = "resume-analyzer"
@@ -8,6 +9,19 @@ variable "REGISTRY" {
 
 variable "TAG" {
   default = "dev"
+}
+
+# Pinned by the flake devShell (`export RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)`,
+# `export NODEJS_VERSION=$(node --version | cut -c 2-)`). No default on purpose:
+# an unset value must fail the build rather than silently fetching a floating tag.
+variable "RUST_VERSION" {}
+variable "NODEJS_VERSION" {}
+
+target "_common" {
+  args = {
+    RUST_VERSION = "${RUST_VERSION}"
+    NODEJS_VERSION = "${NODEJS_VERSION}"
+  }
 }
 
 group "default" {
@@ -19,6 +33,7 @@ group "all" {
 }
 
 target "api" {
+  inherits = ["_common"]
   context    = "."
   dockerfile = "Dockerfile"
   tags       = ["${REGISTRY}/api:${TAG}"]
@@ -40,6 +55,7 @@ target "model-llama" {
 }
 
 target "web" {
+  inherits = ["_common"]
   context    = "."
   dockerfile = "Dockerfile.web"
   tags       = ["${REGISTRY}/web:${TAG}"]

@@ -17,7 +17,12 @@
   };
 
   outputs = { self, nixpkgs, minikube-nixpkgs, rust-overlay, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
+    flake-utils.lib.eachSystem [
+      "aarch64-darwin"
+      "aarch64-linux"
+      "x86_64-darwin"
+      "x86_64-linux"
+    ] (system:
       let
         overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs { inherit system overlays; };
@@ -25,9 +30,7 @@
         minikube = minikube-nixpkgs.legacyPackages.${system}.minikube;
 
         # Pinned so every worktree builds with the same compiler.
-        rustToolchain = pkgs.rust-bin.stable."1.99.1".default.override {
-          extensions = [ "rust-src" "rustfmt" "clippy" ];
-        };
+        rustToolchain = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         # Native libraries the AWS SDK and sqlx need at link time.
         buildInputs = with pkgs; [
@@ -63,6 +66,8 @@
           };
 
           shellHook = ''
+            export RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)
+            export NODEJS_VERSION=$(node --version | cut -c 2-)
             echo "rust $(rustc --version), node $(node --version), pnpm $(pnpm --version) — resume-analyzer dev shell"
           '';
         };

@@ -1,8 +1,12 @@
 # syntax=docker/dockerfile:1
 
-# Match the flake's Rust toolchain; pin Chef rather than installing it on
-# every cold build. Keep compiled dependencies in an exportable image layer.
-FROM lukemathwalker/cargo-chef:0.1.78-rust-1.99.1-bookworm AS chef
+# Build images through Dagger, which runs docker buildx bake via Dagger: $*
+# The version variables come from the flake devShell (RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)).
+# They are declared here as build args so the host-side job passes them through.
+ARG RUST_VERSION=1.99.0
+ARG DEBIAN_CODENAME=bookworm
+
+FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS chef
 WORKDIR /src
 
 FROM chef AS planner

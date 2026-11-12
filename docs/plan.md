@@ -332,7 +332,7 @@ Not part of the current wave. Do these after the demo path works, not instead of
       them from the pinned toolchain (`rustc --version`, `node --version`).
       Dockerfiles take those as build args. Image tags are
       `${REGISTRY}/<name>:${TAG}`. Until this lands, the Dockerfiles pin
-      `rust:1.99.1` and `node:22` by hand, matching the flake.
+      `rust:1.100.0` and `node:22` by hand, matching the flake.
 
 ## Out of scope
 

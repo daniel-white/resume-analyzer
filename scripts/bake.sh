@@ -11,4 +11,8 @@ source "$root/scripts/docker-cred.sh"
 
 "$root/scripts/bake-manifests"
 
-exec docker buildx bake --file docker-bake.hcl "$@"
+exec docker buildx bake \
+  --file docker-bake.hcl \
+  --file images/rust/docker-bake.hcl \
+  --file images/nodejs/docker-bake.hcl \
+  "$@"
