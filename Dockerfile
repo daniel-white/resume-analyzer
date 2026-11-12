@@ -8,6 +8,11 @@ ARG DEBIAN_CODENAME=bookworm
 
 FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS chef
 WORKDIR /src
+# Mirrors images/rust/toolchain.Dockerfile: install Cargo Chef in the toolchain
+# layer so the planner stage (line 16) can run `cargo chef prepare`.
+RUN --mount=type=cache,id=resume-analyzer-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=resume-analyzer-cargo-git,target=/usr/local/cargo/git \
+    cargo install cargo-chef --version 0.1.78 --locked
 
 FROM chef AS planner
 COPY tmp/cargo-manifests.tar ./tmp/
