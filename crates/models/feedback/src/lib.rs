@@ -541,6 +541,14 @@ mod tests {
     }
 
     #[test]
+    fn prompt_distinguishes_impression_from_sections() {
+        assert!(SYSTEM_PROMPT.contains("profile-summary"));
+        assert!(SYSTEM_PROMPT.contains("Profile impression"));
+        assert!(SYSTEM_PROMPT.contains("no markdown rendering"));
+        assert!(SYSTEM_PROMPT.contains("The original text is the real résumé"));
+    }
+
+    #[test]
     fn output_is_plain_bounded_text() {
         let output = clean_output("  Ada\n\nbuilds   systems. ");
         assert_eq!(output, "Ada builds systems.");
