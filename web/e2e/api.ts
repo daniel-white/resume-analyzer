@@ -134,6 +134,8 @@ export type ApiOptions = {
   resumes?: Array<typeof designed>;
   magicLinkStatus?: number;
   verifyStatus?: number;
+  admin?: boolean;
+  adminFeedback?: unknown[];
 };
 
 export async function ready(page: Page) {

@@ -67,7 +67,7 @@ The Rust stack is axum, tokio, sqlx, the AWS S3 SDK, lettre, and webauthn-rs,
 on Rust edition 2024. The web stack is TanStack Start on Vite, with Nitro
 producing a Node server (`node .output/server/index.mjs`) and Tailwind v4.
 
-## Event spine
+## Event flow
 
 ```text
 POST /api/resumes
@@ -279,7 +279,7 @@ about merge conflicts, not about bypassing anyone's safeguards.
 | 0 | `factory/bootstrap` | the orchestrator, directly | immediately | the skeleton, the gate, and the contracts headings are committed |
 | 1a | `factory/foundation` | foundation agent | wave 0 | `nix develop` builds, `just dev` brings up Postgres, LocalStack, Mailpit, and a healthy API |
 | 1b | `web/scaffold` | web-scaffold agent | wave 0 | `pnpm dev` renders the health JSON from Rust |
-| 2 | `api/spine` | api agent | 1a | uploading a DOCX and a PDF shows one stub plugin's callback arriving on the event stream |
+| 2 | `api/flow` | api agent | 1a | uploading a DOCX and a PDF shows one stub plugin's callback arriving on the event stream |
 | 3a | `plugins/fleet` | plugins agent | 2 | the four plugins disagree on the designed fixture and agree on the plain one |
 | 3b | `web/ui` | web-ui agent | 1b and the frozen response shapes from 2 | the designed-versus-plain contrast is visible without reading code |
 | 4 | `auth/magic-link` | auth agent | 2 and 1b | a magic link round-trips through Mailpit |

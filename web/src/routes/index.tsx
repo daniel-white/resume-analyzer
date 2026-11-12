@@ -18,11 +18,11 @@ export const Route = createFileRoute("/")({
 function LibraryPage() {
   const library = Route.useLoaderData();
   if (!library) return <LandingPage />;
-  const { rows, drop, email } = library;
+  const { rows, drop, email, admin } = library;
 
   return (
     <Page>
-      <SiteHeader email={email} />
+      <SiteHeader email={email} admin={admin} />
       <div className="library-heading">
         <p className="eyebrow">YOUR NEXT CHAPTER, IN PROGRESS</p>
         <h1>Your résumés</h1>

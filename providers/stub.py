@@ -176,7 +176,7 @@ def provider(provider_id: str) -> Provider:
 
 
 def secret() -> str:
-    return os.environ.get("PLUGIN_SECRET", "spine-stub-secret")
+    return os.environ.get("PLUGIN_SECRET", "demo-stub-secret")
 
 
 def delay_band(item: Provider) -> tuple[float, float]:

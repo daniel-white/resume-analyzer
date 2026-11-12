@@ -1,10 +1,10 @@
 # Contracts
 
-Frozen by the API spine. Plugin and UI waves consume these shapes and do not
+Frozen by the API contract. Plugin and UI waves consume these shapes and do not
 invent a second one beside them. JSON is snake_case. Timestamps are RFC 3339.
 Identifiers are UUID strings.
 
-Auth routes are not part of this spine. Until a session exists, uploads belong
+Auth routes are not part of this contract. Until a session exists, uploads belong
 to the demo user `00000000-0000-0000-0000-000000000001`. List, detail, and the
 event stream are already scoped to the calling user. Account removal deletes
 that user's rows and every object under `users/{user_id}/`.
@@ -17,7 +17,7 @@ The object key is
 `users/{user_id}/resumes/{resume_id}/versions/{version_id}`. Cleanup deletes
 the outbox rows, the runs, the callback keys, the versions, and the resume
 rows for that user, then deletes every object the call returned. There is no
-public delete route in this spine.
+public delete route in this contract.
 
 ## ParseInput
 
@@ -264,7 +264,7 @@ GET /api/plugins
 }
 ```
 
-This spine compiles in one plugin, `stub`. The four simulated systems replace
+This build compiles in one plugin, `stub`. The four simulated systems replace
 it without changing this document. Each of them receives the raw file.
 
 ## Verdict

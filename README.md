@@ -51,6 +51,10 @@ pnpm dev
 Open <http://localhost:3000>. The frontend proxies `/api` to the Rust API on
 port 8080. Read sign-in emails at <http://localhost:8025>.
 
+`ADMIN_EMAIL_DOMAINS` is a comma-separated list of email domains that can open
+`/admin` (default `resume.local`). Sign in as `admin@resume.local` locally to
+review downvoted feedback and mark model diagnoses handled.
+
 ### Candidate profile model
 
 After parsing, the worker creates a short candidate profile and stores it with

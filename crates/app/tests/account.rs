@@ -107,6 +107,7 @@ async fn login_cookie_can_manage_the_account() {
         auth_secret: "test-secret-value".to_owned(),
         app_origin: "http://127.0.0.1:3000".to_owned(),
         cookie_secure: false,
+        admin_email_domains: vec![],
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await

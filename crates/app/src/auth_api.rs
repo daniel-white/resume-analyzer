@@ -35,6 +35,7 @@ struct IdentityBody {
 struct MeBody {
     id: auth::Uuid,
     email: String,
+    admin: bool,
     sessions: Vec<SessionBody>,
 }
 
@@ -60,6 +61,20 @@ pub async fn current_user(api: &Api, headers: &HeaderMap) -> Result<auth::Uuid, 
     current_session(api, headers)
         .await
         .map(|session| session.user_id)
+}
+
+/// Signed in and on a configured admin domain. Signed-out callers get 401;
+/// signed-in callers on any other domain get 403.
+pub async fn current_admin(
+    api: &Api,
+    headers: &HeaderMap,
+) -> Result<auth::Session, StatusCode> {
+    let session = current_session(api, headers).await?;
+    if api.is_admin_email(&session.email) {
+        Ok(session)
+    } else {
+        Err(StatusCode::FORBIDDEN)
+    }
 }
 
 async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailBody>) -> Response {
@@ -96,6 +111,9 @@ async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailB
 }
 
 fn valid_return_to(path: &str) -> bool {
+    if path == "/admin" {
+        return true;
+    }
     let Some(id) = path.strip_prefix("/resumes/") else {
         return false;
     };
@@ -153,9 +171,11 @@ async fn me(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {
         })
         .collect();
     sessions.sort_by_key(|session| std::cmp::Reverse(session.current));
+    let admin = api.is_admin_email(&current.email);
     Json(MeBody {
         id: current.user_id,
         email: current.email,
+        admin,
         sessions,
     })
     .into_response()
@@ -280,16 +300,19 @@ mod return_to_tests {
     use super::valid_return_to;
 
     #[test]
-    fn accepts_only_local_resume_destinations() {
+    fn accepts_only_local_resume_and_admin_destinations() {
         let id = "12345678-1234-1234-1234-123456789abc";
         assert!(valid_return_to(&format!(
             "/resumes/{id}?version={id}&provider=greenline"
         )));
+        assert!(valid_return_to("/admin"));
         for path in [
             "https://evil.example",
             "//evil.example",
             "/login",
             "/resumes/not-an-id",
+            "/admin/",
+            "/admin?tab=open",
         ] {
             assert!(!valid_return_to(path));
         }

@@ -50,6 +50,8 @@ const server = createServer(async (request, response) => {
       scenarios.set(id, {
         signedIn: body.signedIn ?? true,
         resumes: body.resumes ?? [],
+        admin: body.admin ?? false,
+        adminFeedback: body.adminFeedback ?? [],
         magicLinkStatus: body.magicLinkStatus ?? 202,
         verifyStatus: body.verifyStatus ?? 200,
         streams: new Set(),
@@ -95,6 +97,7 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, {
         id: "user-ada",
         email: "ada@example.com",
+        admin: scenario.admin,
         sessions: [],
       });
     }
@@ -164,6 +167,29 @@ const server = createServer(async (request, response) => {
         version_id: created.versions[0].id,
         status: "uploaded",
       });
+    }
+
+    if (pathname === "/api/admin/feedback" && method === "GET") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      if (!scenario.admin) return sendJson(response, 403, { error: "forbidden" });
+      return sendJson(response, 200, { feedback: scenario.adminFeedback ?? [] });
+    }
+
+    const adminAnalysis = pathname.match(/^\/api\/admin\/feedback\/analyses\/([^/]+)$/);
+    if (adminAnalysis && method === "PUT") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      if (!scenario.admin) return sendJson(response, 403, { error: "forbidden" });
+      const body = await readJson(request);
+      const found = (scenario.adminFeedback ?? []).flatMap((item) => item.analyses).find((analysis) => analysis.id === adminAnalysis[1]);
+      if (!found) return sendJson(response, 404, { error: "missing" });
+      if (body.handled === true) {
+        found.handled_at = "2026-11-08T00:00:00Z";
+        found.handled_by = "ada@example.com";
+      } else {
+        delete found.handled_at;
+        delete found.handled_by;
+      }
+      return send(response, 204, "");
     }
 
     const sectionVote = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/sections\/([^/]+)$/);

@@ -11,7 +11,7 @@ import {
   type MagicLinkResult,
 } from "../server/auth";
 import { SignedOut } from "../server/session";
-import { resumeReturnTo } from "../lib/return-to";
+import { safeReturnTo } from "../lib/return-to";
 
 export type { Account, MagicLinkResult };
 
@@ -40,13 +40,13 @@ export const getAccount = createServerFn({ method: "GET" }).handler(
 );
 
 export const sendMagicLink = createServerFn({ method: "POST" })
-  .validator((data: { email: string; returnTo?: string; uploadId?: string }) => ({ email: data.email, returnTo: resumeReturnTo(data.returnTo), uploadId: data.uploadId }))
+  .validator((data: { email: string; returnTo?: string; uploadId?: string }) => ({ email: data.email, returnTo: safeReturnTo(data.returnTo), uploadId: data.uploadId }))
   .handler(async ({ data }): Promise<MagicLinkResult> =>
     requestMagicLink(apiBase(), data.email, cookie(), data.returnTo, data.uploadId),
   );
 
 export const verifyLink = createServerFn({ method: "POST" })
-  .validator((data: { token: string; returnTo?: string }) => ({ token: data.token, returnTo: resumeReturnTo(data.returnTo) }))
+  .validator((data: { token: string; returnTo?: string }) => ({ token: data.token, returnTo: safeReturnTo(data.returnTo) }))
   .handler(async ({ data }): Promise<{ ok: false; message: string }> => {
     const result = await verifyMagicLink(apiBase(), data.token, cookie());
     if (!result.ok) return result;

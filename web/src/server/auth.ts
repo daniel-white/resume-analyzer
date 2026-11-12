@@ -2,6 +2,7 @@ import { apiFetch, readSetCookie } from "./session";
 
 export type Account = {
   email: string;
+  admin: boolean;
 };
 
 export type MagicLinkResult = { ok: true } | { ok: false; message: string };
@@ -73,9 +74,9 @@ export async function fetchAccount(
 ): Promise<Account | null> {
   const result = await apiFetch(baseUrl, "/api/me", cookie);
   if (!result.ok) throw new Error(`account returned ${result.status}`);
-  const body = (await result.value.json()) as { email?: string };
+  const body = (await result.value.json()) as { email?: string; admin?: boolean };
   if (!body.email) return null;
-  return { email: body.email };
+  return { email: body.email, admin: body.admin === true };
 }
 
 export async function postLogout(

@@ -25,7 +25,7 @@ Plan an original fake logo for the confirmed name as part of every new-plugin ad
 Read in this order:
 
 1. `docs/contracts.md`. If it still says the sections are headings only, or Verdict has no shape, stop. Do not draft `ParseInput`, the verdict, or the callback in the plugin crate.
-2. `docs/plan.md`, sections "The simulated fleet" and "Event spine". Greenline, Levr, Workdaye, and Ash keep those names and biases. Do not rename them.
+2. `docs/plan.md`, sections "The simulated fleet" and "Event flow". Greenline, Levr, Workdaye, and Ash keep those names and biases. Do not rename them.
 3. `crates/domain`. Use the plugin trait and verdict types that are defined there.
 4. `crates/plugins`, `crates/app/src/providers.rs`, `crates/app/src/worker.rs`, and `providers/stub.py`. Read the registry and siblings, the raw-file handoff, how callbacks are signed, and where the HMAC secret comes from. The current fleet uses Rust registrations with private Python providers; `ATS_PROVIDERS=stub` selects the compiled stand-in.
 5. The two fixture resumes the fleet tests already load. If they are not there and this is not the fleet wave seeding them, stop.

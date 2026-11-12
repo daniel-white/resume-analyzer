@@ -100,7 +100,7 @@ fn plain_pdf() -> Vec<u8> {
 }
 
 fn multipart(filename: &str, bytes: &[u8]) -> (String, Vec<u8>) {
-    let boundary = "spine-boundary";
+    let boundary = "upload-boundary";
     let mut body = Vec::new();
     body.extend(format!("--{boundary}\r\n").into_bytes());
     body.extend(
@@ -231,6 +231,7 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
         auth_secret: auth_secret.into(),
         app_origin: "http://127.0.0.1:3000".into(),
         cookie_secure: false,
+        admin_email_domains: vec![],
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
@@ -453,6 +454,7 @@ async fn upload_reaches_a_callback() {
         auth_secret: secret.to_owned(),
         app_origin: "http://127.0.0.1:3000".to_owned(),
         cookie_secure: false,
+        admin_email_domains: vec![],
     });
     let app = api_router(api);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -573,6 +575,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
             auth_secret: auth_secret.into(),
             app_origin: "http://127.0.0.1:3000".into(),
             cookie_secure: false,
+            admin_email_domains: vec![],
         });
         async move {
             let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

@@ -28,11 +28,24 @@ pub struct Api {
     pub auth_secret: String,
     pub app_origin: String,
     pub cookie_secure: bool,
+    pub admin_email_domains: Vec<String>,
 }
 
 impl Api {
     fn plugin(&self, id: &str) -> Option<&Arc<dyn Ats>> {
         self.plugins.iter().find(|plugin| plugin.id() == id)
+    }
+
+    /// Exact domain match after `@`, case-insensitive. Empty configuration
+    /// grants nobody admin access.
+    pub fn is_admin_email(&self, email: &str) -> bool {
+        let Some((_, domain)) = email.rsplit_once('@') else {
+            return false;
+        };
+        let domain = domain.trim().to_ascii_lowercase();
+        self.admin_email_domains
+            .iter()
+            .any(|allowed| allowed == &domain)
     }
 }
 

@@ -47,7 +47,7 @@ function TeardownPage() {
 
   return (
     <Page wide>
-      <SiteHeader email={view.email} />
+      <SiteHeader email={view.email} admin={view.admin} />
       <ResumeOverview resumeId={view.resumeId} title={view.title} filename={view.filename} cards={view.cards}
         number={view.versions.find((version) => version.id === view.versionId)!.number} isNotResume={isNotResume} />
       <ResumeVersions key={view.resumeId} resumeId={view.resumeId} versionId={view.versionId} versions={view.versions} />

@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    AnalyzeFeedbackPayload, CallbackPayload, EventName, FeedbackAnalysis, GenerateMarkdownPayload,
-    PROFILE_SUMMARY_ID, ParseInput, ProfileSummary, ResumeDetail, ResumeMarkdown, ResumeStatus,
-    ResumeSummary, RunPayload, RunStatus, RunView, SectionKind, SectionMap, SectionVote,
-    UploadedPayload, Verdict, VersionDetail, VersionSummary,
+    AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, CallbackPayload, EventName,
+    FeedbackAnalysis, GenerateMarkdownPayload, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary,
+    ResumeDetail, ResumeMarkdown, ResumeStatus, ResumeSummary, RunPayload, RunStatus, RunView,
+    SectionKind, SectionMap, SectionVote, UploadedPayload, Verdict, VersionDetail, VersionSummary,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -821,6 +821,142 @@ impl Store {
             diagnosis: diagnosis.to_owned(),
             created_at,
         })
+    }
+
+    /// Current thumbs down across all users, each with every diagnosis stored
+    /// for that reading. Only current down votes appear: changing a vote to up
+    /// or clearing it hides the item without deleting the analysis history.
+    pub async fn admin_feedback(&self) -> anyhow::Result<Vec<AdminFeedback>> {
+        let rows = sqlx::query(
+            "select feedback.version_id, feedback.user_id, users.email as user_email,
+                    resumes.id as resume_id, resumes.title as resume_title,
+                    versions.number, versions.filename, feedback.section_id,
+                    feedback.updated_at, versions.sections, versions.profile_summary
+             from section_feedback feedback
+             join versions on versions.id = feedback.version_id
+             join resumes on resumes.id = versions.resume_id
+             join users on users.id = feedback.user_id
+             where feedback.vote = 'down'
+             order by feedback.updated_at desc",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let analyses = sqlx::query(
+            "select analysis.id, analysis.version_id, analysis.user_id,
+                    analysis.section_id, analysis.section_heading, analysis.section_kind,
+                    analysis.model, analysis.engine, analysis.diagnosis, analysis.created_at,
+                    analysis.handled_at, analysis.handled_by
+             from feedback_analysis analysis
+             join section_feedback feedback
+               on feedback.version_id = analysis.version_id
+              and feedback.user_id = analysis.user_id
+              and feedback.section_id = analysis.section_id
+              and feedback.vote = 'down'
+             order by analysis.created_at desc",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.iter()
+            .map(|row| {
+                let version_id: Uuid = row.try_get("version_id")?;
+                let user_id: Uuid = row.try_get("user_id")?;
+                let section_id: String = row.try_get("section_id")?;
+                let matching: Vec<(AdminFeedbackAnalysis, String, SectionKind)> = analyses
+                    .iter()
+                    .filter(|analysis| {
+                        analysis.try_get::<Uuid, _>("version_id").ok() == Some(version_id)
+                            && analysis.try_get::<Uuid, _>("user_id").ok() == Some(user_id)
+                            && analysis.try_get::<String, _>("section_id").ok().as_deref()
+                                == Some(section_id.as_str())
+                    })
+                    .map(|analysis| {
+                        let heading: String = analysis.try_get("section_heading")?;
+                        let kind: String = analysis.try_get("section_kind")?;
+                        Ok((
+                            AdminFeedbackAnalysis {
+                                id: analysis.try_get("id")?,
+                                model: analysis.try_get("model")?,
+                                engine: analysis.try_get("engine")?,
+                                diagnosis: analysis.try_get("diagnosis")?,
+                                created_at: analysis.try_get("created_at")?,
+                                handled_at: analysis.try_get("handled_at")?,
+                                handled_by: analysis.try_get("handled_by")?,
+                            },
+                            heading,
+                            SectionKind::parse(&kind).unwrap_or(SectionKind::Other),
+                        ))
+                    })
+                    .collect::<anyhow::Result<_>>()?;
+
+                let sections: Option<Json<SectionMap>> = row.try_get("sections")?;
+                let profile_summary: Option<Json<ProfileSummary>> =
+                    row.try_get("profile_summary")?;
+                let (section_heading, section_kind, section_body) =
+                    if section_id == PROFILE_SUMMARY_ID {
+                        (
+                            "Profile impression".to_owned(),
+                            SectionKind::Summary,
+                            profile_summary
+                                .as_ref()
+                                .map(|summary| summary.0.text.clone()),
+                        )
+                    } else if let Some(section) = sections
+                        .as_ref()
+                        .and_then(|map| map.0.sections.iter().find(|item| item.id == section_id))
+                    {
+                        (
+                            section.heading.clone(),
+                            section.kind,
+                            Some(section.body.clone()),
+                        )
+                    } else {
+                        match matching.first() {
+                            Some((_, heading, kind)) => (heading.clone(), *kind, None),
+                            None => (section_id.clone(), SectionKind::Other, None),
+                        }
+                    };
+
+                Ok(AdminFeedback {
+                    version_id,
+                    user_id,
+                    user_email: row.try_get("user_email")?,
+                    resume_id: row.try_get("resume_id")?,
+                    resume_title: row.try_get("resume_title")?,
+                    version_number: row.try_get("number")?,
+                    filename: row.try_get("filename")?,
+                    section_id,
+                    section_heading,
+                    section_kind,
+                    section_body,
+                    voted_at: row.try_get("updated_at")?,
+                    analyses: matching
+                        .into_iter()
+                        .map(|(analysis, _, _)| analysis)
+                        .collect(),
+                })
+            })
+            .collect()
+    }
+
+    /// Handle or reopen one diagnosis. Returns false when the id is unknown.
+    /// The row stays either way; `handled_by` is the acting admin's email.
+    pub async fn set_feedback_analysis_handled(
+        &self,
+        id: Uuid,
+        handled_by: Option<&str>,
+    ) -> anyhow::Result<bool> {
+        let result = sqlx::query(
+            "update feedback_analysis
+             set handled_at = case when $2::text is null then null else now() end,
+                 handled_by = $2
+             where id = $1",
+        )
+        .bind(id)
+        .bind(handled_by)
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
     }
 
     pub async fn fanout(&self, version_id: Uuid, plugin_ids: &[&str]) -> anyhow::Result<()> {

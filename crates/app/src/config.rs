@@ -16,6 +16,9 @@ pub struct Config {
     pub auth_secret: String,
     /// Origin of the web app, used as the prefix of the link in the email.
     pub app_origin: String,
+    /// Email domains whose users can open the admin feedback view. Compared
+    /// case-insensitively against the part after `@`. Empty disables admins.
+    pub admin_email_domains: Vec<String>,
 }
 
 impl Config {
@@ -37,6 +40,7 @@ impl Config {
             bind: env("BIND", "0.0.0.0:8080"),
             auth_secret: env("AUTH_SECRET", "dev-only-auth-secret-change-me"),
             app_origin: env("APP_ORIGIN", "https://app.resume.local"),
+            admin_email_domains: domains(&env("ADMIN_EMAIL_DOMAINS", "resume.local")),
         }
     }
 
@@ -59,10 +63,24 @@ impl Config {
             bind: "127.0.0.1:0".into(),
             auth_secret: "dev-only-auth-secret-change-me".into(),
             app_origin: "https://app.resume.local".into(),
+            admin_email_domains: vec!["resume.local".into()],
         }
     }
 }
 
 fn env(key: &str, fallback: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| fallback.to_owned())
+}
+
+/// A comma-separated list, tolerant of spaces and a leading `@` copied from an
+/// email address. Duplicates collapse so a check cannot depend on order.
+fn domains(value: &str) -> Vec<String> {
+    let mut domains: Vec<String> = value
+        .split(',')
+        .map(|domain| domain.trim().trim_start_matches('@').to_ascii_lowercase())
+        .filter(|domain| !domain.is_empty())
+        .collect();
+    domains.sort();
+    domains.dedup();
+    domains
 }

@@ -90,7 +90,7 @@ impl Worker {
         self
     }
 
-    /// Keep claiming until the outbox is idle. Used by the spine test so an
+    /// Keep claiming until the outbox is idle. Used by the upload flow test so an
     /// upload can reach a callback without a background loop.
     pub async fn drain(&self) -> anyhow::Result<()> {
         while self.step().await? {}
@@ -408,7 +408,7 @@ struct ProviderJob<'a> {
 }
 
 pub fn plugin_secret() -> String {
-    std::env::var("PLUGIN_SECRET").unwrap_or_else(|_| "spine-stub-secret".to_owned())
+    std::env::var("PLUGIN_SECRET").unwrap_or_else(|_| "demo-stub-secret".to_owned())
 }
 
 pub fn compiled_plugins() -> Vec<Arc<dyn Ats>> {

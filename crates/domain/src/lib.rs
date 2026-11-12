@@ -500,6 +500,43 @@ pub struct FeedbackAnalysis {
     pub created_at: DateTime<Utc>,
 }
 
+/// One model diagnosis as an admin sees it, including whether someone has
+/// already triaged it. The row is never deleted.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminFeedbackAnalysis {
+    pub id: Uuid,
+    pub model: String,
+    pub engine: String,
+    pub diagnosis: String,
+    pub created_at: DateTime<Utc>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handled_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handled_by: Option<String>,
+}
+
+/// A current thumbs down and every diagnosis stored for it. Admins read this
+/// to find patterns in what the model got wrong.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AdminFeedback {
+    pub version_id: Uuid,
+    pub user_id: Uuid,
+    pub user_email: String,
+    pub resume_id: Uuid,
+    pub resume_title: String,
+    pub version_number: i32,
+    pub filename: String,
+    pub section_id: String,
+    pub section_heading: String,
+    pub section_kind: SectionKind,
+    /// The text the user rejected, when it is still in the stored reading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section_body: Option<String>,
+    pub voted_at: DateTime<Utc>,
+    /// Newest first.
+    pub analyses: Vec<AdminFeedbackAnalysis>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VersionDetail {
     pub id: Uuid,

@@ -1,11 +1,11 @@
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { DropdownMenu } from "radix-ui";
-import { BookOpen, ChevronDown, Files, LoaderCircle, LogOut, UserRound } from "lucide-react";
+import { BookOpen, ChevronDown, Files, Gauge, LoaderCircle, LogOut, UserRound } from "lucide-react";
 
 import { signOut } from "~/fns/auth.functions";
 
-export function SiteHeader({ email }: { email: string }) {
+export function SiteHeader({ email, admin = false }: { email: string; admin?: boolean }) {
   const navigate = useNavigate();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -31,6 +31,7 @@ export function SiteHeader({ email }: { email: string }) {
       <Link to="/" className="landing-brand"><span><BookOpen size={23} aria-hidden="true" /></span>The Other Read<span className="landing-beta">BETA</span></Link>
       <nav aria-label="Main navigation">
         <Link to="/" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Files size={16} aria-hidden="true" /> Your résumés</Link>
+        {admin ? <Link to="/admin" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Gauge size={16} aria-hidden="true" /> Feedback triage</Link> : null}
       </nav>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger className="account-trigger" aria-label="Account menu" disabled={busy}>

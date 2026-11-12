@@ -19,12 +19,12 @@ import {
   type UploadResult,
 } from "../server/resumes";
 import { SignedOut } from "../server/session";
-import { resumeReturnTo } from "../lib/return-to";
+import { safeReturnTo } from "../lib/return-to";
 
 export type { LibraryView, Teardown, UploadResult };
 
-export type SignedInLibrary = LibraryView & { email: string };
-export type SignedInTeardown = Exclude<Teardown, { kind: "missing" }> & { email: string };
+export type SignedInLibrary = LibraryView & { email: string; admin: boolean };
+export type SignedInTeardown = Exclude<Teardown, { kind: "missing" }> & { email: string; admin: boolean };
 
 function apiBase(): string {
   return process.env.API_URL ?? "http://127.0.0.1:8080";
@@ -35,7 +35,7 @@ function cookie(): string | undefined {
 }
 
 function signedOut(returnTo?: string): never {
-  throw redirect({ to: "/login", search: { returnTo: resumeReturnTo(returnTo) } });
+  throw redirect({ to: "/login", search: { returnTo: safeReturnTo(returnTo) } });
 }
 
 export const getLibrary = createServerFn({ method: "GET" }).handler(
@@ -44,7 +44,7 @@ export const getLibrary = createServerFn({ method: "GET" }).handler(
       const account = await fetchAccount(apiBase(), cookie());
       if (!account) return null;
       const library = await fetchLibrary(apiBase(), cookie());
-      return { ...library, email: account.email };
+      return { ...library, email: account.email, admin: account.admin };
     } catch (error) {
       if (error instanceof SignedOut) return null;
       throw error;
@@ -77,7 +77,7 @@ export const getTeardown = createServerFn({ method: "GET" })
       ]);
       if (!account) signedOut(returnTo);
       if (view.kind === "missing") return view;
-      return { ...view, email: account.email };
+      return { ...view, email: account.email, admin: account.admin };
     } catch (error) {
       if (error instanceof SignedOut) signedOut(returnTo);
       throw error;

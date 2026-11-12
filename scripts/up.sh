@@ -85,7 +85,7 @@ case "$mode" in
 api:
   providers: "greenline=http://greenline:8080,levr=http://levr:8080,workdaye=http://workdaye:8080,ash=http://ash:8080,smart_resume=http://smart-resume:8080,indy_hackers_hiring=http://indy-hackers-hiring:8080,blast_track=http://blast-track:8080"
   callbackUrl: http://api:8080
-  pluginSecret: spine-stub-secret
+  pluginSecret: demo-stub-secret
 EOF
     args+=(--values "$root/.run/api-providers.yaml")
     ;;

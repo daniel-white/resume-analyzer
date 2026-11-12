@@ -32,6 +32,7 @@ async fn anonymous_upload_is_private_and_claimed_by_verified_link() {
         auth_secret: "test-secret-value".into(),
         app_origin: "http://127.0.0.1:3000".into(),
         cookie_secure: false,
+        admin_email_domains: vec![],
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());

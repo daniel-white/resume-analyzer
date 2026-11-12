@@ -58,6 +58,10 @@ spec:
               value: https://app.resume.local
             - name: AUTH_SECRET
               value: {{ .Values.auth.secret | quote }}
+            {{- if .Values.api.adminEmailDomains }}
+            - name: ADMIN_EMAIL_DOMAINS
+              value: {{ .Values.api.adminEmailDomains | quote }}
+            {{- end }}
             {{- if .Values.api.providers }}
             - name: ATS_PROVIDERS
               value: {{ .Values.api.providers | quote }}

@@ -1,4 +1,4 @@
-//! Simulated ATS integrations. The spine still compiles in `stub` so an upload
+//! Simulated ATS integrations. The upload flow still compiles in `stub` so an upload
 //! can reach one callback without the Python providers. `fleet` is Greenline,
 //! Levr, Workdaye, Ash, SmartResume, IndyHackersHiring, and BlastTrack. The running
 //! API posts those files to the Python fake and does not call `read` or `call`.

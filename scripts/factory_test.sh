@@ -121,10 +121,10 @@ else
 fi
 prompt=$(
   cd "$root"
-  FACTORY_STATE=$tmp/real-state bash "$factory" plan spine
+  FACTORY_STATE=$tmp/real-state bash "$factory" plan flow
 )
-grep -q 'api/spine' <<<"$prompt" || fail "spine prompt missing branch"
-grep -q 'docs/contracts.md' <<<"$prompt" || fail "spine prompt missing contracts"
+grep -q 'api/flow' <<<"$prompt" || fail "flow prompt missing branch"
+grep -q 'docs/contracts.md' <<<"$prompt" || fail "flow prompt missing contracts"
   grep -q 'playwright.config.ts' "$root/scripts/check.sh" || fail "web gate does not run playwright"
   grep -q 'web/e2e' "$root/factory/waves.tsv" || fail "ui wave does not allow the playwright suite"
   ui_prompt=$(

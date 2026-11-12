@@ -1,5 +1,6 @@
 //! HTTP server, the outbox worker, and the live event stream.
 
+mod admin_api;
 mod api;
 mod auth_api;
 mod bus;
@@ -50,7 +51,7 @@ fn health_router(state: HealthState) -> Router {
         .with_state(Arc::new(state))
 }
 
-/// Routes the spine test drives. Health stays on its own router so a missing
+/// Routes the upload flow test drives. Health stays on its own router so a missing
 /// database does not block the liveness probe.
 pub fn api_router(api: Arc<Api>) -> Router {
     Router::new()
@@ -82,6 +83,7 @@ pub fn api_router(api: Arc<Api>) -> Router {
         .route("/api/uploads", post(api::stage_resume))
         .route("/api/callbacks/{plugin_id}", post(api::callback))
         .merge(auth_api::routes())
+        .merge(admin_api::routes())
         .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES + 256 * 1024))
         .with_state(api)
 }
@@ -139,6 +141,7 @@ pub async fn serve() {
         auth_secret: config.auth_secret.clone(),
         app_origin: config.app_origin.clone(),
         cookie_secure: config.cookie_secure(),
+        admin_email_domains: config.admin_email_domains.clone(),
     });
     let listener = tokio::net::TcpListener::bind(&bind)
         .await
