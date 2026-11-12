@@ -1,17 +1,16 @@
-dashboard:
+# The Kubernetes Dashboard, served off-the-shelf by Minikube's built-in
+# "dashboard" addon (no custom UI, no image to pull - Minikube ships it).
+#
+# Why an addon instead of a Helm Deployment here: the official dashboard
+# image lives on GHCR, which requires authentication to pull. The addon is
+# preloaded into the cluster by Minikube itself, so there is nothing to
+# fetch and no registry creds to manage. scripts/up.sh enables it; this
+# chart only owns the ingress that routes tools.resume.local/volumes at it.
+ingress:
   enabled: true
-  image:
-    repository: ghcr.io/kubernetes-dashboard/dashboard
-    tag: v0.16.2
-  service:
-    type: ClusterIP
-    port: 80
-  ingress:
-    enabled: true
-    className: nginx
-    annotations: {}
-    hosts:
-      - host: tools.resume.local
-        paths:
-          - path: /
-            pathType: Prefix
+  className: nginx
+  hosts:
+    - host: tools.resume.local
+      paths:
+        - path: /
+          pathType: Prefix

@@ -81,11 +81,11 @@ spec:
             {{- with index .Values "llama-cpp" }}
 {{- if .enabled }}
             - name: SUMMARY_MODEL_URL
-              value: http://llama-cpp:8080/v1/chat/completions
+              value: {{ .url }}
             - name: SUMMARY_MODEL_NAME
               value: {{ .model | quote }}
             - name: FEEDBACK_MODEL_URL
-              value: http://llama-cpp:8080/v1/chat/completions
+              value: {{ .url }}
             - name: FEEDBACK_MODEL_NAME
               value: {{ .model | quote }}
             {{- end }}

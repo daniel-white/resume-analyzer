@@ -18,6 +18,7 @@ bake *args:
 template:
     helm template resume-analyzer deploy/helm/resume-analyzer
     helm template ats-providers deploy/helm/ats-providers
+    helm template llama-cpp deploy/helm/llama-cpp
 
 check:
     ./scripts/check.sh

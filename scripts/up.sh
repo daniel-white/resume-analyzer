@@ -22,11 +22,11 @@ ip=$(minikube ip --profile "$profile")
 
 if [[ "$mode" == "demo" ]]; then
   # The LLM release installs before anything else that could wait on it:
-  # its own chart, its own PVC, its own Deployment, no hooks. The bake/load
-  # above must run first (the GGUF rides in the model-llama image, the server
-  # image is preloaded into Minikube), then the release goes in before the
-  # provider refresh and before the app upgrade, so the app never starts a
-  # pod that has no model to serve and never rolls back the model.
+  # its own chart, its own image volume, its own Deployment, no hooks. The
+  # bake/load above must run first (the GGUF rides in the model-llama image,
+  # the server image is preloaded into Minikube), then the release goes in
+  # before the provider refresh and before the app upgrade, so the app never
+  # starts a pod that has no model to serve and never rolls back the model.
   "$root/scripts/bake.sh" --load api web model model-llama
   docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev resume-analyzer/model-llama:dev |
     minikube image load --profile "$profile" --overwrite -
@@ -53,8 +53,11 @@ kubectl rollout status deployment -l app.kubernetes.io/name=ats-providers --time
 # the pod.
 
 # Volume viewer (off-the-shelf Kubernetes Dashboard) for viewing PVCs/PVs
-# at https://tools.resume.local/volumes
+# at https://tools.resume.local/volumes. The dashboard ships with Minikube
+# as the "dashboard" addon, so enable it here (no image to pull) and let
+# the volume-viewer chart own the Service + Ingress that route the path.
 if [[ "$mode" == "demo" ]]; then
+  minikube -p "$profile" addons enable dashboard >/dev/null 2>&1 || true
   helm upgrade --install volume-viewer deploy/helm/volume-viewer --wait --timeout 5m
 fi
 

@@ -75,12 +75,16 @@ text.
 
 ### llama.cpp in the cluster
 
-`just demo` deploys the official `ghcr.io/ggml-org/llama.cpp:server` image as
-the `llama-cpp` pod. (The `ggml-org/llama.cpp` name does not exist on Docker
-Hub - the image lives on GHCR.) An initContainer downloads the GGUF into a PVC
-before the server starts, so a fresh pod serves it without a download while a
-resume uploads. A quantized 3B model answers in well under a second on one core.
-The API reaches it at `llama-cpp:8080` on the OpenAI chat completions path. The
+`just demo` installs the official `ghcr.io/ggml-org/llama.cpp:server` image as
+the `llama-cpp` pod from its own chart, `deploy/helm/llama-cpp`, so the model
+deploys separately from the app: upgrading the API and web pods never restarts
+the server or touches its volume, and `just dev` leaves a running one alone.
+(The `ggml-org/llama.cpp` name does not exist on Docker Hub - the image lives
+on GHCR.) The GGUF is baked into the `resume-analyzer/model-llama:dev` image,
+and a `cp -n` initContainer fills the PVC from it, so a fresh pod serves the
+model without a download while a resume uploads and a restart is a no-op. A
+quantized 3B model answers in well under a second on one core. The API
+reaches it at `llama-cpp:8080` on the OpenAI chat completions path. The
 worker still parses and stores a `profile_summary` row either way. Point the
 API at a different server with `SUMMARY_MODEL_URL`.
 

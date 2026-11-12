@@ -1,12 +1,19 @@
-{{- if .Values.dashboard.enabled }}
+# The Kubernetes Dashboard, served off-the-shelf by Minikube's built-in
+# "dashboard" addon (no custom UI, no image to pull - Minikube ships it).
+#
+# Why an addon instead of a Helm Deployment here: the official dashboard
+# image lives on GHCR, which requires authentication to pull. The addon is
+# preloaded into the cluster by Minikube itself, so there is nothing to
+# fetch and no registry creds to manage. scripts/up.sh enables it; this
+# chart only owns the ingress that routes tools.resume.local/volumes at it.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: volume-viewer-dashboard
+  name: volume-viewer
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
-  ingressClassName: {{ .Values.dashboard.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
   rules:
     - host: tools.resume.local
       http:
@@ -15,7 +22,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: kubernetes-dashboard
+                name: volume-viewer
                 port:
-                  number: {{ .Values.dashboard.service.port }}
-{{- end }}
+                  number: 80

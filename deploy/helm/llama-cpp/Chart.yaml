@@ -1,0 +1,6 @@
+apiVersion: v2
+name: llama-cpp
+description: llama.cpp serving the candidate-profile model for the API. OpenAI chat completions on :8080.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

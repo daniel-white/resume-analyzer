@@ -1,11 +1,15 @@
 # syntax=docker/dockerfile:1
 
-# The candidate-profile GGUF is baked into this image so a Job can load it into
-# the llama-cpp PVC once, instead of an initContainer downloading it on every
-# pod start. The section detector (Dockerfile.model) bakes its small ONNX files
-# the same way; this is the same pattern for the one large file. The Job runs
-# this image's /bin/cp into the volume, so a fresh pod serves the model without
-# a download while a resume uploads.
+# The candidate-profile GGUF is baked into this image so the llama-cpp pod
+# mounts it read-only as an OCI image volume (.spec.volumes[].image), instead
+# of downloading it on every pod start. The section detector (Dockerfile.model)
+# bakes its small ONNX files the same way; this is the same pattern for the one
+# large file.
+#
+# The GGUF lands at the IMAGE ROOT, not under /models/: an image volume mounts
+# the image's root filesystem at the mountPath, so /models/llama-...gguf in the
+# image would show up at /models/models/llama-...gguf in the pod. At the root it
+# is visible at <mountPath>/<file>, which is what the server expects.
 FROM debian:bookworm-slim AS fetch
 ARG MODEL_REPO=hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF
 ARG MODEL_REVISION=main
@@ -14,16 +18,23 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /model
+# --retry-all-errors: curl's plain --retry does not cover transfer errors
+# like exit 18 ("HTTP/2 stream ... not closed cleanly"), which HuggingFace
+# throws mid-download on large files. --continue-at - makes each retry
+# resume the partial file instead of restarting 2GB from byte zero, and
+# --http1.1 sidesteps the HTTP/2 stream resets entirely.
 RUN set -eux; \
-    curl --fail --location --retry 3 --retry-delay 2 \
+    curl --fail --location --http1.1 \
+      --retry 5 --retry-all-errors --retry-delay 5 --continue-at - \
       --output "${MODEL_FILE}" \
       "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}"; \
     test -s "${MODEL_FILE}"
 
-# The final image holds only the model file and a static cp. The Job runs it to
-# fill the PVC, so a full Debian userland would be dead weight.
+# The final scratch image holds the GGUF at its root and a static /bin/cp
+# (busybox). The cp binary is kept for compatibility with any older flow
+# that copies the file into a PVC, but the chart does not reference it.
 FROM busybox:stable-musl AS tool
 
 FROM scratch
 COPY --from=tool /bin/busybox /bin/cp
-COPY --from=fetch /model /model
+COPY --from=fetch /model/llama-3.2-3b-instruct-q4_k_m.gguf /llama-3.2-3b-instruct-q4_k_m.gguf

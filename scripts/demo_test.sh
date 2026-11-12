@@ -25,6 +25,10 @@ assert(api.includes("- /bin/cp"));
 assert(api.includes("name: SECTION_MODEL_DIR"));
 assert(api.includes('value: "/models"'));
 assert(api.includes("emptyDir: {}"));
+// The API aims at the separately deployed llama-cpp chart.
+assert(api.includes("value: http://llama-cpp:8080/v1/chat/completions"));
+assert(api.includes("name: SUMMARY_MODEL_URL"));
+assert(api.includes("name: FEEDBACK_MODEL_URL"));
 assert(web?.includes("image: resume-analyzer/web:dev"));
 assert(web.includes("value: http://api:8080"));
 assert(web.includes('value: "3000"'));
@@ -58,13 +62,38 @@ function providersHasRoute(docs) {
 }
 JS
 
+llama=$(helm template llama-cpp deploy/helm/llama-cpp)
+RENDER="$llama" node --input-type=module <<'JS'
+import assert from "node:assert/strict";
+const documents = process.env.RENDER.split("\n---");
+const pvc = documents.find(doc => doc.includes("kind: PersistentVolumeClaim") && doc.includes("  name: llama-cpp-models\n"));
+assert(!pvc, "demo: llama-cpp must not provision a PVC; the model image is mounted read-only");
+const deployment = documents.find(doc => doc.includes("kind: Deployment") && doc.includes("  name: llama-cpp\n"));
+assert(deployment?.includes("image: ghcr.io/ggml-org/llama.cpp:server"));
+assert(deployment.includes("reference: resume-analyzer/model-llama:dev"));
+assert(deployment.includes("/models/llama-3.2-3b-instruct-q4_k_m.gguf"));
+assert(deployment.includes("path: /health"));
+const service = documents.find(doc => doc.includes("kind: Service") && doc.includes("  name: llama-cpp\n"));
+assert(service?.includes("app: llama-cpp"));
+// No hooks: hook deletion of the PVC under the running pod is what
+// deadlocked upgrades of the combined chart, and a hook Job cannot be
+// ordered against a regular-resource PVC. The initContainer above is the
+// ordering mechanism instead.
+assert(!documents.some(doc => doc.includes("helm.sh/hook")));
+assert(!documents.some(doc => doc.includes("kind: Job")));
+JS
+
 deps=$(helm template resume-analyzer deploy/helm/resume-analyzer)
 if grep -q '  name: web$\|  name: app$' <<<"$deps"; then
   echo "demo: deps mode unexpectedly serves the app" >&2
   exit 1
 fi
+if grep -q llama-cpp <<<"$deps"; then
+  echo "demo: llama-cpp is deployed by its own chart, not resume-analyzer" >&2
+  exit 1
+fi
 
-docker buildx bake --print --file docker-bake.hcl api web providers model | node --input-type=module -e '
+docker buildx bake --print --file docker-bake.hcl api web providers model model-llama | node --input-type=module -e '
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const targets = JSON.parse(readFileSync(0, "utf8")).target;
@@ -75,6 +104,8 @@ assert.equal(targets.providers.context, "providers");
 assert(targets.providers.tags.includes("resume-analyzer/ats:dev"));
 assert.equal(targets.model.dockerfile, "Dockerfile.model");
 assert(targets.model.tags.includes("resume-analyzer/model:dev"));
+assert.equal(targets["model-llama"].dockerfile, "Dockerfile.model-llama");
+assert(targets["model-llama"].tags.includes("resume-analyzer/model-llama:dev"));
 '
 node --input-type=module <<'JS'
 import assert from "node:assert/strict";
@@ -95,9 +126,10 @@ for (const step of steps) {
   previous = position;
 }
 JS
-grep -Fq '"$root/scripts/bake.sh" --load api web model' scripts/up.sh
-grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev |' scripts/up.sh
+grep -Fq '"$root/scripts/bake.sh" --load api web model model-llama' scripts/up.sh
+grep -Fq 'docker save resume-analyzer/api:dev resume-analyzer/web:dev resume-analyzer/model:dev resume-analyzer/model-llama:dev |' scripts/up.sh
 grep -Fq 'minikube image load --profile "$profile" --overwrite -' scripts/up.sh
+grep -Fq 'helm upgrade --install llama-cpp deploy/helm/llama-cpp --wait --timeout 5m' scripts/up.sh
 if grep -Eq 'minikube image load .*resume-analyzer/(api|web|ats):dev' scripts/up.sh; then
   echo "demo: stream daemon images, not cached named :dev archives" >&2
   exit 1

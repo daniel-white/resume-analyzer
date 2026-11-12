@@ -1,12 +1,19 @@
+# The Kubernetes Dashboard, served off-the-shelf by Minikube's built-in
+# "dashboard" addon (no custom UI, no image to pull - Minikube ships it).
+#
+# Why an addon instead of a Helm Deployment here: the official dashboard
+# image lives on GHCR, which requires authentication to pull. The addon is
+# preloaded into the cluster by Minikube itself, so there is nothing to
+# fetch and no registry creds to manage. scripts/up.sh enables it; this
+# chart only owns the ingress that routes tools.resume.local/volumes at it.
 apiVersion: v1
 kind: Service
 metadata:
-  name: kubernetes-dashboard
+  name: volume-viewer
+  labels:
+    app: volume-viewer
 spec:
-  type: ClusterIP
-  selector:
-    app: kubernetes-dashboard
+  type: ExternalName
+  externalName: kubernetes-dashboard.kube-system.svc.cluster.local
   ports:
     - port: 80
-      targetPort: 80
-      protocol: TCP

@@ -1,0 +1,25 @@
+# The official llama.cpp server image, published on GHCR. It IS the server
+# (entrypoint /app/llama-server) and speaks the OpenAI chat completions API
+# on :8080. Verified end-to-end against a live model: /v1/chat/completions
+# returns choices[0].message.content exactly as the worker expects.
+# ggml-org/llama.cpp does not exist on Docker Hub - only on GHCR.
+image: ghcr.io/ggml-org/llama.cpp:server
+pullPolicy: IfNotPresent
+
+# The GGUF is baked into the model-llama image (Dockerfile.model-llama, bake
+# target model-llama). The llama-cpp pod mounts that OCI image read-only as a
+# volume via .spec.volumes[].image, so the server sees the model at
+# /models/llama-3.2-3b-instruct-q4_k_m.gguf with no initContainer and no PVC.
+# Loaded into Minikube by scripts/up.sh (docker save | minikube image load)
+# so containerd has the image locally; pullPolicy Never avoids a registry pull.
+modelImage: resume-analyzer/model-llama:dev
+modelImagePullPolicy: Never
+
+# The GGUF filename is also the model the server loads. Must match the
+# model name the resume-analyzer chart hands the API.
+model: llama-3.2-3b-instruct-q4_k_m.gguf
+dir: /models
+
+# Total KV-cache tokens. 2048 is the current setting; the 3B model's native
+# context is 8192 if summaries ever hit "context size exceeded" again.
+context: 2048

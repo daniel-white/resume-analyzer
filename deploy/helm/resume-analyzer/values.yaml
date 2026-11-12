@@ -31,39 +31,18 @@ sections:
     dir: /models
     name: BAAI/bge-small-en-v1.5
 
-# llama.cpp serves the candidate-profile model. The image is the official
-# ghcr.io/ggml-org/llama.cpp:server build; the initContainer below downloads
-# the GGUF into
-# the PVC before the server starts, so a fresh pod serves it without a
-# download while a resume uploads. A quantized 3B model answers in well under
-# a second on one core, versus minutes for the Ollama build it replaces. The
-# API reaches it in-cluster at llama-cpp:8080 on the OpenAI chat completions
-# path. The worker still parses and stores a profile_summary row either way.
+# llama.cpp serves the candidate-profile model from the separate llama-cpp
+# chart (deploy/helm/llama-cpp), installed by `just demo`, so the model is
+# deployed independently of this release: upgrading the app never restarts
+# the server or touches its PVC, and `just dev` leaves a running one alone.
+# These values only aim the API at it; the server, its volume, and the
+# baked GGUF image live in that chart.
 llama-cpp:
   enabled: true
-  # The official llama.cpp server image, published on GHCR. It IS the server
-  # (entrypoint /app/llama-server) and speaks the OpenAI chat completions API
-  # on :8080. Verified end-to-end against a live model: /v1/chat/completions
-  # returns choices[0].message.content exactly as the worker expects.
-  # ggml-org/llama.cpp does not exist on Docker Hub - only on GHCR.
-  image: ghcr.io/ggml-org/llama.cpp:server
-  pullPolicy: IfNotPresent
-  # The GGUF filename is also the model the server loads, so the container
-  # args and the initContainer download target both use this value.
+  # The OpenAI chat completions path the summary and feedback models call.
+  url: http://llama-cpp:8080/v1/chat/completions
+  # Must match the GGUF the llama-cpp chart serves.
   model: llama-3.2-3b-instruct-q4_k_m.gguf
-  # The GGUF the initContainer downloads before the server starts. The
-  # quantized 3B file is ~2GB; the default keeps it out of the writable
-  # layer and survives pod restarts.
-  url: https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/main/llama-3.2-3b-instruct-q4_k_m.gguf
-  # Per-slot KV-cache budget, set via --kv-unified-per-slot. Was a shared
-  # pool of 2048, which is smaller than the system prompt alone (~1200
-  # tokens) and far smaller under concurrency: the "Context size has been
-  # exceeded" errors came from three slots holding ~1400/200/900 tokens =
-  # 2500 > 2048. 8192 is the model's native context and comfortably holds
-  # the prompt plus a full 12-section résumé. -np 2 gives two isolated slots;
-  # a third queues instead of erroring.
-  context: 8192
-  storage: 3Gi
 
 gateway:
   enabled: true
