@@ -20,11 +20,11 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { email, feedback } = Route.useLoaderData();
+  const { email, feedback, timezone } = Route.useLoaderData();
   return (
     <Page wide>
       <SiteHeader email={email} admin />
-      <AdminFeedbackDashboard email={email} feedback={feedback} />
+      <AdminFeedbackDashboard email={email} feedback={feedback} timezone={timezone} />
     </Page>
   );
 }

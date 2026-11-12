@@ -1,9 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { Page } from "~/components/page";
 import { PublicHeader } from "~/components/public-header";
 import { ArrowRight, Mail, ShieldCheck } from "lucide-react";
+import { detectTimeZone } from "~/lib/timezone";
 import { getAccount, sendMagicLink } from "~/fns/auth.functions";
 
 export const Route = createFileRoute("/login/")({
@@ -20,6 +21,11 @@ function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
+  const [timezone, setTimezone] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTimezone(detectTimeZone());
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -27,7 +33,7 @@ function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const result = await sendMagicLink({ data: { email, returnTo } });
+      const result = await sendMagicLink({ data: { email, returnTo, timezone: timezone ?? "" } });
       if (!result.ok) {
         setError(result.message);
         setBusy(false);

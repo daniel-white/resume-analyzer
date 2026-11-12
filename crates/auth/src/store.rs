@@ -14,6 +14,9 @@ pub struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
     pub email: String,
+    /// Browser-reported IANA timezone, carried from the magic link that
+    /// created the session. Absent when the client did not send one.
+    pub timezone: Option<String>,
 }
 
 pub struct ListedSession {
@@ -27,6 +30,7 @@ pub async fn insert_magic_link(
     token: &[u8; 32],
     now: OffsetDateTime,
     expires_at: OffsetDateTime,
+    timezone: Option<&str>,
 ) -> Result<(), AuthError> {
     let mut tx = pool.begin().await?;
     sqlx::query("UPDATE magic_links SET used_at = $2 WHERE email = $1 AND used_at IS NULL")
@@ -35,12 +39,13 @@ pub async fn insert_magic_link(
         .execute(&mut *tx)
         .await?;
     sqlx::query(
-        "INSERT INTO magic_links (id, email, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO magic_links (id, email, token_hash, expires_at, timezone) VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(Uuid::new_v4())
     .bind(email)
     .bind(hash_token(token).as_slice())
     .bind(expires_at)
+    .bind(timezone)
     .execute(&mut *tx)
     .await?;
     tx.commit().await?;
@@ -54,17 +59,17 @@ pub async fn consume_magic_link(
     session_expires_at: OffsetDateTime,
 ) -> Result<Session, AuthError> {
     let mut tx = pool.begin().await?;
-    let link: Option<(String, Option<Uuid>)> = sqlx::query_as(
+    let link: Option<(String, Option<Uuid>, Option<String>)> = sqlx::query_as(
         "UPDATE magic_links
          SET used_at = $2
          WHERE token_hash = $1 AND used_at IS NULL AND expires_at > $2
-         RETURNING email, pending_upload_id",
+         RETURNING email, pending_upload_id, timezone",
     )
     .bind(hash_token(token).as_slice())
     .bind(now)
     .fetch_optional(&mut *tx)
     .await?;
-    let Some((email, upload_id)) = link else {
+    let Some((email, upload_id, timezone)) = link else {
         return Err(AuthError::Link);
     };
     let user_id: Uuid = sqlx::query_scalar(
@@ -97,10 +102,11 @@ pub async fn consume_magic_link(
             .bind(Uuid::new_v4()).bind(id).bind(version_id).bind(user_id.to_string()).bind(filename).bind(media_type).bind(object_key).execute(&mut *tx).await?;
     }
     let session_id = Uuid::new_v4();
-    sqlx::query("INSERT INTO sessions (id, user_id, expires_at) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO sessions (id, user_id, expires_at, timezone) VALUES ($1, $2, $3, $4)")
         .bind(session_id)
         .bind(user_id)
         .bind(session_expires_at)
+        .bind(&timezone)
         .execute(&mut *tx)
         .await?;
     tx.commit().await?;
@@ -108,6 +114,7 @@ pub async fn consume_magic_link(
         id: session_id,
         user_id,
         email,
+        timezone,
     })
 }
 
@@ -116,8 +123,8 @@ pub async fn find_session(
     session_id: Uuid,
     now: OffsetDateTime,
 ) -> Result<Option<Session>, AuthError> {
-    let row: Option<(Uuid, Uuid, String)> = sqlx::query_as(
-        "SELECT sessions.id, users.id, users.email
+    let row: Option<(Uuid, Uuid, String, Option<String>)> = sqlx::query_as(
+        "SELECT sessions.id, users.id, users.email, sessions.timezone
          FROM sessions
          JOIN users ON users.id = sessions.user_id
          WHERE sessions.id = $1 AND sessions.expires_at > $2",
@@ -126,7 +133,7 @@ pub async fn find_session(
     .bind(now)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|(id, user_id, email)| Session { id, user_id, email }))
+    Ok(row.map(|(id, user_id, email, timezone)| Session { id, user_id, email, timezone }))
 }
 
 pub async fn list_sessions(

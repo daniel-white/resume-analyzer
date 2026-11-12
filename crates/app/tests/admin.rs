@@ -43,7 +43,7 @@ fn session_pair(response: &reqwest::Response) -> String {
 
 async fn sign_in(base: &str, store: &storage::Store, email: &str) -> (String, String) {
     let now = auth::OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(store.pool(), email, now)
+    let issued = auth::request_magic_link(store.pool(), email, now, None)
         .await
         .expect("link");
     let response = reqwest::Client::new()

@@ -84,10 +84,11 @@ pub async fn request_magic_link(
     pool: &sqlx::PgPool,
     email: &str,
     now: OffsetDateTime,
+    timezone: Option<&str>,
 ) -> Result<IssuedLink, AuthError> {
     let email = normalize_email(email).ok_or(AuthError::Email)?;
     let token = random_token();
-    store::insert_magic_link(pool, &email, &token, now, now + MAGIC_LINK).await?;
+    store::insert_magic_link(pool, &email, &token, now, now + MAGIC_LINK, timezone).await?;
     Ok(IssuedLink {
         token: encode_token(token),
         email,

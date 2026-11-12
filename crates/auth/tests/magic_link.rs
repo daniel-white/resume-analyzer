@@ -60,7 +60,7 @@ async fn magic_link_is_single_use_and_expires() {
     let database = database().await;
     let pool = &database.pool;
     let now = OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(pool, "Ada@Example.com", now)
+    let issued = auth::request_magic_link(pool, "Ada@Example.com", now, None)
         .await
         .unwrap();
     assert_eq!(issued.email, "ada@example.com");
@@ -83,7 +83,7 @@ async fn magic_link_is_single_use_and_expires() {
             .is_err()
     );
 
-    let again = auth::request_magic_link(pool, "ada@example.com", now)
+    let again = auth::request_magic_link(pool, "ada@example.com", now, None)
         .await
         .unwrap();
     let later = now + time::Duration::minutes(16);
@@ -99,7 +99,7 @@ async fn session_cookie_round_trip() {
     let database = database().await;
     let pool = &database.pool;
     let now = OffsetDateTime::now_utc();
-    let first = auth::request_magic_link(pool, "ada@example.com", now)
+    let first = auth::request_magic_link(pool, "ada@example.com", now, None)
         .await
         .unwrap();
     let session = auth::verify_magic_link(pool, &first.token, now)
@@ -113,7 +113,7 @@ async fn session_cookie_round_trip() {
         .unwrap();
     assert_eq!(found.email, "ada@example.com");
 
-    let second = auth::request_magic_link(pool, "ada@example.com", now)
+    let second = auth::request_magic_link(pool, "ada@example.com", now, None)
         .await
         .unwrap();
     let other = auth::verify_magic_link(pool, &second.token, now)
@@ -125,7 +125,7 @@ async fn session_cookie_round_trip() {
         .unwrap();
     assert_eq!(listed.len(), 2);
 
-    let stranger = auth::request_magic_link(pool, "grace@example.com", now)
+    let stranger = auth::request_magic_link(pool, "grace@example.com", now, None)
         .await
         .unwrap();
     let grace = auth::verify_magic_link(pool, &stranger.token, now)
@@ -167,7 +167,7 @@ async fn delete_account_removes_sessions() {
     let database = database().await;
     let pool = &database.pool;
     let now = OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(pool, "ada@example.com", now)
+    let issued = auth::request_magic_link(pool, "ada@example.com", now, None)
         .await
         .unwrap();
     let session = auth::verify_magic_link(pool, &issued.token, now)
@@ -182,7 +182,7 @@ async fn delete_account_removes_sessions() {
             .is_none()
     );
 
-    let again = auth::request_magic_link(pool, "ada@example.com", now)
+    let again = auth::request_magic_link(pool, "ada@example.com", now, None)
         .await
         .unwrap();
     let fresh = auth::verify_magic_link(pool, &again.token, now)

@@ -18,6 +18,9 @@ struct EmailBody {
     email: String,
     return_to: Option<String>,
     upload_id: Option<auth::Uuid>,
+    /// Browser-reported IANA timezone, e.g. "America/New_York". Absent or
+    /// unparseable values are stored as NULL and fall back to UTC.
+    timezone: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -36,6 +39,8 @@ struct MeBody {
     id: auth::Uuid,
     email: String,
     admin: bool,
+    /// The session's timezone, if the browser reported one at sign-in.
+    timezone: Option<String>,
     sessions: Vec<SessionBody>,
 }
 
@@ -79,7 +84,14 @@ pub async fn current_admin(
 
 async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailBody>) -> Response {
     let now = auth::OffsetDateTime::now_utc();
-    let issued = match auth::request_magic_link(api.store.pool(), &body.email, now).await {
+    let issued = match auth::request_magic_link(
+        api.store.pool(),
+        &body.email,
+        now,
+        validate_timezone(body.timezone.as_deref()),
+    )
+    .await
+    {
         Ok(issued) => issued,
         Err(auth::AuthError::Email) => return error(StatusCode::BAD_REQUEST, "email"),
         Err(err) => {
@@ -176,6 +188,7 @@ async fn me(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {
         id: current.user_id,
         email: current.email,
         admin,
+        timezone: current.timezone,
         sessions,
     })
     .into_response()
@@ -293,6 +306,19 @@ fn with_cookie(mut response: Response, cookie: HeaderValue) -> Response {
 
 fn error(status: StatusCode, code: &'static str) -> Response {
     (status, Json(serde_json::json!({ "error": code }))).into_response()
+}
+
+/// Keep only IANA names the browser could plausibly report. The client already
+/// validated the value with `Intl.DateTimeFormat`, so this is a cheap defense
+/// against junk in transit: non-empty, bounded length, no control characters.
+/// Unknown names are dropped rather than trusted, and the client falls back
+/// to UTC for them.
+fn validate_timezone(timezone: Option<&str>) -> Option<&str> {
+    let timezone = timezone?.trim();
+    if timezone.is_empty() || timezone.len() > 64 || timezone.chars().any(|c| c.is_control()) {
+        return None;
+    }
+    Some(timezone)
 }
 
 #[cfg(test)]

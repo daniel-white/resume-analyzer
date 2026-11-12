@@ -30,9 +30,11 @@ const FILTERS: { id: AdminFilter; label: string }[] = [
 export function AdminFeedbackDashboard({
   email,
   feedback,
+  timezone,
 }: {
   email: string;
   feedback: AdminFeedback[];
+  timezone?: string | null;
 }) {
   const [items, setItems] = useState(feedback);
   const [filter, setFilter] = useState<AdminFilter>("open");
@@ -172,6 +174,7 @@ export function AdminFeedbackDashboard({
               key={`${item.version_id}:${item.section_id}`}
               item={item}
               busyId={busyId}
+              timezone={timezone}
               onToggle={(analysis) => void toggle(analysis)}
               onRerun={(analysis) => void rerun(analysis)}
             />
@@ -187,11 +190,13 @@ function FeedbackCard({
   busyId,
   onToggle,
   onRerun,
+  timezone,
 }: {
   item: AdminFeedback;
   busyId: string | null;
   onToggle: (analysis: AdminFeedbackAnalysis) => void;
   onRerun: (analysis: AdminFeedbackAnalysis) => void;
+  timezone?: string | null;
 }) {
   const open = feedbackOpen(item);
   return (
@@ -237,7 +242,7 @@ function FeedbackCard({
               <div key={analysis.id} className={cn("admin-analysis", handled && "is-handled")}>
                 <div className="admin-analysis-meta">
                   <span>{analysis.engine} · {analysis.model}</span>
-                  <time dateTime={analysis.created_at}>{formatDate(analysis.created_at)}</time>
+                  <time dateTime={analysis.created_at}>{formatDate(analysis.created_at, timezone)}</time>
                 </div>
                 <p>{analysis.diagnosis}</p>
                 <div className="admin-analysis-actions">
@@ -245,7 +250,7 @@ function FeedbackCard({
                     <span className="admin-handled-note">
                       <ShieldCheck size={14} aria-hidden="true" />
                       {analysis.handled_by ? `Handled by ${analysis.handled_by}` : "Handled"}
-                      {analysis.handled_at ? ` · ${formatDate(analysis.handled_at)}` : ""}
+                      {analysis.handled_at ? ` · ${formatDate(analysis.handled_at, timezone)}` : ""}
                     </span>
                   ) : (
                     <span className="admin-handled-note is-open">Waiting for review</span>
@@ -279,7 +284,7 @@ function FeedbackCard({
       </div>
 
       <footer className="admin-feedback-foot">
-        Downvoted {formatDate(item.voted_at)}
+        Downvoted {formatDate(item.voted_at, timezone)}
       </footer>
     </article>
   );
@@ -340,12 +345,16 @@ function removeAnalysis(items: AdminFeedback[], id: string): AdminFeedback[] {
     .filter((item) => item.analyses.length > 0);
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat("en-US", {
+function formatDate(value: string, timezone?: string): string {
+  const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  }).format(new Date(value));
+    timeZone: timezone ?? "UTC",
+  };
+  const formatted = new Intl.DateTimeFormat("en-US", options).format(new Date(value));
+  // Show "(UTC)" when the backend could not determine the user's timezone.
+  return timezone ? formatted : `${formatted} (UTC)`;
 }

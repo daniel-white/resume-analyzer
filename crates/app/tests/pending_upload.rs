@@ -69,12 +69,10 @@ async fn anonymous_upload_is_private_and_claimed_by_verified_link() {
         .await
         .unwrap();
     assert_eq!(before, 0, "analysis waits until the email is verified");
-    let issued = auth::request_magic_link(
-        store.pool(),
+    let issued = auth::request_magic_link(store.pool(),
         "ada@example.com",
-        auth::OffsetDateTime::now_utc(),
-    )
-    .await
+        auth::OffsetDateTime::now_utc(), None)
+        .await
     .unwrap();
     assert!(
         auth::bind_upload(store.pool(), &issued.token, id)
@@ -135,12 +133,10 @@ async fn anonymous_upload_is_private_and_claimed_by_verified_link() {
     .execute(store.pool())
     .await
     .unwrap();
-    let other = auth::request_magic_link(
-        store.pool(),
+    let other = auth::request_magic_link(store.pool(),
         "other@example.com",
-        auth::OffsetDateTime::now_utc(),
-    )
-    .await
+        auth::OffsetDateTime::now_utc(), None)
+        .await
     .unwrap();
     assert!(
         !auth::bind_upload(store.pool(), &other.token, expired)
@@ -158,12 +154,10 @@ async fn anonymous_upload_is_private_and_claimed_by_verified_link() {
         .stage_upload(stale, "stale.pdf", domain::PDF, "pending/stale")
         .await
         .unwrap();
-    let stale_link = auth::request_magic_link(
-        store.pool(),
+    let stale_link = auth::request_magic_link(store.pool(),
         "stale@example.com",
-        auth::OffsetDateTime::now_utc(),
-    )
-    .await
+        auth::OffsetDateTime::now_utc(), None)
+        .await
     .unwrap();
     assert!(
         auth::bind_upload(store.pool(), &stale_link.token, stale)

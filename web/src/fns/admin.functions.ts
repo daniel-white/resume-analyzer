@@ -17,6 +17,7 @@ export type { AdminFeedback, HandledResult };
 
 export type AdminView = {
   email: string;
+  timezone?: string | null;
   feedback: AdminFeedback[];
 };
 
@@ -43,7 +44,7 @@ export const getAdminFeedback = createServerFn({ method: "GET" }).handler(
       if (!account) signIn();
       if (!account.admin) notAdmin();
       const feedback = await fetchAdminFeedback(apiBase(), cookie());
-      return { email: account.email, feedback };
+      return { email: account.email, timezone: account.timezone, feedback };
     } catch (error) {
       if (error instanceof SignedOut) signIn();
       if (error instanceof NotAdmin) notAdmin();

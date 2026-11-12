@@ -210,7 +210,7 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
     let objects = Arc::new(MemoryObjects::default());
     let auth_secret = "blast-track-auth-test";
     let now = auth::OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(store.pool(), "blast@example.com", now)
+    let issued = auth::request_magic_link(store.pool(), "blast@example.com", now, None)
         .await
         .unwrap();
     let session = auth::verify_magic_link(store.pool(), &issued.token, now)
@@ -266,7 +266,7 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
         client.get(&url).send().await.unwrap().status(),
         reqwest::StatusCode::UNAUTHORIZED
     );
-    let other = auth::request_magic_link(store.pool(), "other@example.com", now)
+    let other = auth::request_magic_link(store.pool(), "other@example.com", now, None)
         .await
         .unwrap();
     let other_session = auth::verify_magic_link(store.pool(), &other.token, now)
@@ -438,7 +438,7 @@ async fn upload_reaches_a_callback() {
     let bus = Bus::default();
     let secret = "test-secret-value";
     let now = auth::OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(store.pool(), "ada@example.com", now)
+    let issued = auth::request_magic_link(store.pool(), "ada@example.com", now, None)
         .await
         .expect("link");
     let session = auth::verify_magic_link(store.pool(), &issued.token, now)
@@ -554,7 +554,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
     store.migrate().await.unwrap();
     let objects = Arc::new(MemoryObjects::default());
     let now = auth::OffsetDateTime::now_utc();
-    let issued = auth::request_magic_link(store.pool(), "indy-test@example.com", now)
+    let issued = auth::request_magic_link(store.pool(), "indy-test@example.com", now, None)
         .await
         .unwrap();
     let session = auth::verify_magic_link(store.pool(), &issued.token, now)
@@ -684,7 +684,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
         client.get(&detail_url).send().await.unwrap().status(),
         reqwest::StatusCode::UNAUTHORIZED
     );
-    let other_link = auth::request_magic_link(store.pool(), "other-indy@example.com", now)
+    let other_link = auth::request_magic_link(store.pool(), "other-indy@example.com", now, None)
         .await
         .unwrap();
     let other = auth::verify_magic_link(store.pool(), &other_link.token, now)

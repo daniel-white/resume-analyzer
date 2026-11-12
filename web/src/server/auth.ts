@@ -3,6 +3,7 @@ import { apiFetch, readSetCookie } from "./session";
 export type Account = {
   email: string;
   admin: boolean;
+  timezone?: string | null;
 };
 
 export type MagicLinkResult = { ok: true } | { ok: false; message: string };
@@ -37,13 +38,14 @@ export async function requestMagicLink(
   cookie?: string,
   returnTo?: string,
   uploadId?: string,
+  timezone?: string,
 ): Promise<MagicLinkResult> {
   const trimmed = email.trim();
   if (!trimmed) return { ok: false, message: "Enter your email." };
   const response = await fetch(new URL("/api/auth/magic-link", baseUrl), {
     method: "POST",
     headers: jsonHeaders(cookie),
-    body: JSON.stringify({ email: trimmed, return_to: returnTo, upload_id: uploadId }),
+    body: JSON.stringify({ email: trimmed, return_to: returnTo, upload_id: uploadId, timezone: timezone ?? "" }),
   });
   if (response.status === 202) return { ok: true };
   return { ok: false, message: magicLinkMessage(response.status, await response.text()) };
@@ -74,9 +76,9 @@ export async function fetchAccount(
 ): Promise<Account | null> {
   const result = await apiFetch(baseUrl, "/api/me", cookie);
   if (!result.ok) throw new Error(`account returned ${result.status}`);
-  const body = (await result.value.json()) as { email?: string; admin?: boolean };
+  const body = (await result.value.json()) as { email?: string; admin?: boolean; timezone?: string | null };
   if (!body.email) return null;
-  return { email: body.email, admin: body.admin === true };
+  return { email: body.email, admin: body.admin === true, timezone: body.timezone ?? null };
 }
 
 export async function postLogout(

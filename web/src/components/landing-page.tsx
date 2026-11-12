@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowDown, ArrowRight, ArrowUpRight, BookOpen, Check, CheckCheck, FileSearch, FileText, LoaderCircle, Mail, ScanLine, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 
+import { detectTimeZone } from "~/lib/timezone";
 import { sendMagicLink } from "~/fns/auth.functions";
 import { stageUpload } from "~/fns/resumes.functions";
 
@@ -14,6 +15,11 @@ export function LandingPage() {
   const [sent, setSent] = useState(false);
   const depth = useRef(0);
   const input = useRef<HTMLInputElement>(null);
+  const [timezone, setTimezone] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTimezone(detectTimeZone());
+  }, []);
 
   async function store(file?: File) {
     if (!file || busy) return;
