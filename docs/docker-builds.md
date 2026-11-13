@@ -14,7 +14,7 @@ is required to build the images.
 
 ## Cache boundaries
 
-- **API:** Cargo Chef 0.1.78 on Rust 1.99.1 Bookworm prepares a workspace
+- **API:** Cargo Chef 0.1.78 on Rust 1.100.0 Bookworm prepares a workspace
   recipe, then compiles dependencies in a separate layer. The planner stage only
   reads Cargo.toml/Cargo.lock, so Rust source changes do not invalidate it. The
   cook layer stays cached; source changes only invalidate the application build

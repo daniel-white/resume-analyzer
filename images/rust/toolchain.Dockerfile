@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG DEBIAN_CODENAME=bookworm
-ARG RUST_VERSION=1.99.1
+ARG RUST_VERSION=1.100.0
 
 FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS rust-toolchain
 WORKDIR /repo

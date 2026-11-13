@@ -3,7 +3,7 @@
 # Build images through Dagger, which runs docker buildx bake via Dagger: $*
 # The version variables come from the flake devShell (RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)).
 # They are declared here as build args so the host-side job passes them through.
-ARG RUST_VERSION=1.99.1
+ARG RUST_VERSION=1.100.0
 ARG DEBIAN_CODENAME=bookworm
 
 FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS chef
