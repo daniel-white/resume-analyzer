@@ -84,7 +84,8 @@ if [[ "$run_web" == 1 ]]; then
     fi
     if [[ -f playwright.config.ts ]]; then
       echo "check: web playwright"
-      pnpm exec playwright install chromium
+      # webkit runs resume-viewer.spec.ts and theme.spec.ts; install it too.
+      pnpm exec playwright install chromium webkit
       # Test the production build we just produced, not the dev server.
       PLAYWRIGHT_PRODUCTION=1 pnpm test:e2e
     fi
