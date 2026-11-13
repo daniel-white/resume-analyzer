@@ -85,8 +85,14 @@ if [[ "$run_web" == 1 ]]; then
     if [[ -f playwright.config.ts ]]; then
       echo "check: web playwright"
       # webkit runs resume-viewer.spec.ts and theme.spec.ts; install it too.
-      # WebKit needs GTK/GStreamer/Cairo/Pango system libs; Playwright installs them via apt.
-      sudo "$(command -v pnpm)" exec playwright install-deps webkit
+      # WebKit needs GTK/GStreamer/Cairo/Pango system libs on Ubuntu.
+      sudo /usr/bin/apt-get update -qq
+      sudo /usr/bin/apt-get install -y -qq \
+        libgstreamer1.0-0 libgmodule-2.0-0 libgtk-4-1 libpangocairo-1.0-0 \
+        libpango-1.0-0 libgdk-pixbuf-2.0-0 libcairo-gobject2 libcairo2 \
+        libvulkan1 libgraphene-1.0-0 libglib2.0-0 libatomic1 libsystemd0 \
+        libssl3 libxml2 libsqlite3-0 libxslt1.1 liblcms2-2 libevent-2.1-7 \
+        libopus0
       pnpm exec playwright install chromium webkit
       # Test the production build we just produced, not the dev server.
       PLAYWRIGHT_PRODUCTION=1 pnpm test:e2e
