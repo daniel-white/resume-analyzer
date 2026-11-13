@@ -1,0 +1,19 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write      # create tags, releases, and push version commits
+      pull-requests: write # open and update version PRs
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4
+        with:
+          config: release-please-config.json
+          token: ${{ secrets.GITHUB_TOKEN }}
