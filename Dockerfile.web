@@ -3,7 +3,7 @@
 # The compiled web app. `just demo` loads this image and the chart
 # routes https://app.resume.local/ at it. /api stays on the Rust pod.
 # NODEJS_VERSION comes from the flake devShell (`node --version | cut -c 2-`).
-ARG NODEJS_VERSION=22
+ARG NODEJS_VERSION=24
 ARG DEBIAN_CODENAME=bookworm
 
 FROM node:${NODEJS_VERSION}-${DEBIAN_CODENAME} AS build

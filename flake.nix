@@ -51,7 +51,7 @@
             # On the default shell so `use flake` can run the web app.
             # PKG_CONFIG_PATH stays pinned below so Node's OpenSSL does not
             # steal the Rust link.
-            nodejs_22
+            nodejs_24
             pnpm
           ])
           # From nixos-26.05 for Kubernetes 1.35 + containerd 2.x (image
@@ -74,7 +74,7 @@
 
         devShells.web = pkgs.mkShell {
           packages = with pkgs; [
-            nodejs_22
+            nodejs_24
             pnpm
           ];
         };

@@ -1,5 +1,5 @@
 # Node.js base image targets. The flake devShell exports NODEJS_VERSION
-# (from the nixpkgs nodejs_22 package via `node --version | cut -c 2-`).
+# (from the nixpkgs nodejs_24 package via `node --version | cut -c 2-`).
 # This file declares the variable with no default so an unset value fails
 # the build.
 
