@@ -1,0 +1,31 @@
+# Release overlay for resume-analyzer chart v__VERSION__.
+#
+# Images are pinned to the immutable multi-arch digest published by the
+# release workflow. Model and llama.cpp are disabled: those images are not
+# built or published by CI. `auth.secret` must be supplied at install time
+# (never committed); use `--set-file auth.secret=...` or a sealed secret.
+api:
+  enabled: true
+  image: __API_IMAGE__
+  pullPolicy: IfNotPresent
+
+web:
+  enabled: true
+  image: __WEB_IMAGE__
+  pullPolicy: IfNotPresent
+
+sections:
+  model:
+    enabled: false
+
+llama-cpp:
+  enabled: false
+
+postgres:
+  image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
+
+s3:
+  bucket: resumes
+  region: us-east-1
+  accessKey: test
+  secretKey: test
