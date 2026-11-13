@@ -83,7 +83,10 @@ if [[ "$run_web" == 1 ]]; then
       node ../scripts/web-assets.mjs .output
     fi
     if [[ -f playwright.config.ts ]]; then
-      echo "check: web playwright (skipped in CI; run locally with just demo)"
+      echo "check: web playwright"
+      pnpm exec playwright install chromium
+      # Test the production build we just produced, not the dev server.
+      PLAYWRIGHT_PRODUCTION=1 pnpm test:e2e
     fi
   )
 fi
