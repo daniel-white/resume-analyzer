@@ -64,10 +64,16 @@ export function ResumeViewer({
     };
   }, [file.url]);
 
+  const resumeKind = file.mediaType === "application/pdf"
+    ? "PDF"
+    : file.mediaType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      ? "DOCX"
+      : "file";
+
   return (
     <section className="resume-viewer overflow-hidden rounded-xl border border-black/10 bg-white text-black" aria-label="Original résumé">
       <div className="viewer-heading">
-        <h2><FileText size={17} aria-hidden="true" /> Original file</h2>
+        <h2><FileText size={17} aria-hidden="true" /> Original {resumeKind} résumé</h2>
         <a href={uri ?? file.url} download={filename}><Download size={15} aria-hidden="true" /> Download original</a>
       </div>
       {error ? <p role="alert" className="p-4">{error}</p> : uri ? (
