@@ -1,0 +1,376 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (retry a failed release)
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io/daniel-white
+  CHART_REGISTRY: ghcr.io/daniel-white/charts
+  CHART: resume-analyzer
+
+jobs:
+  meta:
+    name: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
+      - id: meta
+        env:
+          TAG_REF: ${{ inputs.tag || github.ref }}
+        run: |
+          tag=${TAG_REF#refs/tags/}
+          version=${tag#v}
+          sha=$(git rev-parse HEAD)
+          short_sha=$(git rev-parse --short HEAD)
+          epoch=$(git log -1 --format=%ct)
+
+          # The tag commit must be reachable from origin/main so a release
+          # never cuts from a forgotten side branch.
+          if ! git merge-base --is-ancestor HEAD origin/main 2>/dev/null \
+             && ! git merge-base --is-ancestor HEAD main 2>/dev/null; then
+            echo "meta: ${tag} is not reachable from main" >&2
+            exit 1
+          fi
+
+          # Chart.yaml must already carry the release version (release-please
+          # bumps it in the version PR that created this tag).
+          chart_version=$(sed -n 's/^version:[[:space:]]*//p' deploy/helm/resume-analyzer/Chart.yaml | tr -d '"')
+          chart_appversion=$(sed -n 's/^appVersion:[[:space:]]*//p' deploy/helm/resume-analyzer/Chart.yaml | tr -d '"')
+          if [[ "$chart_version" != "$version" || "$chart_appversion" != "$version" ]]; then
+            echo "meta: Chart.yaml version=${chart_version} appVersion=${chart_appversion} do not match tag ${version}" >&2
+            exit 1
+          fi
+
+          # Prerelease if the version carries a pre-release segment (rc, beta, …).
+          if [[ "$version" =~ - ]]; then prerelease=true; else prerelease=false; fi
+
+          {
+            echo "version=${version}"
+            echo "tag=${tag}"
+            echo "short_sha=${short_sha}"
+            echo "source_date_epoch=${epoch}"
+            echo "prerelease=${prerelease}"
+          } >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: verify
+    needs: meta
+    uses: ./.github/workflows/check.yml
+    with: {}
+    secrets: inherit
+
+  build:
+    name: build
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, web]
+        include:
+          - target: api
+            arch: amd64
+            runner: ubuntu-24.04
+          - target: api
+            arch: arm64
+            runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+          - target: web
+            arch: amd64
+            runner: ubuntu-24.04
+          - target: web
+            arch: arm64
+            runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.meta.outputs.tag }}
+      - name: install nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: cache nix store
+        uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+      - name: login to ghcr
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: bake ${{ matrix.target }} for ${{ matrix.arch }}
+        env:
+          TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
+          CACHE_ARCH: ${{ matrix.arch }}
+          CACHE_WRITE: "true"
+        run: |
+          source scripts/versions.sh
+          ./scripts/bake.sh "${{ matrix.target }}" \
+            --var "TAG=${TAG}" \
+            --var "CACHE_ARCH=${CACHE_ARCH}" \
+            --var "CACHE_WRITE=${CACHE_WRITE}" \
+            --provenance=mode=max --sbom=true --push
+      - name: record digest
+        run: |
+          mkdir -p digests
+          image="${REGISTRY}/${CHART#charts/}/${{ matrix.target }}:${{ needs.meta.outputs.version }}-${{ matrix.arch }}"
+          digest=$(docker buildx imagetools inspect "$image" \
+            | sed -n 's/^Digest:[[:space:]]*//p' | head -1)
+          echo "${{ matrix.target }}=${digest}" > "digests/${{ matrix.target }}-${{ matrix.arch }}.txt"
+      - name: upload digests
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: digests-${{ matrix.target }}-${{ matrix.arch }}
+          path: digests/
+          retention-days: 7
+
+  manifest:
+    name: manifest
+    needs: [meta, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.meta.outputs.tag }}
+      - name: login to ghcr
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: download digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: digests
+          merge-multiple: true
+      - name: tag multi-arch image indexes
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        run: |
+          for target in api web; do
+            amd=$(sed -n 's/.*=//p' "digests/${target}-amd64.txt")
+            arm=$(sed -n 's/.*=//p' "digests/${target}-arm64.txt")
+            refs=("${REGISTRY}/${target}:${VERSION}" "${REGISTRY}/${target}:sha-${SHORT_SHA}")
+            if [[ "${PRERELEASE}" != "true" ]]; then
+              major=${VERSION%%.*}
+              minor=${VERSION#*.}; minor=${minor%.*}
+              refs+=("${REGISTRY}/${target}:${major}.${minor}" "${REGISTRY}/${target}:${major}")
+            fi
+            docker buildx imagetools create \
+              "${refs[@]/#/-t }" \
+              "${REGISTRY}/${target}:${VERSION}-amd64@${amd}" \
+              "${REGISTRY}/${target}:${VERSION}-arm64@${arm}"
+            merged=$(docker buildx imagetools inspect "${REGISTRY}/${target}:${VERSION}" \
+              | sed -n 's/^Digest:[[:space:]]*//p' | head -1)
+            echo "${target}_digest=${merged}" >> "$GITHUB_OUTPUT"
+          done
+        id: images
+      - name: write digest summary
+        run: |
+          {
+            echo "## Images (${{ needs.meta.outputs.version }})"
+            echo ""
+            echo "| Image | Digest |"
+            echo "| --- | --- |"
+            printf '| ghcr.io/daniel-white/resume-analyzer/api | %s |\n' "${{ steps.images.outputs.api_digest }}"
+            printf '| ghcr.io/daniel-white/resume-analyzer/web | %s |\n' "${{ steps.images.outputs.web_digest }}"
+          } > digests.txt
+      - name: upload digest summary
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: digest-summary
+          path: digests.txt
+          retention-days: 7
+
+  chart:
+    name: chart
+    needs: [meta, manifest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.meta.outputs.tag }}
+      - name: install helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.19.1
+      - name: login to ghcr (OCI)
+        run: |
+          echo "${{ github.token }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+      - name: download digest summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digest-summary
+          path: digests
+      - name: package chart
+        id: package
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+          API_IMAGE: ghcr.io/daniel-white/resume-analyzer/api@${{ needs.manifest.outputs.api_digest }}
+          WEB_IMAGE: ghcr.io/daniel-white/resume-analyzer/web@${{ needs.manifest.outputs.web_digest }}
+          SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source_date_epoch }}
+        run: |
+          ./scripts/ci/package-chart.sh \
+            "${VERSION}" "${API_IMAGE}" "${WEB_IMAGE}" dist
+          echo "tgz=$(ls dist/resume-analyzer-${VERSION}.tgz)" >> "$GITHUB_OUTPUT"
+          echo "values=$(ls dist/values.release-${VERSION}.yaml)" >> "$GITHUB_OUTPUT"
+      - name: push chart to OCI
+        run: |
+          helm push dist/resume-analyzer-${{ needs.meta.outputs.version }}.tgz \
+            oci://${CHART_REGISTRY}
+      - name: upload chart artifacts
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: chart-${{ needs.meta.outputs.version }}
+          path: |
+            dist/resume-analyzer-${{ needs.meta.outputs.version }}.tgz
+            dist/values.release-${{ needs.meta.outputs.version }}.yaml
+          retention-days: 7
+
+  sign:
+    name: sign
+    needs: [meta, chart, manifest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.meta.outputs.tag }}
+      - name: install cosign
+        uses: sigstore/cosign-installer@db0f512372e476bcdfc58b21303b1407a4313ccc # v2.6.0
+      - name: download chart artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: chart-${{ needs.meta.outputs.version }}
+          path: dist
+      - name: write checksums
+        run: |
+          sha256sum dist/resume-analyzer-${VERSION}.tgz \
+            > dist/checksums-${VERSION}.txt
+          cat dist/checksums-${VERSION}.txt
+      - name: sign images, chart, and checksums
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+          VERSION: ${{ needs.meta.outputs.version }}
+          API_DIGEST: ${{ needs.manifest.outputs.api_digest }}
+          WEB_DIGEST: ${{ needs.manifest.outputs.web_digest }}
+        run: |
+          # Sign the immutable multi-arch image indexes by digest.
+          cosign sign --yes "ghcr.io/daniel-white/resume-analyzer/api@${API_DIGEST}"
+          cosign sign --yes "ghcr.io/daniel-white/resume-analyzer/web@${WEB_DIGEST}"
+          # Sign the published chart tag.
+          cosign sign --yes "oci://${CHART_REGISTRY}/${CHART}:${VERSION}"
+          # Sign the checksums file as an attestation.
+          cosign sign-blob --yes \
+            dist/checksums-${VERSION}.txt \
+            > dist/checksums-${VERSION}.sig
+
+  release:
+    name: release
+    needs: [meta, chart, sign]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: release
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ needs.meta.outputs.tag }}
+      - name: download chart artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: chart-${{ needs.meta.outputs.version }}
+          path: dist
+      - name: download digest summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: digest-summary
+          path: dist
+      - name: publish draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.meta.outputs.version }}
+          TAG: ${{ needs.meta.outputs.tag }}
+          PRERELEASE: ${{ needs.meta.outputs.prerelease }}
+        run: |
+          set -e
+          # release-please already created a draft release for this tag. Update
+          # it with the chart, checksums, and install/verify instructions, then
+          # publish. If no draft exists yet, create one from the tag.
+          if gh release view "${TAG}" --json draft 2>/dev/null | grep -q '"draft": true'; then
+            gh release upload "${TAG}" \
+              dist/resume-analyzer-${VERSION}.tgz \
+              dist/values.release-${VERSION}.yaml \
+              dist/checksums-${VERSION}.txt \
+              dist/digests.txt
+          else
+            gh release create "${TAG}" \
+              --title "${VERSION}" \
+              --notes "See CHANGELOG.md for details." \
+              dist/resume-analyzer-${VERSION}.tgz \
+              dist/values.release-${VERSION}.yaml \
+              dist/checksums-${VERSION}.txt \
+              dist/digests.txt
+          fi
+          {
+            echo ""
+            echo "## Install"
+            echo ""
+            echo "Add the Helm chart repository:"
+            echo ""
+            echo "```sh"
+            echo "helm add repo resume-analyzer oci://ghcr.io/daniel-white/charts"
+            echo "helm install resume-analyzer resume-analyzer/resume-analyzer --version ${VERSION} \\"
+            echo "  --values values.release-${VERSION}.yaml"
+            echo "```"
+            echo ""
+            echo "## Verify"
+            echo ""
+            echo "```sh"
+            echo "helm pull oci://ghcr.io/daniel-white/charts/resume-analyzer --version ${VERSION} --untar"
+            echo "helm template resume-analyzer ./resume-analyzer --values values.release-${VERSION}.yaml"
+            echo "```"
+          } >> dist/release-notes.md
+          gh release edit "${TAG}" \
+            --notes-file dist/release-notes.md \
+            --draft=false \
+            ${{ needs.meta.outputs.prerelease == 'true' && '--prerelease' || '' }}
