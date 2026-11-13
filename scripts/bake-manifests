@@ -54,7 +54,14 @@ while IFS= read -r -d '' crate_manifest; do
     : > "$MANIFEST_DIR/$crate_dir/src/lib.rs"
 done < <(find crates -name 'Cargo.toml' -print0)
 
-# Create the tarball
-tar -cf tmp/cargo-manifests.tar -C "$MANIFEST_DIR" .
+# Create the tarball with fixed metadata. Docker cache keys are content
+# hashes, so host mtimes from `cp` would invalidate the planner and cook
+# layers on every run.
+tar --sort=name \
+    --mtime='@0' \
+    --owner=0 --group=0 --numeric-owner \
+    --format=gnu \
+    -cf tmp/cargo-manifests.tar \
+    -C "$MANIFEST_DIR" .
 
-echo "Manifest bundle created: tmp/cargo-manifests.tar"
+echo "Manifest bundle created: tmp/cargo-manifests.tar" >&2

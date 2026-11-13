@@ -9,8 +9,23 @@ just bake all --progress=plain
 ```
 
 The default target is `api`; `web` and `providers` can also be built separately.
-The scripts use BuildKit through Docker Buildx. No host Rust or Node installation
-is required to build the images.
+`release` builds only `api` and `web`, which is what CI publishes. The model
+targets are intentionally excluded from CI. The scripts use BuildKit through
+Docker Buildx. No host Rust or Node installation is required to build the
+images.
+
+## Pinned inputs
+
+- Rust: `rust-toolchain.toml`
+- Node: `.node-version`
+- pnpm: `web/package.json` `packageManager`
+- Base images: pinned by digest in the Dockerfiles
+- Cargo Chef: `0.1.78`, `--locked`
+- Cargo and pnpm lockfiles: `--locked` / `--frozen-lockfile`
+
+`scripts/bake.sh` fills `RUST_VERSION`, `NODEJS_VERSION`, `PNPM_VERSION`,
+`SOURCE_DATE_EPOCH`, and `BUILD_DATE` when they are not already set, so a bare
+`docker buildx bake` is not required to know about the Nix shell.
 
 ## Cache boundaries
 
@@ -23,6 +38,9 @@ is required to build the images.
   `--locked` and the same toolchain, profile, and working directory.
 - **Downloads:** BuildKit mounts retain Cargo registry/Git downloads and the
   pnpm store across lockfile changes on the same builder.
+- **Manifests:** `scripts/bake-manifests` writes a deterministic tarball with
+  fixed mtimes, ownership, and entry order. Without that, every run produced a
+  different content hash and invalidated the planner and cook layers.
 - **Web:** pnpm setup precedes manifest copies, dependency installation precedes
   source copies, and only `.output` goes into the runtime image.
 - **Context:** `.dockerignore` excludes host build outputs, worktrees, local
@@ -33,8 +51,29 @@ The compiled Cargo dependencies deliberately live in the cook **layer**, not a
 mounts are local to the builder and are not carried by ordinary layer exports.
 Cold builds still compile dependencies; no speedup is claimed for that case.
 
-To share intermediate layers with a registry-backed Buildx builder, configure
-cache import/export per target (use separate references for API and web):
+## Registry-backed cache
+
+`docker-bake.hcl` exposes registry cache controls for CI:
+
+```sh
+CACHE_REGISTRY=ghcr.io/daniel-white/resume-analyzer \
+CACHE_ARCH=amd64 \
+CACHE_WRITE=true \
+./scripts/bake.sh release --set '*.platforms=linux/amd64'
+```
+
+The API and web targets use separate references:
+
+- `${CACHE_REGISTRY}/api:buildcache-${CACHE_ARCH}`
+- `${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH}`
+
+Exports use `mode=max`, `oci-mediatypes=true`, and `image-manifest=true`.
+`mode=max` is required because the Cargo Chef dependency layer is an
+intermediate stage and is not exported by the default cache mode. Pull requests
+read cache; only `main` and release runs write it. Fork pull requests cannot
+write GHCR cache without credentials.
+
+To share intermediate layers with a registry-backed Buildx builder manually:
 
 ```sh
 ./scripts/bake.sh api \

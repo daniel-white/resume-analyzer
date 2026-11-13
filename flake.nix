@@ -66,8 +66,12 @@
           };
 
           shellHook = ''
-            export RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)
-            export NODEJS_VERSION=$(node --version | cut -c 2-)
+            # Container builds use the versions in rust-toolchain.toml,
+            # .node-version, and web/package.json, not whatever happens to be
+            # first on PATH.
+            export RUST_VERSION=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml | head -1)
+            export NODEJS_VERSION=$(tr -d '[:space:]' < .node-version)
+            export PNPM_VERSION=$(node -p "require('./web/package.json').packageManager.split('@')[1]")
             echo "rust $(rustc --version), node $(node --version), pnpm $(pnpm --version) — resume-analyzer dev shell"
           '';
         };

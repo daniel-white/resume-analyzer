@@ -4,6 +4,24 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# The bake file deliberately has no defaults for these; ordinary CI and local
+# invocations derive them from the files that own the versions. Do not inherit
+# stale values from the calling shell.
+export RUST_VERSION=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml | head -1)
+export NODEJS_VERSION=$(tr -d '[:space:]' < .node-version)
+export PNPM_VERSION=$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' web/package.json)
+
+# The manifest bundle is a Docker cache key. Two runs must produce the same
+# bytes or the chef/cook layers rebuild on every invocation.
+./scripts/bake-manifests >/dev/null
+first=$(git hash-object tmp/cargo-manifests.tar)
+./scripts/bake-manifests >/dev/null
+second=$(git hash-object tmp/cargo-manifests.tar)
+test "$first" = "$second" || {
+  echo "demo: cargo-manifests.tar is not deterministic" >&2
+  exit 1
+}
+
 render=$(helm template resume-analyzer deploy/helm/resume-analyzer \
   --set api.enabled=true --set web.enabled=true)
 RENDER="$render" node --input-type=module <<'JS'
