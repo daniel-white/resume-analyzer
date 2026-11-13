@@ -93,6 +93,13 @@ fi
 
 if [[ "$run_factory" == 1 ]]; then
   echo "check: factory"
+  # Factory scripts resolve `main` as a local branch; on PR checkouts only
+  # origin/main exists, so create a local main pointing at it.
+  if ! git rev-parse --verify --quiet main >/dev/null 2>&1; then
+    if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+      git branch main origin/main
+    fi
+  fi
   bash scripts/factory_test.sh
 fi
 
