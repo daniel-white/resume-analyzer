@@ -99,9 +99,9 @@ jobs:
           password: ${{ github.token }}
       - name: create buildx builder
         run: |
-          docker buildx create --use --name bake --driver docker-container \
-            --config /home/runner/.docker/config.json 2>/dev/null \
-            || docker buildx inspect bake >/dev/null
+          docker buildx inspect bake >/dev/null 2>&1 \
+            || docker buildx create --use --name bake --driver docker-container
+          docker buildx inspect bake
       - name: bake api + web for ${{ matrix.arch }}
         env:
           TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
