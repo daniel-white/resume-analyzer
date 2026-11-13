@@ -1,0 +1,133 @@
+name: reproducibility
+
+on:
+  schedule:
+    - cron: "0 2 * * 1" # weekly, Mondays
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: reproducibility-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io/daniel-white/resume-analyzer
+
+jobs:
+  meta:
+    name: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: meta
+        run: |
+          short_sha=$(git rev-parse --short HEAD)
+          epoch=$(git log -1 --format=%ct)
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=${epoch}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [api, web]
+        arch: [amd64, arm64]
+        repeat: [1, 2]
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: install nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: cache nix store
+        uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+      - name: bake ${{ matrix.target }} repeat ${{ matrix.repeat }} for ${{ matrix.arch }}
+        env:
+          TAG: repro-${{ needs.meta.outputs.short_sha }}-${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}
+          CACHE_ARCH: ${{ matrix.arch }}
+          CACHE_WRITE: "false"
+          SOURCE_DATE_EPOCH: ${{ needs.meta.outputs.source_date_epoch }}
+        run: |
+          source scripts/versions.sh
+          ./scripts/bake.sh "${{ matrix.target }}" \
+            --var "TAG=${TAG}" \
+            --var "CACHE_ARCH=${CACHE_ARCH}" \
+            --var "CACHE_WRITE=${CACHE_WRITE}" \
+            --no-cache --load \
+            --provenance=false --sbom=false
+      - name: record image digest
+        env:
+          TAG: repro-${{ needs.meta.outputs.short_sha }}-${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}
+        run: |
+          mkdir -p digests
+          image="${REGISTRY}/${{ matrix.target }}:${TAG}"
+          digest=$(docker inspect --format='{{.Id}}' "$image")
+          echo "${image}=${digest}" >> "digests/${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}.txt"
+      - name: upload digests
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: digests-${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}
+          path: digests/
+          retention-days: 7
+
+  compare:
+    name: compare
+    needs: [meta, build]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: download digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: digests
+          merge-multiple: true
+      - name: compare repeat builds
+        run: |
+          failed=0
+          for target in api web; do
+            for arch in amd64 arm64; do
+              r1=$(sed -n '1p' "digests/${target}-${arch}-r1.txt" 2>/dev/null | sed 's/.*=//')
+              r2=$(sed -n '1p' "digests/${target}-${arch}-r2.txt" 2>/dev/null | sed 's/.*=//')
+              if [[ -z "$r1" || -z "$r2" ]]; then
+                echo "::error::missing digest for ${target}/${arch} (r1=$r1 r2=$r2)"
+                failed=1
+              elif [[ "$r1" != "$r2" ]]; then
+                echo "::error::${target}/${arch} not reproducible: r1=$r1 r2=$r2"
+                failed=1
+              else
+                echo "reproducible: ${target}/${arch} = $r1"
+              fi
+            done
+          done
+          exit $failed
