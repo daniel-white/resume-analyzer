@@ -70,10 +70,7 @@ pub async fn current_user(api: &Api, headers: &HeaderMap) -> Result<auth::Uuid, 
 
 /// Signed in and on a configured admin domain. Signed-out callers get 401;
 /// signed-in callers on any other domain get 403.
-pub async fn current_admin(
-    api: &Api,
-    headers: &HeaderMap,
-) -> Result<auth::Session, StatusCode> {
+pub async fn current_admin(api: &Api, headers: &HeaderMap) -> Result<auth::Session, StatusCode> {
     let session = current_session(api, headers).await?;
     if api.is_admin_email(&session.email) {
         Ok(session)

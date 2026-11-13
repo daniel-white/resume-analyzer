@@ -30,10 +30,7 @@ pub fn routes() -> axum::Router<Arc<Api>> {
             "/api/admin/feedback/analyses/{id}",
             put(set_analysis_handled),
         )
-        .route(
-            "/api/admin/feedback/analyses/{id}",
-            post(rerun_analysis),
-        )
+        .route("/api/admin/feedback/analyses/{id}", post(rerun_analysis))
 }
 
 async fn list_feedback(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {

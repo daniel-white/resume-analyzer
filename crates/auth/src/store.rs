@@ -133,7 +133,12 @@ pub async fn find_session(
     .bind(now)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|(id, user_id, email, timezone)| Session { id, user_id, email, timezone }))
+    Ok(row.map(|(id, user_id, email, timezone)| Session {
+        id,
+        user_id,
+        email,
+        timezone,
+    }))
 }
 
 pub async fn list_sessions(

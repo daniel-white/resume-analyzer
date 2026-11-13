@@ -520,8 +520,8 @@ impl Store {
         )
         .bind(version_id)
         .bind(jsonb(parse)?)
-        .bind(sections.map(|sections| jsonb(sections)).transpose()?)
-        .bind(profile_summary.map(|summary| jsonb(summary)).transpose()?)
+        .bind(sections.map(jsonb).transpose()?)
+        .bind(profile_summary.map(jsonb).transpose()?)
         .execute(&mut *tx)
         .await?;
         let already = sqlx::query(
@@ -963,18 +963,9 @@ impl Store {
     /// model still has the version's markdown and raw file, so the new
     /// diagnosis arrives as a fresh row. Returns false when the id is unknown
     /// or the version no longer has the text it was built from.
-    pub async fn rerun_feedback_analysis(
-        &self,
-        id: Uuid,
-    ) -> anyhow::Result<bool> {
+    pub async fn rerun_feedback_analysis(&self, id: Uuid) -> anyhow::Result<bool> {
         let mut tx = self.pool.begin().await?;
-        let row: Option<(
-            Uuid,
-            Uuid,
-            String,
-            String,
-            String,
-        )> = sqlx::query_as(
+        let row: Option<(Uuid, Uuid, String, String, String)> = sqlx::query_as(
             "select version_id, user_id, section_id, section_heading, section_kind
              from feedback_analysis where id = $1",
         )
@@ -984,12 +975,11 @@ impl Store {
         let Some((version_id, user_id, section_id, section_heading, section_kind)) = row else {
             return Ok(false);
         };
-        let has_markdown: bool = sqlx::query_scalar(
-            "select resume_markdown is not null from versions where id = $1",
-        )
-        .bind(version_id)
-        .fetch_one(&mut *tx)
-        .await?;
+        let has_markdown: bool =
+            sqlx::query_scalar("select resume_markdown is not null from versions where id = $1")
+                .bind(version_id)
+                .fetch_one(&mut *tx)
+                .await?;
         if !has_markdown {
             tx.rollback().await?;
             return Ok(false);
@@ -998,11 +988,10 @@ impl Store {
             .bind(id)
             .execute(&mut *tx)
             .await?;
-        let resume_id: Uuid =
-            sqlx::query_scalar("select resume_id from versions where id = $1")
-                .bind(version_id)
-                .fetch_one(&mut *tx)
-                .await?;
+        let resume_id: Uuid = sqlx::query_scalar("select resume_id from versions where id = $1")
+            .bind(version_id)
+            .fetch_one(&mut *tx)
+            .await?;
         let kind = SectionKind::parse(&section_kind).unwrap_or(SectionKind::Other);
         let payload = AnalyzeFeedbackPayload {
             version_id,

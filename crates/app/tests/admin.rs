@@ -427,6 +427,9 @@ async fn admins_triage_downvoted_feedback_without_deleting_it() {
         .fetch_one(store.pool())
         .await
         .expect("count after up vote");
-    assert_eq!(rows, 1, "rerun deleted the experience diagnosis; the profile one stays");
+    assert_eq!(
+        rows, 1,
+        "rerun deleted the experience diagnosis; the profile one stays"
+    );
     let _ = profile.id;
 }
