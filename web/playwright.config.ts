@@ -45,10 +45,17 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
     },
-    {
-      name: "webkit",
-      testMatch: ["resume-viewer.spec.ts", "theme.spec.ts"],
-      use: { ...devices["Desktop Safari"] },
-    },
+    // WebKit (Safari) runs resume-viewer.spec.ts and theme.spec.ts.
+    // It requires GTK/GStreamer/Cairo/Pango system libraries that are not
+    // available in the default CI container. Enable with PLAYWRIGHT_WEBKIT=1.
+    ...(process.env.PLAYWRIGHT_WEBKIT === "1"
+      ? [
+          {
+            name: "webkit",
+            testMatch: ["resume-viewer.spec.ts", "theme.spec.ts"],
+            use: { ...devices["Desktop Safari"] },
+          },
+        ]
+      : []),
   ],
 });
