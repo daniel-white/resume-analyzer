@@ -345,7 +345,7 @@ function removeAnalysis(items: AdminFeedback[], id: string): AdminFeedback[] {
     .filter((item) => item.analyses.length > 0);
 }
 
-function formatDate(value: string, timezone?: string): string {
+function formatDate(value: string, timezone?: string | null): string {
   const date = new Date(value);
   const options: Intl.DateTimeFormatOptions = {
     month: "short",

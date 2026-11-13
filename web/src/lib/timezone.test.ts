@@ -3,15 +3,19 @@ import { detectTimeZone } from "./timezone";
 
 describe("detectTimeZone", () => {
   const originalIntl = Intl;
+  const originalDateTimeFormat = Intl.DateTimeFormat;
 
   afterEach(() => {
-    // Restore original Intl after each test
+    // Restore original Intl after each test, including the DateTimeFormat
+    // property that individual tests replace.
     global.Intl = originalIntl;
+    global.Intl.DateTimeFormat = originalDateTimeFormat;
   });
 
   beforeEach(() => {
     // Reset Intl to ensure tests don't leak
     global.Intl = originalIntl;
+    global.Intl.DateTimeFormat = originalDateTimeFormat;
   });
 
   it("returns null when Intl is unavailable", () => {
@@ -29,6 +33,7 @@ describe("detectTimeZone", () => {
   it("returns a valid IANA timezone string when detected", () => {
     const result = detectTimeZone();
     expect(result).toBeTruthy();
+    if (result === null) throw new Error("expected a timezone");
     expect(typeof result).toBe("string");
     // Should be a valid IANA zone name (non-empty, reasonable length)
     expect(result.length).toBeGreaterThan(0);

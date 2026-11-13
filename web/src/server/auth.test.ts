@@ -8,7 +8,7 @@ describe("sign-in messages", () => {
     const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     try {
       expect(await requestMagicLink("http://localhost:8080", "ada@example.com", undefined, `/resumes/${id}`, id)).toEqual({ ok: true });
-      expect(JSON.parse(mock.mock.calls[0][1]!.body as string)).toEqual({ email: "ada@example.com", return_to: `/resumes/${id}`, upload_id: id });
+      expect(JSON.parse(mock.mock.calls[0][1]!.body as string)).toEqual({ email: "ada@example.com", return_to: `/resumes/${id}`, upload_id: id, timezone: "" });
       expect(magicLinkMessage(400, '{"error":"upload"}')).toContain("upload has expired");
     } finally { mock.mockRestore(); }
   });
@@ -35,7 +35,7 @@ describe("sign-in messages", () => {
     try {
       expect(await requestMagicLink("http://localhost:8080", " ada@example.com ", undefined, destination)).toEqual({ ok: true });
       const request = fetchMock.mock.calls[0][1];
-      expect(JSON.parse(request!.body as string)).toEqual({ email: "ada@example.com", return_to: destination });
+      expect(JSON.parse(request!.body as string)).toEqual({ email: "ada@example.com", return_to: destination, timezone: "" });
     } finally {
       fetchMock.mockRestore();
     }
