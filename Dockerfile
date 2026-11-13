@@ -8,6 +8,9 @@ ARG DEBIAN_CODENAME=bookworm
 
 FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS chef
 WORKDIR /src
+# Pin the actual toolchain from rust-toolchain.toml so the build uses the
+# same compiler even if a stale RUST_VERSION is exported in the shell.
+COPY rust-toolchain.toml ./
 # Mirrors images/rust/toolchain.Dockerfile: install Cargo Chef in the toolchain
 # layer so the planner stage (line 16) can run `cargo chef prepare`.
 RUN --mount=type=cache,id=resume-analyzer-cargo-registry,target=/usr/local/cargo/registry \

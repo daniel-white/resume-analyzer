@@ -28,7 +28,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: rust
-        uses: dtolnay/rust-toolchain@1.100.0
+        uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
       - name: gate

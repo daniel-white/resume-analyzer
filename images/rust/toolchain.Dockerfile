@@ -6,6 +6,9 @@ ARG RUST_VERSION=1.99.1
 FROM rust:${RUST_VERSION}-${DEBIAN_CODENAME} AS rust-toolchain
 WORKDIR /repo
 ENV CI=true
+# Pin the actual toolchain from rust-toolchain.toml so a stale RUST_VERSION
+# export cannot select a different compiler.
+COPY rust-toolchain.toml ./
 
 RUN --mount=type=cache,id=resume-analyzer-cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=resume-analyzer-cargo-git,target=/usr/local/cargo/git \
