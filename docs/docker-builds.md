@@ -16,16 +16,17 @@ images.
 
 ## Pinned inputs
 
-- Rust: `rust-toolchain.toml`
-- Node: `.node-version`
-- pnpm: `web/package.json` `packageManager`
+- Rust, Node, and pnpm: the `nix develop` shell (`flake.lock`)
 - Base images: pinned by digest in the Dockerfiles
 - Cargo Chef: `0.1.78`, `--locked`
 - Cargo and pnpm lockfiles: `--locked` / `--frozen-lockfile`
 
-`scripts/bake.sh` fills `RUST_VERSION`, `NODEJS_VERSION`, `PNPM_VERSION`,
-`SOURCE_DATE_EPOCH`, and `BUILD_DATE` when they are not already set, so a bare
-`docker buildx bake` is not required to know about the Nix shell.
+`scripts/bake.sh` sources `scripts/versions.sh`, which asks `nix develop` for
+`RUST_VERSION`, `NODEJS_VERSION`, and `PNPM_VERSION` on every run. It always
+queries the flake, so a shell that is several `flake.lock` generations old
+cannot build an image with a stale compiler. `SOURCE_DATE_EPOCH` and
+`BUILD_DATE` come from the commit. Running `docker buildx bake` directly
+requires those values in the environment.
 
 ## Cache boundaries
 

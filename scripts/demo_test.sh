@@ -4,12 +4,10 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-# The bake file deliberately has no defaults for these; ordinary CI and local
-# invocations derive them from the files that own the versions. Do not inherit
-# stale values from the calling shell.
-export RUST_VERSION=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml | head -1)
-export NODEJS_VERSION=$(tr -d '[:space:]' < .node-version)
-export PNPM_VERSION=$(sed -n 's/.*"packageManager": "pnpm@\([^"]*\)".*/\1/p' web/package.json)
+# The bake file deliberately has no defaults for these; resolve them from the
+# Nix devShell, which is the only place tool versions are pinned.
+# shellcheck source=versions.sh
+source "$root/scripts/versions.sh"
 
 # The manifest bundle is a Docker cache key. Two runs must produce the same
 # bytes or the chef/cook layers rebuild on every invocation.

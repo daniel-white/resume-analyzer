@@ -11,9 +11,9 @@ variable "TAG" {
   default = "dev"
 }
 
-# Pinned in rust-toolchain.toml, .node-version, and web/package.json. No
-# default on purpose: an unset value must fail the build rather than silently
-# fetching a floating tag.
+# Pinned by the flake devShell, which exports the versions it actually
+# provides. No default on purpose: an unset value must fail the build rather
+# than silently fetching a floating tag.
 variable "RUST_VERSION" {}
 variable "NODEJS_VERSION" {}
 variable "PNPM_VERSION" {}

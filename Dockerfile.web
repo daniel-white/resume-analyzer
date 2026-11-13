@@ -2,12 +2,12 @@
 
 # The compiled web app. `just demo` loads this image and the chart
 # routes https://app.resume.local/ at it. /api stays on the Rust pod.
-# NODEJS_VERSION and PNPM_VERSION are pinned in .node-version and
-# web/package.json, and passed by the bake file.
+# NODEJS_VERSION and PNPM_VERSION come from the Nix devShell and are passed
+# by the bake file.
 ARG NODEJS_VERSION
 ARG PNPM_VERSION
 
-FROM node:${NODEJS_VERSION}-bookworm@sha256:9a2ed90cd91b1f3412affe080b62e69b057ba8661d9844e143a6bbd76a23260f AS build
+FROM node:${NODEJS_VERSION}-bookworm@sha256:5711a0d445a1af54af9589066c646df387d1831a608226f4cd694fc59e745059 AS build
 ARG PNPM_VERSION
 WORKDIR /src
 # Tool installation does not depend on application manifests.
@@ -27,7 +27,7 @@ ARG SOURCE_DATE_EPOCH=0
 ENV SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH}
 RUN pnpm build && node web-assets.mjs .output
 
-FROM node:${NODEJS_VERSION}-bookworm-slim@sha256:48abc13a19400ca3985071e287bd405a1d99306770eb81d61202fb6b65cf0b57
+FROM node:${NODEJS_VERSION}-bookworm-slim@sha256:6f7b03f7c2c8e2e784dcf9295400527b9b1270fd37b7e9a7285cf83b6951452d
 ARG VERSION=dev
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=1970-01-01T00:00:00Z
