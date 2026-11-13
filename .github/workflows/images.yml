@@ -106,12 +106,16 @@ jobs:
         env:
           TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
           CACHE_ARCH: ${{ matrix.arch }}
+          # PRs from forks can't read GHCR cache without credentials; skip cache
+          # entirely on pull_request runs.
+          CACHE_REGISTRY: ${{ needs.meta.outputs.push == 'true' && env.CACHE_REGISTRY || '' }}
           CACHE_WRITE: ${{ needs.meta.outputs.cache_write }}
         run: |
           source scripts/versions.sh
           args=(
             --var "TAG=${TAG}"
             --var "CACHE_ARCH=${CACHE_ARCH}"
+            --var "CACHE_REGISTRY=${CACHE_REGISTRY}"
             --var "CACHE_WRITE=${CACHE_WRITE}"
             --provenance=mode=max --sbom=true
           )
