@@ -90,7 +90,7 @@ jobs:
           digest=$(docker inspect --format='{{.Id}}' "$image")
           echo "${image}=${digest}" >> "digests/${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}.txt"
       - name: upload digests
-        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: digests-${{ matrix.target }}-${{ matrix.arch }}-r${{ matrix.repeat }}
           path: digests/

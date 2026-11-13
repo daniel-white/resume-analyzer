@@ -124,7 +124,7 @@ jobs:
           done
       - name: upload digests
         if: needs.meta.outputs.push == 'true'
-        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: digests-${{ matrix.arch }}
           path: digests/
@@ -179,7 +179,7 @@ jobs:
             printf '| ghcr.io/daniel-white/resume-analyzer/web | %s |\n' "${{ steps.images.outputs.web_digest }}"
           } > digests.txt
       - name: upload digest summary
-        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: digest-summary
           path: digests.txt
