@@ -1,0 +1,186 @@
+name: images
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: images-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  REGISTRY: ghcr.io/daniel-white/resume-analyzer
+  CACHE_REGISTRY: ghcr.io/daniel-white/resume-analyzer
+
+jobs:
+  meta:
+    name: meta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      short_sha: ${{ steps.meta.outputs.short_sha }}
+      source_date_epoch: ${{ steps.meta.outputs.source_date_epoch }}
+      push: ${{ steps.meta.outputs.push }}
+      cache_write: ${{ steps.meta.outputs.cache_write }}
+      arches: ${{ steps.meta.outputs.arches }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: meta
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          epoch=$(git log -1 --format=%ct)
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            version="sha-${sha}"
+            push=true
+            cache_write=true
+            arches='["amd64","arm64"]'
+          else
+            version="pr-${sha}"
+            push=false
+            cache_write=false
+            arches='["amd64"]'
+          fi
+          {
+            echo "version=${version}"
+            echo "short_sha=${sha}"
+            echo "source_date_epoch=${epoch}"
+            echo "push=${push}"
+            echo "cache_write=${cache_write}"
+            echo "arches=${arches}"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    name: build
+    needs: meta
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: ${{ fromJson(needs.meta.outputs.arches) }}
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ${{ vars.ARM_RUNNER || 'ubuntu-24.04-arm' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: install nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      - name: cache nix store
+        uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+      - name: login to ghcr
+        if: needs.meta.outputs.push == 'true'
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: bake api + web for ${{ matrix.arch }}
+        env:
+          TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
+          CACHE_ARCH: ${{ matrix.arch }}
+          CACHE_WRITE: ${{ needs.meta.outputs.cache_write }}
+        run: |
+          source scripts/versions.sh
+          args=(
+            --var "TAG=${TAG}"
+            --var "CACHE_ARCH=${CACHE_ARCH}"
+            --var "CACHE_WRITE=${CACHE_WRITE}"
+            --provenance=mode=max --sbom=true
+          )
+          [[ "${{ needs.meta.outputs.push }}" == "true" ]] && args+=(--push)
+          ./scripts/bake.sh release "${args[@]}"
+      - name: record per-arch digests
+        if: needs.meta.outputs.push == 'true'
+        run: |
+          mkdir -p digests
+          for target in api web; do
+            image="${REGISTRY}/${target}:${{ needs.meta.outputs.version }}-${{ matrix.arch }}"
+            digest=$(docker buildx imagetools inspect "$image" \
+              | sed -n 's/^Digest:[[:space:]]*//p' | head -1)
+            echo "${target}=${digest}" > "digests/${target}-${{ matrix.arch }}.txt"
+          done
+      - name: upload digests
+        if: needs.meta.outputs.push == 'true'
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: digests-${{ matrix.arch }}
+          path: digests/
+          retention-days: 7
+
+  manifest:
+    name: manifest
+    needs: [meta, build]
+    if: needs.meta.outputs.push == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: login to ghcr
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: download digests
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: digests
+          merge-multiple: true
+      - name: create multi-arch image indexes
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          for target in api web; do
+            amd=$(sed -n 's/.*=//p' "digests/${target}-amd64.txt")
+            arm=$(sed -n 's/.*=//p' "digests/${target}-arm64.txt")
+            docker buildx imagetools create \
+              -t "${REGISTRY}/${target}:${VERSION}" \
+              "${REGISTRY}/${target}:${VERSION}-amd64@${amd}" \
+              "${REGISTRY}/${target}:${VERSION}-arm64@${arm}"
+            merged=$(docker buildx imagetools inspect "${REGISTRY}/${target}:${VERSION}" \
+              | sed -n 's/^Digest:[[:space:]]*//p' | head -1)
+            echo "${target}_digest=${merged}" >> "$GITHUB_OUTPUT"
+          done
+        id: images
+      - name: write digest summary
+        run: |
+          {
+            echo "## Images (${{ needs.meta.outputs.version }})"
+            echo ""
+            echo "| Image | Digest |"
+            echo "| --- | --- |"
+            printf '| ghcr.io/daniel-white/resume-analyzer/api | %s |\n' "${{ steps.images.outputs.api_digest }}"
+            printf '| ghcr.io/daniel-white/resume-analyzer/web | %s |\n' "${{ steps.images.outputs.web_digest }}"
+          } > digests.txt
+      - name: upload digest summary
+        uses: actions/upload-artifact@ea8169f87d877963012d3b492fc88c2cc29af1e4 # v4.6.2
+        with:
+          name: digest-summary
+          path: digests.txt
+          retention-days: 7
