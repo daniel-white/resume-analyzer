@@ -97,6 +97,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ github.token }}
+      - name: create buildx builder
+        run: |
+          docker buildx create --use --name bake --driver docker-container \
+            --config /home/runner/.docker/config.json 2>/dev/null \
+            || docker buildx inspect bake >/dev/null
       - name: bake api + web for ${{ matrix.arch }}
         env:
           TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
