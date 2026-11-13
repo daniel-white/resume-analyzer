@@ -90,7 +90,7 @@ describe("detectTimeZone", () => {
     const originalDateTimeFormat = global.Intl.DateTimeFormat;
     const mockResolved = { timeZone: "America/New_York" };
     const callCount = { value: 0 };
-    global.Intl.DateTimeFormat = vi.fn().mockImplementation((...args) => {
+    global.Intl.DateTimeFormat = vi.fn().mockImplementation(function () {
       callCount.value++;
       if (callCount.value === 1) {
         // First call: resolvedOptions for the check
@@ -108,7 +108,7 @@ describe("detectTimeZone", () => {
     const originalDateTimeFormat = global.Intl.DateTimeFormat;
     const mockResolved = { timeZone: "America/New_York" };
     const callCount = { value: 0 };
-    global.Intl.DateTimeFormat = vi.fn().mockImplementation((...args) => {
+    global.Intl.DateTimeFormat = vi.fn().mockImplementation(function () {
       callCount.value++;
       if (callCount.value === 1) {
         // First call: resolvedOptions for the check
