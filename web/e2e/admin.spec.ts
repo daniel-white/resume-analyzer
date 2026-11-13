@@ -91,7 +91,7 @@ test("admin dashboard triage: filters, handles, and reopens", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Profile impression" })).toBeVisible();
 
   await page.getByRole("button", { name: /Mark handled/ }).first().click();
-  await expect(page.getByRole("button", { name: /Reopen/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Reopen/ })).first().toBeVisible();
   await expect(page.getByRole("button", { name: /Handled/ })).toHaveText(/Handled\s*2/);
 
   await page.getByRole("button", { name: /Reopen/ }).first().click();
