@@ -5,10 +5,11 @@
 //! has no tools and its response is returned only as display text.
 
 use std::env;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use anyhow::{Result, anyhow};
 use domain::{ParseInput, ProfileSummary, SectionKind, SectionMap};
-use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{Level, field, info, span, warn};
 
@@ -81,7 +82,10 @@ enum Mode {
     Chat {
         endpoint: String,
         model: String,
-        client: reqwest::blocking::Client,
+        /// Built on first use. `reqwest::blocking` starts its own runtime, which
+        /// panics if it is constructed inside an async context, and generators
+        /// are built from async startup and tests.
+        client: OnceLock<reqwest::blocking::Client>,
     },
 }
 
@@ -96,16 +100,11 @@ impl SummaryGenerator {
     /// model both come from configuration in production; this variant lets
     /// tests point at an unreachable server and assert on the failure.
     pub fn from_env_with(endpoint: &str, model: &str) -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(120))
-            .build()
-            .expect("summary model client available");
         Self {
             mode: Mode::Chat {
                 endpoint: endpoint.to_owned(),
                 model: model.to_owned(),
-                client,
+                client: OnceLock::new(),
             },
         }
     }
@@ -119,18 +118,24 @@ impl SummaryGenerator {
             .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
             .trim()
             .to_owned();
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(120))
-            .build()
-            .expect("summary model client available");
         Self {
             mode: Mode::Chat {
                 endpoint,
                 model,
-                client,
+                client: OnceLock::new(),
             },
         }
+    }
+
+    fn client(&self) -> &reqwest::blocking::Client {
+        let Mode::Chat { client, .. } = &self.mode;
+        client.get_or_init(|| {
+            reqwest::blocking::Client::builder()
+                .connect_timeout(Duration::from_secs(2))
+                .timeout(Duration::from_secs(120))
+                .build()
+                .expect("summary model client available")
+        })
     }
 
     /// Ask the chat server to load and keep the model warm before the first
@@ -157,7 +162,10 @@ impl SummaryGenerator {
     }
 
     fn infer_output(&self, parse: &ParseInput, sections: &SectionMap) -> Result<ProfileSummary> {
-        let Mode::Chat { client, endpoint, model } = &self.mode;
+        let Mode::Chat {
+            endpoint, model, ..
+        } = &self.mode;
+        let client = self.client();
 
         let span = span!(
             Level::INFO,
@@ -225,10 +233,9 @@ impl SummaryGenerator {
 
     fn model_available(&self) -> bool {
         let Mode::Chat {
-            endpoint,
-            model,
-            client,
+            endpoint, model, ..
         } = &self.mode;
+        let client = self.client();
         let content = "{\"resume\":{\"name\":\"Model warmup\",\"sections\":[]}}".to_owned();
         match infer(client, endpoint, model, &content) {
             Ok(_) => true,

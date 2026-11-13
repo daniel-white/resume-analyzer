@@ -11,6 +11,7 @@
 //! to extractive methods when the LLM is unavailable.
 
 use std::env;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use domain::{ParseInput, ResumeMarkdown, SectionKind, SectionMap};
@@ -251,7 +252,10 @@ pub enum FeedbackError {
 pub struct FeedbackAnalyzer {
     endpoint: String,
     model: String,
-    client: reqwest::blocking::Client,
+    /// Built on first use. `reqwest::blocking` starts its own runtime, which
+    /// panics if it is constructed inside an async context, and analyzers are
+    /// built from async startup and tests.
+    client: OnceLock<reqwest::blocking::Client>,
 }
 
 impl FeedbackAnalyzer {
@@ -264,16 +268,21 @@ impl FeedbackAnalyzer {
             .unwrap_or_else(|_| DEFAULT_MODEL.to_owned())
             .trim()
             .to_owned();
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(90))
-            .build()
-            .expect("feedback model client available");
         Self {
             endpoint,
             model,
-            client,
+            client: OnceLock::new(),
         }
+    }
+
+    fn client(&self) -> &reqwest::blocking::Client {
+        self.client.get_or_init(|| {
+            reqwest::blocking::Client::builder()
+                .connect_timeout(Duration::from_secs(2))
+                .timeout(Duration::from_secs(90))
+                .build()
+                .expect("feedback model client available")
+        })
     }
 
     /// Ask the chat server to load and keep the model warm before the first
@@ -292,7 +301,7 @@ impl FeedbackAnalyzer {
         section_heading: &str,
         section_kind: SectionKind,
     ) -> Result<Diagnosis, FeedbackError> {
-        let client = &self.client;
+        let client = self.client();
         let endpoint = &self.endpoint;
         let model = &self.model;
 
@@ -335,7 +344,9 @@ impl FeedbackAnalyzer {
                     section_kind.label(),
                     preview(&raw),
                 );
-                Err(FeedbackError::OutputRejected(format!("section {section_id}")))
+                Err(FeedbackError::OutputRejected(format!(
+                    "section {section_id}"
+                )))
             }
             Err(err) => {
                 span.record("outcome", "failed");
@@ -352,7 +363,7 @@ impl FeedbackAnalyzer {
     fn model_available(&self) -> bool {
         let endpoint = &self.endpoint;
         let model = &self.model;
-        let client = &self.client;
+        let client = self.client();
         let request = chat_request(model, "", "", "warmup", "warmup", SectionKind::Summary);
         match infer(client, endpoint, request) {
             Ok(_) => true,
@@ -370,15 +381,10 @@ impl FeedbackAnalyzer {
     /// model both come from configuration in production; this variant lets
     /// tests point at an unreachable server and assert on the failure.
     pub fn from_env_with(endpoint: &str, model: &str) -> Self {
-        let client = reqwest::blocking::Client::builder()
-            .connect_timeout(Duration::from_secs(2))
-            .timeout(Duration::from_secs(90))
-            .build()
-            .expect("feedback model client available");
         Self {
             endpoint: endpoint.to_owned(),
             model: model.to_owned(),
-            client,
+            client: OnceLock::new(),
         }
     }
 }
@@ -397,10 +403,7 @@ impl std::fmt::Debug for FeedbackAnalyzer {
 // ---------------------------------------------------------------------------
 
 /// Build the markdown rendering of the detected sections, once per version.
-pub fn markdown(
-    parse: &ParseInput,
-    sections: &SectionMap,
-) -> ResumeMarkdown {
+pub fn markdown(parse: &ParseInput, sections: &SectionMap) -> ResumeMarkdown {
     let mut text = String::new();
     if let Some(name) = parse.profile.name.as_deref() {
         text.push_str(&format!("# {name}\n\n"));
@@ -500,7 +503,8 @@ mod tests {
         let result = FeedbackAnalyzer::from_env_with(
             "http://127.0.0.1:1/v1/chat/completions",
             "unreachable",
-        ).analyze(
+        )
+        .analyze(
             &markdown.text,
             "Ada Lovelace\nExperience\nBuilt analytical engines.",
             "experience-1",

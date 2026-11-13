@@ -11,7 +11,7 @@ use domain::{
     AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
     RunPayload, UploadedPayload,
 };
-use feedback::{markdown, FeedbackAnalyzer};
+use feedback::{FeedbackAnalyzer, markdown};
 use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
@@ -66,14 +66,16 @@ impl Worker {
         self
     }
 
-    /// The profile summary generator. Tests default to the offline extractor.
+    /// The profile summary generator. The default reads the chat endpoint from
+    /// configuration; tests override it to point at a stub or unreachable server.
     pub fn summarizer(mut self, summarizer: SummaryGenerator) -> Self {
         self.summarizer = summarizer;
         self
     }
 
-    /// The feedback analyzer that diagnoses thumbs downs. Tests default to the
-    /// offline extractor.
+    /// The feedback analyzer that diagnoses thumbs downs. The default reads the
+    /// chat endpoint from configuration; tests override it to point at a stub or
+    /// unreachable server.
     pub fn feedback(mut self, feedback: FeedbackAnalyzer) -> Self {
         self.feedback = feedback;
         self
@@ -260,8 +262,7 @@ impl Worker {
         else {
             return Ok(());
         };
-        let markdown =
-            tokio::task::spawn_blocking(move || markdown(&parse, &sections)).await?;
+        let markdown = tokio::task::spawn_blocking(move || markdown(&parse, &sections)).await?;
         self.store
             .save_resume_markdown(payload.version_id, &markdown)
             .await?;

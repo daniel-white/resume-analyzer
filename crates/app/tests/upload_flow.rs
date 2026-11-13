@@ -7,6 +7,7 @@ use app::{Api, Bus, Worker, api_router, compiled_plugins};
 use domain::{DOCX, PDF};
 use futures_util::StreamExt;
 use storage::MemoryObjects;
+use summary::SummaryGenerator;
 use testcontainers_modules::postgres::Postgres;
 use testcontainers_modules::testcontainers::ImageExt;
 use testcontainers_modules::testcontainers::runners::AsyncRunner;
@@ -58,6 +59,72 @@ async fn smtp_sink() -> (u16, tokio::sync::mpsc::Receiver<String>) {
         }
     });
     (port, receiver)
+}
+
+/// Minimal OpenAI-compatible chat endpoint. The worker treats the summary model
+/// as a hard dependency, so tests serve a canned reply instead of requiring a
+/// live llama.cpp server.
+async fn chat_sink() -> String {
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("chat sink bind");
+    let address = listener.local_addr().expect("chat sink address");
+    tokio::spawn(async move {
+        loop {
+            let Ok((socket, _)) = listener.accept().await else {
+                break;
+            };
+            tokio::spawn(async move {
+                let (read, mut write) = socket.into_split();
+                let mut reader = BufReader::new(read);
+                let mut length = 0usize;
+                loop {
+                    let mut line = String::new();
+                    if reader.read_line(&mut line).await.is_err() {
+                        return;
+                    }
+                    if line == "\r\n" || line.is_empty() {
+                        break;
+                    }
+                    let lower = line.to_ascii_lowercase();
+                    if let Some(value) = lower.strip_prefix("content-length:") {
+                        length = value.trim().parse().unwrap_or(0);
+                    }
+                }
+                if length > 0 {
+                    let mut body = vec![0u8; length];
+                    if reader.read_exact(&mut body).await.is_err() {
+                        return;
+                    }
+                }
+                // Between 50 and 260 words: the generator rejects shorter text.
+                let profile = "Ada Lovelace writes careful, well-tested systems and explains her \
+                    decisions clearly. She has spent several years building backend services, data \
+                    pipelines, and developer tools, and she enjoys making complex behavior easy to \
+                    reason about. Her colleagues trust her to turn vague requirements into small, \
+                    reliable pieces, to review code with empathy, and to leave each project easier \
+                    to operate than she found it. She documents tradeoffs, measures before \
+                    optimizing, and keeps the people using her software in view.";
+                let content = serde_json::json!({
+                    "is_resume": true,
+                    "profile_text": profile,
+                })
+                .to_string();
+                let reply = serde_json::json!({
+                    "choices": [{ "message": { "content": content } }],
+                })
+                .to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    reply.len(),
+                    reply
+                );
+                let _ = write.write_all(response.as_bytes()).await;
+            });
+        }
+    });
+    format!("http://{address}/v1/chat/completions")
 }
 
 struct Database {
@@ -236,14 +303,17 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move { axum::serve(listener, api_router(api)).await.unwrap() });
+    let chat = chat_sink().await;
     let old_worker = Worker::new(
         store.clone(),
         objects.clone(),
         old_plugins,
         bus.clone(),
         base.clone(),
-    );
-    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone());
+    )
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
+    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
+        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
     let client = reqwest::Client::new();
     let accepted = upload(&base, &cookie, "before.pdf", &plain_pdf()).await;
     let id = accepted["id"].as_str().unwrap();
@@ -413,7 +483,7 @@ async fn one_callback(
     assert!(version["parse"]["profile"]["sections"].is_array());
     assert!(version["parse"]["layout"]["columns"].is_number());
     assert!(version["profile_summary"]["text"].is_string());
-    assert_eq!(version["profile_summary"]["engine"], "extractive");
+    assert_eq!(version["profile_summary"]["engine"], "chat");
     let verdict = &version["runs"][0]["verdict"];
     assert!(verdict["kept"].is_array());
     assert!(verdict["dropped"].is_array());
@@ -466,10 +536,13 @@ async fn upload_reaches_a_callback() {
         axum::serve(listener, app).await.expect("serve");
     });
     let (smtp_port, mut mail) = smtp_sink().await;
-    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone()).notifications(
-        mail::Smtp::new("127.0.0.1", smtp_port),
-        "http://127.0.0.1:3000",
-    );
+    let chat = chat_sink().await;
+    let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
+        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+        .notifications(
+            mail::Smtp::new("127.0.0.1", smtp_port),
+            "http://127.0.0.1:3000",
+        );
 
     one_callback(
         &base,
@@ -587,13 +660,15 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
         }
     };
     let (old_base, old_server) = serve(original_plugins.clone()).await;
+    let chat = chat_sink().await;
     let old_worker = Worker::new(
         store.clone(),
         objects.clone(),
         original_plugins.clone(),
         bus.clone(),
         old_base.clone(),
-    );
+    )
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
     let old = upload(&old_base, &cookie, "old.pdf", &plain_pdf()).await;
     old_worker.drain().await.unwrap();
     let client = reqwest::Client::new();
@@ -678,6 +753,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
     }
     assert!(healthy, "provider never became healthy");
     let worker = Worker::new(store.clone(), objects, active, bus, base.clone())
+        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
         .endpoints(HashMap::from([("indy_hackers_hiring".into(), endpoint)]));
     let detail_url = format!("{base}/api/resumes/{}", old_detail.id);
     assert_eq!(
