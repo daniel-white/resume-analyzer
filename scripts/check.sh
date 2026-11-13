@@ -75,6 +75,7 @@ if [[ "$run_web" == 1 ]]; then
   echo "check: web"
   (
     cd web
+    pnpm install --frozen-lockfile
     pnpm typecheck
     pnpm test
     pnpm build
