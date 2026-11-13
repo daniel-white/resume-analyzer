@@ -4,6 +4,22 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# The bake file deliberately has no defaults for these; resolve them from the
+# Nix devShell, which is the only place tool versions are pinned.
+# shellcheck source=versions.sh
+source "$root/scripts/versions.sh"
+
+# The manifest bundle is a Docker cache key. Two runs must produce the same
+# bytes or the chef/cook layers rebuild on every invocation.
+./scripts/bake-manifests >/dev/null
+first=$(git hash-object tmp/cargo-manifests.tar)
+./scripts/bake-manifests >/dev/null
+second=$(git hash-object tmp/cargo-manifests.tar)
+test "$first" = "$second" || {
+  echo "demo: cargo-manifests.tar is not deterministic" >&2
+  exit 1
+}
+
 render=$(helm template resume-analyzer deploy/helm/resume-analyzer \
   --set api.enabled=true --set web.enabled=true)
 RENDER="$render" node --input-type=module <<'JS'

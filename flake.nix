@@ -66,8 +66,12 @@
           };
 
           shellHook = ''
+            # This flake is the single source of the toolchain versions that
+            # Docker image builds consume. Export what the shell actually
+            # provides instead of reading version files that can drift.
             export RUST_VERSION=$(rustc --version | cut -d ' ' -f 2)
             export NODEJS_VERSION=$(node --version | cut -c 2-)
+            export PNPM_VERSION=$(pnpm --version)
             echo "rust $(rustc --version), node $(node --version), pnpm $(pnpm --version) — resume-analyzer dev shell"
           '';
         };

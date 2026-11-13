@@ -75,6 +75,7 @@ if [[ "$run_web" == 1 ]]; then
   echo "check: web"
   (
     cd web
+    pnpm install --frozen-lockfile
     pnpm typecheck
     pnpm test
     pnpm build
@@ -84,13 +85,21 @@ if [[ "$run_web" == 1 ]]; then
     if [[ -f playwright.config.ts ]]; then
       echo "check: web playwright"
       pnpm exec playwright install chromium
-      pnpm test:e2e
+      # Test the production build we just produced, not the dev server.
+      PLAYWRIGHT_PRODUCTION=1 pnpm test:e2e
     fi
   )
 fi
 
 if [[ "$run_factory" == 1 ]]; then
   echo "check: factory"
+  # Factory scripts resolve `main` as a local branch; on PR checkouts only
+  # origin/main exists, so create a local main pointing at it.
+  if ! git rev-parse --verify --quiet main >/dev/null 2>&1; then
+    if git rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+      git branch main origin/main
+    fi
+  fi
   bash scripts/factory_test.sh
 fi
 

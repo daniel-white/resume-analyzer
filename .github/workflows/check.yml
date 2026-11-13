@@ -3,13 +3,25 @@ name: check
 on:
   push:
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-alpine@sha256:d3244e8ce3f165ee3c93d9c4a4b1d0fe48b3a89e2287b717fdcbbde92d405065
         env:
           POSTGRES_USER: resume
           POSTGRES_PASSWORD: resume
@@ -24,12 +36,33 @@ jobs:
     env:
       DATABASE_URL: postgres://resume:resume@localhost:5432/resume
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-      - name: rust
-        uses: dtolnay/rust-toolchain@1.100.0
+          persist-credentials: false
+      - name: install nix
+        uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
         with:
-          components: rustfmt, clippy
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      # Rust, Node, pnpm, Helm, and the test tools all come from the flake.
+      # The key is input-only so a lockfile change restores the closest store.
+      - name: cache nix store
+        uses: nix-community/cache-nix-action@135667ec418502fa5a3598af6fb9eb733888ce6a # v6
+        with:
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.lock', 'flake.nix') }}
+          restore-prefixes-first-match: nix-${{ runner.os }}-
+      - name: cache pnpm store
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: pnpm-${{ runner.os }}-
+      - name: cache playwright browsers
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
+          restore-keys: playwright-${{ runner.os }}-
       - name: gate
-        run: ./scripts/check.sh
+        run: nix develop --command ./scripts/check.sh

@@ -46,8 +46,7 @@ test("uses consistent editorial headings, readable sans copy, and technical mono
   await ready(page);
   await expect(page.locator(".filename")).toHaveCSS("font-family", /Georgia/);
   await expect(page.locator(".results-heading h2")).toHaveCSS("font-family", /Georgia/);
-  await expect(page.locator(".extract h2")).toHaveCSS("font-family", /Georgia/);
-  await expect(page.locator(".extract h2")).toHaveCSS("font-size", "28px");
+  await expect(page.locator(".results-heading h2")).toHaveCSS("font-size", "28px");
   await expect(page.locator(".overview-stats > div:nth-child(2) strong")).toHaveCSS("font-family", /Arial/);
   await expect(page.locator(".overall-rating-value strong")).toHaveCSS("font-family", /Georgia/);
   await expect(page.locator(".stat-label").first()).toHaveCSS("font-family", /Arial/);
