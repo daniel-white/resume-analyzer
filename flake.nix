@@ -2,7 +2,7 @@
   description = "Resume analyzer — pinned Rust and Node toolchains";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     # minikube 1.38.1 ships containerd 2.x and supports Kubernetes 1.35, where
     # the ImageVolume feature is enabled by default. The nixos-25.11 nixpkgs
     # pins minikube 1.37.0 (K8s 1.34, containerd 1.x), which cannot mount an
