@@ -85,7 +85,8 @@ if [[ "$run_web" == 1 ]]; then
     if [[ -f playwright.config.ts ]]; then
       echo "check: web playwright"
       pnpm exec playwright install chromium
-      pnpm test:e2e
+      # Test the production build we just produced, not the dev server.
+      PLAYWRIGHT_PRODUCTION=1 pnpm test:e2e
     fi
   )
 fi
