@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/daniel-white/resume-analyzer/compare/v0.2.1...v0.2.2) (2026-11-17)
+
+
+### Bug Fixes
+
+* align release image paths and build matrix ([#10](https://github.com/daniel-white/resume-analyzer/issues/10)) ([5958d36](https://github.com/daniel-white/resume-analyzer/commit/5958d366b2d5b8717faf32e053fab0bb0ce0e4e8))
+
 ## [0.2.1](https://github.com/daniel-white/resume-analyzer/compare/v0.2.0...v0.2.1) (2026-11-17)
 
 
