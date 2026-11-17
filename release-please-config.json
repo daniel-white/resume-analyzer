@@ -1,12 +1,23 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/release-please.config.schema.json",
-  "release-type": "rust",
+  "release-type": "simple",
+  "version-file": "version.txt",
   "packages": {
     ".": {
-      "release-type": "rust",
+      "release-type": "simple",
       "package-name": "resume-analyzer",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
+        {
+          "type": "toml",
+          "path": "Cargo.toml",
+          "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value==\"app\"||@.name.value==\"domain\"||@.name.value==\"plugins\"||@.name.value==\"storage\"||@.name.value==\"auth\"||@.name.value==\"mail\"||@.name.value==\"feedback\"||@.name.value==\"sections\"||@.name.value==\"stream-protocol\"||@.name.value==\"summary\")].version"
+        },
         {
           "type": "yaml",
           "path": "deploy/helm/resume-analyzer/Chart.yaml",
