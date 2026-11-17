@@ -343,15 +343,17 @@ jobs:
           PRERELEASE: ${{ needs.meta.outputs.prerelease }}
         run: |
           set -e
-          # release-please already created a draft release for this tag. Update
-          # it with the chart, checksums, and install/verify instructions, then
-          # publish. If no draft exists yet, create one from the tag.
-          if gh release view "${TAG}" --json isDraft 2>/dev/null | grep -q '"isDraft": true'; then
+          # release-please publishes the release when its PR is merged; this
+          # job adds the built chart, checksums and install/verify notes. Fall
+          # back to creating a release when the tag came from somewhere else.
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release view "${TAG}" --json body --jq '.body // ""' > dist/release-notes.md
             gh release upload "${TAG}" \
               dist/resume-analyzer-${VERSION}.tgz \
               dist/values.release-${VERSION}.yaml \
               dist/checksums-${VERSION}.txt \
-              dist/digests.txt
+              dist/digests.txt \
+              --clobber
           else
             gh release create "${TAG}" \
               --title "${VERSION}" \
