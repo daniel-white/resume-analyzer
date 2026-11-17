@@ -14,6 +14,9 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Belt and braces with .cargo/config.toml: every rustc invocation in this
+  # workflow fails on warnings, including steps added later.
+  RUSTFLAGS: "-D warnings"
 
 jobs:
   check:
@@ -64,5 +67,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
-      - name: gate
-        run: nix develop --command ./scripts/check.sh
+      # Warning-free is a named, fail-fast step: rustc + cargo clippy (pedantic
+      # and cargo groups), tsc with the strict tsconfig, and helm lint --strict.
+      - name: strict - no warnings (rust, cargo, typescript, helm)
+        run: nix develop --command ./scripts/check.sh strict
+      - name: gate - tests, e2e, factory, demo
+        run: nix develop --command ./scripts/check.sh behavior

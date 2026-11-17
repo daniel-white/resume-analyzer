@@ -16,7 +16,7 @@ import { safeReturnTo } from "../lib/return-to";
 export type { Account, MagicLinkResult };
 
 function apiBase(): string {
-  return process.env.API_URL ?? "http://127.0.0.1:8080";
+  return process.env["API_URL"] ?? "http://127.0.0.1:8080";
 }
 
 function cookie(): string | undefined {
@@ -40,13 +40,13 @@ export const getAccount = createServerFn({ method: "GET" }).handler(
 );
 
 export const sendMagicLink = createServerFn({ method: "POST" })
-  .validator((data: { email: string; returnTo?: string; uploadId?: string; timezone?: string }) => ({ email: data.email, returnTo: safeReturnTo(data.returnTo), uploadId: data.uploadId, timezone: data.timezone ?? "" }))
+  .validator((data: { email: string; returnTo?: string | undefined; uploadId?: string | undefined; timezone?: string | undefined }) => ({ email: data.email, returnTo: safeReturnTo(data.returnTo), uploadId: data.uploadId, timezone: data.timezone ?? "" }))
   .handler(async ({ data }): Promise<MagicLinkResult> =>
     requestMagicLink(apiBase(), data.email, cookie(), data.returnTo, data.uploadId, data.timezone),
   );
 
 export const verifyLink = createServerFn({ method: "POST" })
-  .validator((data: { token: string; returnTo?: string }) => ({ token: data.token, returnTo: safeReturnTo(data.returnTo) }))
+  .validator((data: { token: string; returnTo?: string | undefined }) => ({ token: data.token, returnTo: safeReturnTo(data.returnTo) }))
   .handler(async ({ data }): Promise<{ ok: false; message: string }> => {
     const result = await verifyMagicLink(apiBase(), data.token, cookie());
     if (!result.ok) return result;

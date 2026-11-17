@@ -31,10 +31,8 @@ export function ResumeComparison({ versions, versionId }: {
   const [fromId, setFromId] = useState("");
   const [toId, setToId] = useState("");
   const ordered = [...versions].sort((a, b) => a.number - b.number);
-  const selected = ordered.find((version) => version.id === (toId || versionId)) ?? ordered[ordered.length - 1];
-  const to = selected.number === ordered[0].number && ordered.length > 1 ? ordered[1] : selected;
-  const from = ordered.find((version) => version.id === fromId && version.number < to.number)
-    ?? ordered.filter((version) => version.number < to.number).at(-1);
+  const first = ordered[0];
+  const last = ordered.at(-1);
 
   const disclosure = <summary className="comparison-disclosure">
     <GitCompareArrows size={16} aria-hidden="true" /><span>Compare versions</span>
@@ -42,9 +40,18 @@ export function ResumeComparison({ versions, versionId }: {
     <ChevronDown className="comparison-chevron" size={16} aria-hidden="true" />
   </summary>;
 
-  if (!from) return <section className="sheet-face resume-comparison" aria-label="Compare versions">
+  const empty = <section className="sheet-face resume-comparison" aria-label="Compare versions">
     <details>{disclosure}<p className="comparison-empty">Upload a new version to see how your scores change. Your first version is a great starting point.</p></details>
   </section>;
+
+  if (!first || !last) return empty;
+
+  const selected = ordered.find((version) => version.id === (toId || versionId)) ?? last;
+  const to = selected.number === first.number && ordered.length > 1 ? ordered[1] ?? last : selected;
+  const from = ordered.find((version) => version.id === fromId && version.number < to.number)
+    ?? ordered.filter((version) => version.number < to.number).at(-1);
+
+  if (!from) return empty;
 
   const comparison = compareVersions(from, to);
   return <section className="sheet-face resume-comparison" aria-label="Compare versions">

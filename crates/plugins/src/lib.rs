@@ -1,6 +1,6 @@
 //! Simulated ATS integrations. The upload flow still compiles in `stub` so an upload
 //! can reach one callback without the Python providers. `fleet` is Greenline,
-//! Levr, Workdaye, Ash, SmartResume, IndyHackersHiring, and BlastTrack. The running
+//! Levr, Workdaye, Ash, `SmartResume`, `IndyHackersHiring`, and `BlastTrack`. The running
 //! API posts those files to the Python fake and does not call `read` or `call`.
 //! `read` is what the fleet tests
 //! call. The factor lists disagree.
@@ -77,6 +77,7 @@ impl Ats for Stub {
 /// The app's first read, shown so the user can check the file came apart into
 /// a name, contact, and sections. Plugins do not receive this value. Each one
 /// calls `Ats::read` on the stored bytes.
+#[must_use]
 pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
     extract(file).0
 }
@@ -84,6 +85,7 @@ pub fn structure(file: &ResumeFile<'_>) -> ParseInput {
 /// Ordered text lines for the section detector. This is a separate read from
 /// the frozen verification parse: it keeps paragraphs in document order
 /// instead of reducing the file to a few fields.
+#[must_use]
 pub fn lines(file: &ResumeFile<'_>) -> Vec<String> {
     document_lines(file)
         .into_iter()
@@ -151,6 +153,15 @@ fn docx_lines(bytes: &[u8]) -> Vec<domain::DocumentLine> {
     header
 }
 
+static HEADING: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"(?i)<w:pStyle\b[^>]*w:val=["']heading[1-9]["']"#).unwrap()
+});
+static BOLD: LazyLock<regex::Regex> = LazyLock::new(|| {
+    regex::Regex::new(r#"<w:b\s*(?:/\s*>|w:val=["'](?:1|true|on)["']\s*/>)"#).unwrap()
+});
+static SIZE: LazyLock<regex::Regex> =
+    LazyLock::new(|| regex::Regex::new(r#"<w:sz\b[^>]*w:val=["'](\d+)["']"#).unwrap());
+
 fn paragraph_lines(xml: &str) -> Vec<domain::DocumentLine> {
     xml.split("</w:p>")
         .filter_map(|paragraph| {
@@ -161,14 +172,6 @@ fn paragraph_lines(xml: &str) -> Vec<domain::DocumentLine> {
             if text.is_empty() {
                 return None;
             }
-            static HEADING: LazyLock<regex::Regex> = LazyLock::new(|| {
-                regex::Regex::new(r#"(?i)<w:pStyle\b[^>]*w:val=["']heading[1-9]["']"#).unwrap()
-            });
-            static BOLD: LazyLock<regex::Regex> = LazyLock::new(|| {
-                regex::Regex::new(r#"<w:b\s*(?:/\s*>|w:val=["'](?:1|true|on)["']\s*/>)"#).unwrap()
-            });
-            static SIZE: LazyLock<regex::Regex> =
-                LazyLock::new(|| regex::Regex::new(r#"<w:sz\b[^>]*w:val=["'](\d+)["']"#).unwrap());
             let runs: Vec<_> = paragraph
                 .split("</w:r>")
                 .filter(|run| !texts(run).concat().trim().is_empty())
@@ -237,6 +240,7 @@ fn split_lines(text: &str) -> Vec<String> {
 
 /// The simulated fleet. The worker posts each file to the matching Python
 /// provider instead of calling `read`.
+#[must_use]
 pub fn fleet(secret: String) -> Vec<Arc<dyn Ats>> {
     vec![
         Arc::new(Greenline::new(secret.clone())),
@@ -485,7 +489,7 @@ fn texts(xml: &str) -> Vec<String> {
     // Match only text elements, never similarly named table/text-box tags, and
     // never consume markup as text (including after a malformed text element).
     static TEXT: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r#"<w:t(?:\s+[^<>]*?[^/])?\s*>([^<]*)</w:t\s*>"#).unwrap()
+        regex::Regex::new(r"<w:t(?:\s+[^<>]*?[^/])?\s*>([^<]*)</w:t\s*>").unwrap()
     });
     TEXT.captures_iter(xml)
         .map(|capture| decode_xml_text(&capture[1]))
@@ -516,9 +520,7 @@ fn decode_xml_text(text: &str) -> String {
                     })
                     .and_then(char::from_u32),
             };
-            decoded
-                .map(|value| value.to_string())
-                .unwrap_or_else(|| capture[0].to_owned())
+            decoded.map_or_else(|| capture[0].to_owned(), |value| value.to_string())
         })
         .into_owned()
 }
@@ -559,6 +561,7 @@ fn date_style(text: &str) -> DateStyle {
     }
 }
 
+#[must_use]
 pub fn compiled(secret: String) -> Vec<Arc<dyn Ats>> {
     vec![Arc::new(Stub::new(secret))]
 }
@@ -658,7 +661,7 @@ mod tests {
             "Score 65 of 100. Keep the email in the body."
         );
         assert_eq!(plain.verdict.kept, vec!["email".to_owned()]);
-        assert!(plain.verdict.dropped.is_empty());
+        assert_eq!(plain.verdict.dropped, [] as [std::string::String; 0]);
         assert!(designed.verdict.score < plain.verdict.score);
     }
 

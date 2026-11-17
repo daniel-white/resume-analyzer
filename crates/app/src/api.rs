@@ -38,6 +38,7 @@ impl Api {
 
     /// Exact domain match after `@`, case-insensitive. Empty configuration
     /// grants nobody admin access.
+    #[must_use]
     pub fn is_admin_email(&self, email: &str) -> bool {
         let Some((_, domain)) = email.rsplit_once('@') else {
             return false;
@@ -239,9 +240,8 @@ pub async fn resume_file(
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
-    let bytes = match api.objects.get(&file.object_key).await {
-        Ok(bytes) => bytes,
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    let Ok(bytes) = api.objects.get(&file.object_key).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
     let filename = default_name(&file.media_type);
     (
@@ -385,7 +385,7 @@ pub async fn events(
                             .data(data),
                     );
                 }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
             }
         }

@@ -121,6 +121,7 @@ impl Worker {
 
     /// The section detector the worker uses. The default is the offline
     /// heading-alias engine so tests never download a model.
+    #[must_use]
     pub fn detector(mut self, detector: SectionDetector) -> Self {
         self.detector = detector;
         self
@@ -128,6 +129,7 @@ impl Worker {
 
     /// The profile summary generator. The default reads the chat endpoint from
     /// configuration; tests override it to point at a stub or unreachable server.
+    #[must_use]
     pub fn summarizer(mut self, summarizer: SummaryGenerator) -> Self {
         self.summarizer = summarizer;
         self
@@ -136,17 +138,20 @@ impl Worker {
     /// The feedback analyzer that diagnoses thumbs downs. The default reads the
     /// chat endpoint from configuration; tests override it to point at a stub or
     /// unreachable server.
+    #[must_use]
     pub fn feedback(mut self, feedback: FeedbackAnalyzer) -> Self {
         self.feedback = feedback;
         self
     }
 
     /// Python provider urls, keyed by plugin id. Empty keeps the in-process stub.
+    #[must_use]
     pub fn endpoints(mut self, endpoints: HashMap<String, String>) -> Self {
         self.endpoints = endpoints;
         self
     }
 
+    #[must_use]
     pub fn notifications(mut self, smtp: mail::Smtp, app_origin: impl Into<String>) -> Self {
         self.notifications = Some((smtp, app_origin.into()));
         self
@@ -242,8 +247,7 @@ impl Worker {
                     .plugins
                     .iter()
                     .find(|plugin| plugin.id() == plugin_id)
-                    .map(|plugin| plugin.name())
-                    .unwrap_or(plugin_id);
+                    .map_or(plugin_id.as_str(), |plugin| plugin.name());
                 let mut url = reqwest::Url::parse(origin)?;
                 url.set_path(&format!("/resumes/{}", batch.resume_id));
                 url.set_query(None);
@@ -532,6 +536,7 @@ pub fn plugin_secret() -> String {
     std::env::var("PLUGIN_SECRET").unwrap_or_else(|_| "demo-stub-secret".to_owned())
 }
 
+#[must_use]
 pub fn compiled_plugins() -> Vec<Arc<dyn Ats>> {
     plugins::compiled(plugin_secret())
 }

@@ -2,7 +2,7 @@ import type { SectionKind, VerdictCard } from "~/server/resumes";
 
 import { VerdictCardView } from "./verdict-card";
 
-export function VerdictGrid({ cards, provider, highlightKind }: { cards: VerdictCard[]; provider?: string; highlightKind?: SectionKind | null }) {
+export function VerdictGrid({ cards, provider, highlightKind }: { cards: VerdictCard[]; provider?: string | undefined; highlightKind?: SectionKind | null | undefined }) {
   return (
     <div className="grid">
       {cards.map((card) => (

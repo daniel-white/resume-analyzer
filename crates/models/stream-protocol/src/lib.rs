@@ -143,10 +143,12 @@ impl StreamOutput {
     }
 
     /// The concatenated value of every delta with this field name.
+    #[must_use]
     pub fn text(&self, field: &str) -> String {
         self.text.get(field).cloned().unwrap_or_default()
     }
 
+    #[must_use]
     pub fn field(&self, name: &str) -> Option<&Value> {
         self.fields.get(name)
     }
@@ -186,7 +188,7 @@ pub fn infer_stream(
         let response = match response.error_for_status() {
             Ok(response) => response,
             Err(err) => {
-                let status = err.status().map(|value| value.as_u16()).unwrap_or(0);
+                let status = err.status().map_or(0, |value| value.as_u16());
                 last_err = format!("chat request to {endpoint}: {err}");
                 if status >= 500 && attempt < MAX_ATTEMPTS {
                     std::thread::sleep(Duration::from_millis(100 * (2u64.pow(attempt - 1))));
@@ -313,7 +315,7 @@ mod tests {
     fn processor_waits_for_complete_lines_and_splits_chunks_mid_event() {
         let mut processor = NdjsonProcessor::default();
         let first = processor.push("{\"type\":\"stage\",\"label\":\"rea");
-        assert!(first.is_empty());
+        assert_eq!(first, [] as [ModelEvent; 0]);
         let second =
             processor.push("ding\"}\n{\"type\":\"delta\",\"field\":\"text\",\"value\":\"he");
         assert_eq!(
@@ -372,7 +374,7 @@ mod tests {
         assert_eq!(output.field("is_resume"), Some(&serde_json::json!(true)));
         assert_eq!(output.stages, vec!["writing"]);
         assert!(output.structured);
-        assert!(!events(&output).is_empty());
+        assert_ne!(events(&output), [] as [std::string::String; 0]);
     }
 
     #[test]

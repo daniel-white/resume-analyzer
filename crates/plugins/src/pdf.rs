@@ -39,6 +39,8 @@ impl OutputDev for TextOutput {
         Ok(())
     }
 
+    // PDF geometry is f64; the layout heuristics store font sizes as f32.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
     fn output_character(
         &mut self,
         trm: &Transform,

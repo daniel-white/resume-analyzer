@@ -11,6 +11,7 @@
 //! to extractive methods when the LLM is unavailable.
 
 use std::env;
+use std::fmt::Write as _;
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -68,7 +69,7 @@ struct Rejected<'a> {
     kind: SectionKind,
 }
 
-/// The standard OpenAI chat completions request. llama.cpp, Ollama's
+/// The standard `OpenAI` chat completions request. llama.cpp, Ollama's
 /// `/api/chat`, and any other compatible server all accept this shape; the
 /// only per-server difference is the endpoint, which comes from
 /// configuration.
@@ -215,6 +216,7 @@ impl FeedbackAnalyzer {
     /// Read `FEEDBACK_MODEL_NAME` and `FEEDBACK_MODEL_URL`. The diagnosis
     /// always comes from the configured chat endpoint; there is no off switch
     /// and no extractive fallback.
+    #[must_use]
     pub fn from_env() -> Self {
         let endpoint = env::var("FEEDBACK_MODEL_URL").unwrap_or_else(|_| DEFAULT_URL.to_owned());
         let model = env::var("FEEDBACK_MODEL_NAME")
@@ -364,6 +366,7 @@ impl FeedbackAnalyzer {
     /// A chat analyzer at a specific endpoint and model. The endpoint and
     /// model both come from configuration in production; this variant lets
     /// tests point at an unreachable server and assert on the failure.
+    #[must_use]
     pub fn from_env_with(endpoint: &str, model: &str) -> Self {
         Self {
             endpoint: endpoint.to_owned(),
@@ -378,7 +381,7 @@ impl std::fmt::Debug for FeedbackAnalyzer {
         f.debug_struct("FeedbackAnalyzer")
             .field("engine", &"chat")
             .field("model", &self.model)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -390,7 +393,7 @@ impl std::fmt::Debug for FeedbackAnalyzer {
 pub fn markdown(parse: &ParseInput, sections: &SectionMap) -> ResumeMarkdown {
     let mut text = String::new();
     if let Some(name) = parse.profile.name.as_deref() {
-        text.push_str(&format!("# {name}\n\n"));
+        write!(text, "# {name}\n\n").expect("writing to String cannot fail");
     }
     let contact: Vec<String> = [
         parse.profile.email.as_deref(),
@@ -403,7 +406,8 @@ pub fn markdown(parse: &ParseInput, sections: &SectionMap) -> ResumeMarkdown {
     .map(str::to_owned)
     .collect();
     if !contact.is_empty() {
-        text.push_str(&format!("{}\n\n", contact.join(" · ")));
+        let joined = contact.join(" · ");
+        write!(text, "{joined}\n\n").expect("writing to String cannot fail");
     }
     for section in sections.sections.iter().take(MAX_SECTIONS) {
         let heading = if section.heading.trim().is_empty() {
@@ -411,7 +415,7 @@ pub fn markdown(parse: &ParseInput, sections: &SectionMap) -> ResumeMarkdown {
         } else {
             section.heading.trim()
         };
-        text.push_str(&format!("## {heading}\n\n"));
+        write!(text, "## {heading}\n\n").expect("writing to String cannot fail");
         let body = section.body.trim();
         if !body.is_empty() {
             for line in body.lines().take(MAX_SECTION_CHARS) {

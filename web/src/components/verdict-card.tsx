@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { PluginCard } from "./plugin-card";
 
-export function VerdictCardView({ card, initiallySelected = false, highlightKind }: { card: VerdictCard; initiallySelected?: boolean; highlightKind?: SectionKind | null }) {
+export function VerdictCardView({ card, initiallySelected = false, highlightKind }: { card: VerdictCard; initiallySelected?: boolean; highlightKind?: SectionKind | null | undefined }) {
   const [selected, setSelected] = useState(initiallySelected);
   return (
     <article aria-label={card.name}>

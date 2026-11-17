@@ -18,3 +18,22 @@ edition = "2024"
 license = "MIT"
 version = "0.1.0"
 publish = false
+
+# Every crate inherits these via `[lints] workspace = true`. Severity is set to
+# deny so a warning can never land; the group priorities let the explicit
+# allows below win over the two lint groups.
+[workspace.lints.rust]
+warnings = "deny"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+cargo = { level = "deny", priority = -1 }
+
+# The dependency tree is not ours to version-align.
+multiple_crate_versions = "allow"
+# Keep doc comments about behaviour, not boilerplate "# Errors" sections.
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+# SQL row mapping and end-to-end scenarios are clearer kept whole than split
+# into helper functions purely to satisfy a line count.
+too_many_lines = "allow"

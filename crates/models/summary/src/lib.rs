@@ -114,6 +114,7 @@ impl SummaryGenerator {
     /// A chat generator at a specific endpoint and model. The endpoint and
     /// model both come from configuration in production; this variant lets
     /// tests point at an unreachable server and assert on the failure.
+    #[must_use]
     pub fn from_env_with(endpoint: &str, model: &str) -> Self {
         Self {
             mode: Mode::Chat {
@@ -127,6 +128,7 @@ impl SummaryGenerator {
     /// Read `SUMMARY_MODEL_NAME` and `SUMMARY_MODEL_URL`. The summary always
     /// comes from the configured chat endpoint; there is no off switch and no
     /// extractive fallback.
+    #[must_use]
     pub fn from_env() -> Self {
         let endpoint = env::var("SUMMARY_MODEL_URL").unwrap_or_else(|_| DEFAULT_URL.to_owned());
         let model = env::var("SUMMARY_MODEL_NAME")
@@ -359,7 +361,9 @@ fn final_summary(output: &stream_protocol::StreamOutput) -> (Option<bool>, Strin
     if output.structured {
         let text = output.text("profile_text");
         if !text.trim().is_empty() {
-            let is_resume = output.field("is_resume").and_then(|value| value.as_bool());
+            let is_resume = output
+                .field("is_resume")
+                .and_then(serde_json::Value::as_bool);
             return (is_resume, clean_output(&text));
         }
     }
@@ -395,7 +399,7 @@ struct ChatOptions {
 fn model_reply(raw: &str) -> Option<(Option<bool>, String)> {
     let json = json_object(raw)?;
     let text = json.get("profile_text")?.as_str()?;
-    let is_resume = json.get("is_resume").and_then(|value| value.as_bool());
+    let is_resume = json.get("is_resume").and_then(serde_json::Value::as_bool);
     Some((is_resume, clean_output(text)))
 }
 

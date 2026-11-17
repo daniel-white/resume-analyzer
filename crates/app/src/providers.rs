@@ -1,7 +1,7 @@
 //! Private ATS urls. The fleet plugins do not score in this process. The worker
 //! hands each file to the Python fake (`python3 -m providers --all`), and that
 //! process posts the callback. Unset, those plugins use the loopback ports.
-//! `ATS_PROVIDERS=id=url` overrides a port (the chart uses ClusterIP names).
+//! `ATS_PROVIDERS=id=url` overrides a port (the chart uses `ClusterIP` names).
 //! `ATS_PROVIDERS=stub` keeps the compiled stub in process.
 
 use std::collections::HashMap;

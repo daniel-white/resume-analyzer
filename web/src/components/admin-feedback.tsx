@@ -42,7 +42,7 @@ export function AdminFeedbackDashboard({
 }: {
   email: string;
   feedback: AdminFeedback[];
-  timezone?: string | null;
+  timezone?: string | null | undefined;
 }) {
   const [items, setItems] = useState(feedback);
   const [filter, setFilter] = useState<AdminFilter>("open");
@@ -256,10 +256,10 @@ function FeedbackCard({
 }: {
   item: AdminFeedback;
   busyId: string | null;
-  live?: LiveRun;
+  live?: LiveRun | undefined;
   onToggle: (analysis: AdminFeedbackAnalysis) => void;
   onRerun: (analysis: AdminFeedbackAnalysis) => void;
-  timezone?: string | null;
+  timezone?: string | null | undefined;
 }) {
   const open = feedbackOpen(item);
   const streaming = Boolean(live && !live.error && live.text.trim());

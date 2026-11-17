@@ -62,6 +62,7 @@ impl Bus {
         let _ = self.stream.send(event);
     }
 
+    #[must_use]
     pub fn subscribe(&self, resume_id: Uuid) -> broadcast::Receiver<EventRecord> {
         let mut slots = self.inner.lock().expect("bus");
         let sender = slots.entry(resume_id).or_insert_with(|| {
@@ -72,6 +73,7 @@ impl Bus {
     }
 
     /// Global stream for admins, who do not own every diagnosis they review.
+    #[must_use]
     pub fn subscribe_stream(&self) -> broadcast::Receiver<EventRecord> {
         self.stream.subscribe()
     }

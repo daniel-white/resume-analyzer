@@ -68,7 +68,7 @@ pub async fn events(
                             .data(data),
                     );
                 }
-                Err(RecvError::Lagged(_)) => continue,
+                Err(RecvError::Lagged(_)) => {}
                 Err(RecvError::Closed) => break,
             }
         }

@@ -40,6 +40,7 @@ impl From<sqlx::Error> for AuthError {
     }
 }
 
+#[must_use]
 pub fn session_max_age_secs() -> i64 {
     SESSION.whole_seconds()
 }
@@ -61,11 +62,13 @@ pub fn normalize_email(input: &str) -> Option<String> {
     Some(email)
 }
 
+#[must_use]
 pub fn seal_session(secret: &str, session_id: Uuid) -> String {
     let signature = sign(secret, session_id);
     format!("{session_id}.{signature}")
 }
 
+#[must_use]
 pub fn open_session(secret: &str, cookie: &str) -> Option<Uuid> {
     let (id_part, signature) = cookie.split_once('.')?;
     let session_id = Uuid::parse_str(id_part).ok()?;

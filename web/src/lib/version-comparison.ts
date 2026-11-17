@@ -9,14 +9,18 @@ export function compareVersions(from: ComparisonVersion, to: ComparisonVersion) 
     return { id: system.id, name: system.name, before, after,
       delta: before !== null && after !== null ? after - before : null };
   });
-  const matched = rows.filter((row) => row.delta !== null);
-  const before = medianScore(matched.map((row) => row.before!));
-  const after = medianScore(matched.map((row) => row.after!));
+  type Matched = (typeof rows)[number] & { before: number; after: number; delta: number };
+  const matched = rows.filter(
+    (row): row is Matched =>
+      row.before !== null && row.after !== null && row.delta !== null,
+  );
+  const before = medianScore(matched.map((row) => row.before));
+  const after = medianScore(matched.map((row) => row.after));
   return {
     rows, before, after,
     delta: before !== null && after !== null ? after - before : null,
-    up: matched.filter((row) => row.delta! > 0).length,
-    down: matched.filter((row) => row.delta! < 0).length,
+    up: matched.filter((row) => row.delta > 0).length,
+    down: matched.filter((row) => row.delta < 0).length,
     unchanged: matched.filter((row) => row.delta === 0).length,
     matched: matched.length,
   };

@@ -18,7 +18,7 @@ struct EmailBody {
     email: String,
     return_to: Option<String>,
     upload_id: Option<auth::Uuid>,
-    /// Browser-reported IANA timezone, e.g. "America/New_York". Absent or
+    /// Browser-reported IANA timezone, e.g. "`America/New_York`". Absent or
     /// unparseable values are stored as NULL and fall back to UTC.
     timezone: Option<String>,
 }
@@ -104,9 +104,8 @@ async fn request_magic_link(State(api): State<Arc<Api>>, Json(body): Json<EmailB
         }
     }
     let origin = api.app_origin.trim_end_matches('/');
-    let mut url = match reqwest::Url::parse(&format!("{origin}/login/verify")) {
-        Ok(url) => url,
-        Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "unavailable"),
+    let Ok(mut url) = reqwest::Url::parse(&format!("{origin}/login/verify")) else {
+        return error(StatusCode::INTERNAL_SERVER_ERROR, "unavailable");
     };
     url.query_pairs_mut().append_pair("token", &issued.token);
     if let Some(return_to) = body.return_to.filter(|path| valid_return_to(path)) {
@@ -312,7 +311,7 @@ fn error(status: StatusCode, code: &'static str) -> Response {
 /// to UTC for them.
 fn validate_timezone(timezone: Option<&str>) -> Option<&str> {
     let timezone = timezone?.trim();
-    if timezone.is_empty() || timezone.len() > 64 || timezone.chars().any(|c| c.is_control()) {
+    if timezone.is_empty() || timezone.len() > 64 || timezone.chars().any(char::is_control) {
         return None;
     }
     Some(timezone)

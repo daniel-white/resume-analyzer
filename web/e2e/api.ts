@@ -1,7 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
-const api = process.env.PLAYWRIGHT_API ?? "http://127.0.0.1:4181";
-const app = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:4173";
+const api = process.env["PLAYWRIGHT_API"] ?? "http://127.0.0.1:4181";
+const app = process.env["PLAYWRIGHT_BASE_URL"] ?? "http://127.0.0.1:4173";
 
 type Verdict = {
   kept: string[];
@@ -75,30 +75,29 @@ function resume(input: {
   parse: typeof designedParse | null;
   runs: ReturnType<typeof run>[];
 }) {
+  const version = {
+    id: `${input.id}-v1`,
+    number: 1,
+    filename: input.filename,
+    media_type: input.filename.endsWith(".docx")
+      ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      : "application/pdf",
+    status: input.status,
+    created_at: "2026-11-07T18:00:00Z",
+    parse: input.parse,
+    profile_summary: input.parse ? {
+      text: "Ada Lovelace is a computing pioneer with skills in analytical engines and mathematics.",
+      engine: "ollama",
+      model: "qwen2.5:0.5b",
+      feedback: null,
+    } : null,
+    runs: input.runs,
+  };
   return {
     id: input.id,
     title: input.filename,
     created_at: "2026-11-07T18:00:00Z",
-    versions: [
-      {
-        id: `${input.id}-v1`,
-        number: 1,
-        filename: input.filename,
-        media_type: input.filename.endsWith(".docx")
-          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : "application/pdf",
-        status: input.status,
-        created_at: "2026-11-07T18:00:00Z",
-        parse: input.parse,
-        profile_summary: input.parse ? {
-          text: "Ada Lovelace is a computing pioneer with skills in analytical engines and mathematics.",
-          engine: "ollama",
-          model: "qwen2.5:0.5b",
-          feedback: null,
-        } : null,
-        runs: input.runs,
-      },
-    ],
+    versions: [version] as [typeof version],
   };
 }
 
@@ -129,9 +128,12 @@ export const stored = resume({
   runs: [],
 });
 
+type SeedVersion = (typeof designed)["versions"][number];
+export type SeedResume = Omit<typeof designed, "versions"> & { versions: SeedVersion[] };
+
 export type ApiOptions = {
   signedIn?: boolean;
-  resumes?: Array<typeof designed>;
+  resumes?: SeedResume[];
   magicLinkStatus?: number;
   verifyStatus?: number;
   admin?: boolean;
@@ -159,7 +161,7 @@ export async function installApi(page: Page, options: ApiOptions = {}) {
     },
   ]);
   return {
-    update: async (data: { resumes?: Array<typeof designed>; onConnectResumes?: Array<typeof designed>; event?: string; disconnect?: boolean }) => {
+    update: async (data: { resumes?: SeedResume[]; onConnectResumes?: SeedResume[]; event?: string; disconnect?: boolean }) => {
       const result = await page.request.post(`${api}/__seed/${id}`, { data });
       if (!result.ok()) throw new Error(`update failed: ${result.status()}`);
     },

@@ -8,8 +8,8 @@ export type AdminFeedbackAnalysis = {
   engine: string;
   diagnosis: string;
   created_at: string;
-  handled_at?: string;
-  handled_by?: string;
+  handled_at?: string | undefined;
+  handled_by?: string | undefined;
 };
 
 /// A current thumbs down and every diagnosis stored for it.
@@ -24,7 +24,7 @@ export type AdminFeedback = {
   section_id: string;
   section_heading: string;
   section_kind: SectionKind;
-  section_body?: string;
+  section_body?: string | undefined;
   voted_at: string;
   analyses: AdminFeedbackAnalysis[];
 };

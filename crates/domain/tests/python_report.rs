@@ -10,7 +10,7 @@ fn python_reports_round_trip_through_the_signed_contract() {
         .current_dir(root)
         .args([
             "-c",
-            r#"
+            r"
 import json
 from providers import stub
 from providers.test_smart_resume import fixture
@@ -22,7 +22,7 @@ for item in stub.FLEET:
         'verdict': stub.delivered_verdict(item, '00000000-0000-0000-0000-000000000123', parsed),
     }, separators=(',', ':'))
     print(json.dumps({'raw': raw, 'signature': stub.sign('report-test', 1700000000, raw.encode())}))
-"#,
+",
         ])
         .output()
         .expect("python3 provider serializer");

@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# Fast preflight on staged files. This is not the gate: CI runs the full
+# ./scripts/check.sh (tests, e2e, demo, factory) after the commit lands.
+set -euo pipefail
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+[[ -n "$staged" ]] || exit 0
+
+fail() {
+  printf 'pre-commit: %s\n' "$1" >&2
+  exit 1
+}
+
+# Conflict markers and whitespace errors, cheap regardless of file type.
+git diff --cached --check || fail "whitespace or conflict markers"
+
+wants_rust=0
+wants_web=0
+wants_helm=0
+while IFS= read -r file; do
+  case "$file" in
+    crates/*|Cargo.toml|Cargo.lock|.cargo/*|rust-toolchain.toml) wants_rust=1 ;;
+    web/*) wants_web=1 ;;
+    deploy/helm/*) wants_helm=1 ;;
+  esac
+done <<< "$staged"
+
+if [[ "$wants_rust" == 1 ]]; then
+  command -v cargo >/dev/null || fail "cargo missing; run inside 'nix develop'"
+  echo "pre-commit: cargo fmt --check"
+  cargo fmt --check || fail "rust formatting"
+  echo "pre-commit: cargo clippy -D warnings"
+  cargo clippy --workspace --all-targets -- -D warnings || fail "rust warnings"
+fi
+
+if [[ "$wants_web" == 1 ]]; then
+  command -v pnpm >/dev/null || fail "pnpm missing; run inside 'nix develop'"
+  echo "pre-commit: tsc --noEmit"
+  (cd web && pnpm typecheck) || fail "TypeScript diagnostics"
+fi
+
+if [[ "$wants_helm" == 1 ]]; then
+  command -v helm >/dev/null || fail "helm missing; run inside 'nix develop'"
+  echo "pre-commit: helm lint --strict"
+  while IFS= read -r chart; do
+    helm lint "$chart" --strict
+  done < <(printf '%s\n' "$staged" | grep -E '^deploy/helm/[^/]+/' | cut -d/ -f1-3 | sort -u) \
+    || fail "helm lint"
+fi
+
+echo "pre-commit: preflight passed (CI runs the full gate)"

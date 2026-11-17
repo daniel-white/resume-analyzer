@@ -242,9 +242,11 @@ async fn callback_on_the_stream(
         };
         buffer.push_str(&String::from_utf8_lossy(&chunk.expect("chunk")));
     }
-    if found.is_empty() {
-        panic!("no callback on the stream: {buffer}");
-    }
+    assert_ne!(
+        found.as_slice(),
+        [] as [serde_json::Value; 0],
+        "no callback on the stream: {buffer}"
+    );
     found
 }
 
@@ -257,7 +259,7 @@ fn take_callbacks(buffer: &mut String) -> Vec<serde_json::Value> {
         let mut data = String::new();
         for line in frame.lines() {
             if let Some(value) = line.strip_prefix("event:") {
-                name = value.trim().to_owned();
+                value.trim().clone_into(&mut name);
             } else if let Some(value) = line.strip_prefix("data:") {
                 data.push_str(value.trim());
             }
@@ -488,11 +490,11 @@ async fn one_callback(
     assert!(verdict["kept"].is_array());
     assert!(verdict["dropped"].is_array());
     let factors = verdict["factors"].as_array().expect("frontend factors");
-    assert!(!factors.is_empty());
+    assert_ne!(factors.as_slice(), [] as [serde_json::Value; 0]);
     for factor in factors {
         assert!(factor["label"].is_string());
         assert!(factor["delta"].is_i64());
-        assert!(!factor["advice"].as_str().expect("factor advice").is_empty());
+        assert_ne!(factor["advice"].as_str().expect("factor advice"), "");
     }
 }
 

@@ -6,13 +6,13 @@ import { DocumentSkeleton } from "./resume-loading";
 const ResumeDocument = lazy(() => import("./resume-document"));
 
 class PreviewBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
+  override state = { failed: false };
 
   static getDerivedStateFromError() {
     return { failed: true };
   }
 
-  render() {
+  override render() {
     return this.state.failed
       ? <p role="alert" className="p-4">This file could not be previewed. You can download the original above.</p>
       : this.props.children;

@@ -64,7 +64,7 @@ pub async fn report_for(config: &Config, s3: &s3::Client) -> Report {
     })
 }
 
-pub async fn s3_client(config: &Config) -> s3::Client {
+pub fn s3_client(config: &Config) -> s3::Client {
     let auth = s3::Auth::Static(
         s3::Credentials::new(config.s3_access_key.clone(), config.s3_secret_key.clone())
             .expect("valid static credentials"),

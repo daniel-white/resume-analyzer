@@ -27,7 +27,7 @@ export type SignedInLibrary = LibraryView & { email: string; admin: boolean };
 export type SignedInTeardown = Exclude<Teardown, { kind: "missing" }> & { email: string; admin: boolean };
 
 function apiBase(): string {
-  return process.env.API_URL ?? "http://127.0.0.1:8080";
+  return process.env["API_URL"] ?? "http://127.0.0.1:8080";
 }
 
 function cookie(): string | undefined {
@@ -35,7 +35,8 @@ function cookie(): string | undefined {
 }
 
 function signedOut(returnTo?: string): never {
-  throw redirect({ to: "/login", search: { returnTo: safeReturnTo(returnTo) } });
+  const next = safeReturnTo(returnTo);
+  throw redirect({ to: "/login", search: next === undefined ? {} : { returnTo: next } });
 }
 
 export const getLibrary = createServerFn({ method: "GET" }).handler(
@@ -61,7 +62,7 @@ export const stageUpload = createServerFn({ method: "POST" })
   });
 
 export const getTeardown = createServerFn({ method: "GET" })
-  .validator((data: { id: string; versionId?: string; provider?: string }) => {
+  .validator((data: { id: string; versionId?: string | undefined; provider?: string | undefined }) => {
     if (!data.id) throw new Error("missing resume");
     return data;
   })
@@ -115,7 +116,7 @@ export const updateResumeName = createServerFn({ method: "POST" })
   });
 
 export const removeResume = createServerFn({ method: "POST" })
-  .validator((data: { id: string; versionId?: string }) => {
+  .validator((data: { id: string; versionId?: string | undefined }) => {
     if (!data.id) throw new Error("missing resume");
     return data;
   })

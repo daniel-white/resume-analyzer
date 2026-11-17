@@ -3,7 +3,9 @@ import { designed, installApi } from "./api";
 
 test("persisted provider reports render after reload without affecting older results", async ({ page }, testInfo) => {
   const resume = structuredClone(designed);
-  const verdict = resume.versions[0].runs[0].verdict!;
+  const run = resume.versions[0].runs[0];
+  if (!run?.verdict) throw new Error("expected a verdict to update");
+  const verdict = run.verdict;
   Object.assign(verdict, {
     report: {
       engine: "Plaintext Classic", engine_version: "3.8.2", reference: "GREENLINE-ABC123",

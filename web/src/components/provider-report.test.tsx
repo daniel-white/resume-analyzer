@@ -22,7 +22,9 @@ function markup(reportValue?: ProviderReport) {
     verdict: { score: 70, kept: ["email"], dropped: ["table"], summary: "Score 70 of 100.", factors: [], report: reportValue },
   };
   const cards = pluginCards([{ id: "greenline", name: "Greenline", subtitle: "Simulated parser" }], [run]);
-  return renderToStaticMarkup(<VerdictCardView card={cards[0]} initiallySelected />);
+  const card = cards[0];
+  if (!card) throw new Error("expected a verdict card");
+  return renderToStaticMarkup(<VerdictCardView card={card} initiallySelected />);
 }
 
 describe("provider report delivery to the card", () => {

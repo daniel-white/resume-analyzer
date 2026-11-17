@@ -8,7 +8,9 @@ describe("sign-in messages", () => {
     const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     try {
       expect(await requestMagicLink("http://localhost:8080", "ada@example.com", undefined, `/resumes/${id}`, id)).toEqual({ ok: true });
-      expect(JSON.parse(mock.mock.calls[0][1]!.body as string)).toEqual({ email: "ada@example.com", return_to: `/resumes/${id}`, upload_id: id, timezone: "" });
+      const call = mock.mock.calls[0];
+      if (!call) throw new Error("expected a fetch call");
+      expect(JSON.parse(call[1]!.body as string)).toEqual({ email: "ada@example.com", return_to: `/resumes/${id}`, upload_id: id, timezone: "" });
       expect(magicLinkMessage(400, '{"error":"upload"}')).toContain("upload has expired");
     } finally { mock.mockRestore(); }
   });
@@ -34,7 +36,9 @@ describe("sign-in messages", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
     try {
       expect(await requestMagicLink("http://localhost:8080", " ada@example.com ", undefined, destination)).toEqual({ ok: true });
-      const request = fetchMock.mock.calls[0][1];
+      const call = fetchMock.mock.calls[0];
+      if (!call) throw new Error("expected a fetch call");
+      const request = call[1];
       expect(JSON.parse(request!.body as string)).toEqual({ email: "ada@example.com", return_to: destination, timezone: "" });
     } finally {
       fetchMock.mockRestore();

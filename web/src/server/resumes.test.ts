@@ -31,8 +31,10 @@ describe("private anonymous staging", () => {
   it("accepts a private upload without requiring a session", async () => {
     const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "pending-id" }), { status: 202 }));
     expect(await stageResume("http://localhost:8080", new File(["%PDF"], "resume.pdf"))).toEqual({ ok: true, id: "pending-id" });
-    expect(String(mock.mock.calls[0][0])).toBe("http://localhost:8080/api/uploads");
-    expect(mock.mock.calls[0][1]!.method).toBe("POST");
+    const call = mock.mock.calls[0];
+    if (!call) throw new Error("expected a fetch call");
+    expect(String(call[0])).toBe("http://localhost:8080/api/uploads");
+    expect(call[1]!.method).toBe("POST");
   });
 
   it("rejects empty and oversized uploads before contacting storage", async () => {
@@ -55,7 +57,9 @@ describe("resume set names", () => {
     const mock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 204 }));
     expect(await renameResume("http://api.test", "resume-1", "  Engineering roles  ", "session=test"))
       .toEqual({ ok: true });
-    const [url, options] = mock.mock.calls[0];
+    const call = mock.mock.calls[0];
+    if (!call) throw new Error("expected a fetch call");
+    const [url, options] = call;
     expect(String(url)).toBe("http://api.test/api/resumes/resume-1");
     expect(options).toMatchObject({ method: "PATCH", body: JSON.stringify({ title: "Engineering roles" }) });
     expect(new Headers(options?.headers).get("cookie")).toBe("session=test");
@@ -406,9 +410,11 @@ describe("teardown", () => {
     const view = teardown(detail, plugins);
     expect(view.kind).toBe("complete");
     if (view.kind !== "complete") throw new Error("expected complete");
+    const selectedVersion = detail.versions[0];
+    if (!selectedVersion) throw new Error("expected a version");
     expect(view.file).toEqual({
-      url: `/api/resumes/resume-1/versions/${detail.versions[0].id}/file`,
-      mediaType: detail.versions[0].media_type,
+      url: `/api/resumes/resume-1/versions/${selectedVersion.id}/file`,
+      mediaType: selectedVersion.media_type,
     });
     expect(view.lede).toBe(
       "Contact in the header, skills in a table, two columns. Each system opened the file itself.",
@@ -422,6 +428,7 @@ describe("teardown", () => {
     const greenline = view.cards[0];
     const missing = view.cards[2];
     const ash = view.cards[3];
+    if (!greenline || !ash || !missing) throw new Error("expected verdict cards");
     if (greenline.pending || ash.pending || !missing.pending) {
       throw new Error("expected greenline and ash scored, workdaye pending");
     }
@@ -468,9 +475,11 @@ describe("teardown", () => {
 
   it("keeps a plugin pending when that run has no verdict", () => {
     const cards = pluginCards(plugins, [run("greenline", 95), run("levr", null)]);
-    expect(cards[0].pending).toBe(false);
-    expect(cards[1].pending).toBe(true);
-    expect(cards[2].pending).toBe(true);
+    const [greenlineCard, levrCard, strangerCard] = cards;
+    if (!greenlineCard || !levrCard || !strangerCard) throw new Error("expected three verdict cards");
+    expect(greenlineCard.pending).toBe(false);
+    expect(levrCard.pending).toBe(true);
+    expect(strangerCard.pending).toBe(true);
   });
 });
 
@@ -504,7 +513,7 @@ describe("version selection", () => {
     const view = teardown(detail, plugins, "version-1");
     expect(view).toMatchObject({ kind: "complete", title: "ada.pdf", versionId: "version-1", filename: "old.pdf" });
     if (view.kind === "missing") throw new Error("expected version");
-    expect(view.extract?.[0].value).toBe("Old name");
+    expect(view.extract?.[0]?.value).toBe("Old name");
     expect(view.file.url).toBe("/api/resumes/resume-1/versions/version-1/file");
     expect(view.cards[0]).toMatchObject({ pending: false, score: 95 });
   });

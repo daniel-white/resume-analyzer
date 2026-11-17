@@ -17,12 +17,12 @@ export type { AdminFeedback, HandledResult };
 
 export type AdminView = {
   email: string;
-  timezone?: string | null;
+  timezone?: string | null | undefined;
   feedback: AdminFeedback[];
 };
 
 function apiBase(): string {
-  return process.env.API_URL ?? "http://127.0.0.1:8080";
+  return process.env["API_URL"] ?? "http://127.0.0.1:8080";
 }
 
 function cookie(): string | undefined {

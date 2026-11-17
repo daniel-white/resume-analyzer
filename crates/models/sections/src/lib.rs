@@ -189,6 +189,7 @@ impl Clone for SectionDetector {
 
 impl SectionDetector {
     /// No model files, no downloads. Used by tests and when explicitly disabled.
+    #[must_use]
     pub fn heuristic() -> Self {
         Self {
             mode: Mode::Heuristic,
@@ -217,8 +218,7 @@ impl SectionDetector {
             .ok()
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(".fastembed_cache"));
+            .map_or_else(|| PathBuf::from(".fastembed_cache"), PathBuf::from);
         let model = env::var("SECTION_MODEL_NAME")
             .ok()
             .map(|value| value.trim().to_owned())
@@ -237,6 +237,7 @@ impl SectionDetector {
 
     /// The engine name shown in the UI. It reports the heuristic fallback when
     /// the embedding model could not be loaded.
+    #[must_use]
     pub fn engine(&self) -> &str {
         if self.mode().is_some() {
             &self.engine
@@ -245,6 +246,7 @@ impl SectionDetector {
         }
     }
 
+    #[must_use]
     pub fn model(&self) -> &str {
         if self.mode().is_some() {
             &self.model
@@ -260,6 +262,7 @@ impl SectionDetector {
     }
 
     /// Detect sections from ordered text lines.
+    #[must_use]
     pub fn detect(&self, lines: &[String]) -> SectionMap {
         let lines: Vec<_> = lines
             .iter()
@@ -272,6 +275,7 @@ impl SectionDetector {
     }
 
     /// Formatting supports a label decision; it never supplies the label itself.
+    #[must_use]
     pub fn detect_document(&self, source: &[domain::DocumentLine]) -> SectionMap {
         let mut sizes: Vec<_> = source
             .iter()
@@ -327,7 +331,7 @@ impl SectionDetector {
     fn mode(&self) -> Option<&Mode> {
         match &self.mode {
             Mode::Heuristic => None,
-            mode => Some(mode),
+            mode @ Mode::Embedding { .. } => Some(mode),
         }
     }
 
@@ -417,8 +421,7 @@ fn load_local_model(dir: &Path) -> Result<TextEmbedding, String> {
         Pooling::Cls
     };
     let quantization = env::var("SECTION_MODEL_QUANTIZED")
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+        .is_ok_and(|value| value == "1" || value.eq_ignore_ascii_case("true"));
     let model = UserDefinedEmbeddingModel::new(
         onnx,
         TokenizerFiles {
@@ -637,7 +640,7 @@ fn embedding_kind(
     let mut ranked: Vec<(SectionKind, f32)> = best.into_iter().collect();
     ranked.sort_by(|left, right| right.1.total_cmp(&left.1));
     let (kind, score) = *ranked.first()?;
-    let second = ranked.get(1).map(|(_, score)| *score).unwrap_or(0.0);
+    let second = ranked.get(1).map_or(0.0, |(_, score)| *score);
     // A close second means the heading is ambiguous; leave it for the alias
     // fallback rather than inventing a section.
     let threshold = if formatted { 0.58 } else { 0.62 };
@@ -647,6 +650,8 @@ fn embedding_kind(
     Some((kind, (0.6 + (score - 0.62) * 1.4).clamp(0.6, 0.96)))
 }
 
+// The wider f64 math keeps the dot product stable; callers store f32 scores.
+#[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
 fn cosine(left: &[f32], right: &[f32]) -> f32 {
     let dot: f64 = left
         .iter()
@@ -709,7 +714,7 @@ fn segment(lines: &[String], headings: &[Heading]) -> Vec<DetectedSection> {
 
     // Text above the first heading is the name/contact block. Treat it as one
     // section instead of dropping it.
-    let first = headings.first().map(|heading| heading.index).unwrap_or(0);
+    let first = headings.first().map_or(0, |heading| heading.index);
     if first > 0 {
         let body = join_body(&lines[..first]);
         if !body.is_empty() {
@@ -734,8 +739,7 @@ fn segment(lines: &[String], headings: &[Heading]) -> Vec<DetectedSection> {
     for (position, heading) in headings.iter().enumerate() {
         let end = headings
             .get(position + 1)
-            .map(|next| next.index)
-            .unwrap_or(lines.len());
+            .map_or(lines.len(), |next| next.index);
         let body = join_body(&lines[heading.index + 1..end]);
 
         // A repeated heading of the same kind is a formatting artifact. Fold

@@ -15,7 +15,7 @@ export function LandingPage() {
   const [sent, setSent] = useState(false);
   const depth = useRef(0);
   const input = useRef<HTMLInputElement>(null);
-  const [timezone, setTimezone] = useState<string | null>(null);
+  const [, setTimezone] = useState<string | null>(null);
 
   useEffect(() => {
     setTimezone(detectTimeZone());

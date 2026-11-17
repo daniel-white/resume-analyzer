@@ -64,6 +64,7 @@ impl Store {
         Ok(Self { pool })
     }
 
+    #[must_use]
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
@@ -293,7 +294,7 @@ impl Store {
                         id: row.try_get("version_id")?,
                         number: row.try_get("number")?,
                         filename: row.try_get("filename")?,
-                        status: status(row.try_get("status")?)?,
+                        status: status(&row.try_get::<String, _>("status")?)?,
                         created_at: row.try_get("version_created_at")?,
                     },
                 })
@@ -390,7 +391,7 @@ impl Store {
                 number: version.try_get("number")?,
                 filename: version.try_get("filename")?,
                 media_type: version.try_get("media_type")?,
-                status: status(version.try_get("status")?)?,
+                status: status(&version.try_get::<String, _>("status")?)?,
                 created_at: version.try_get("created_at")?,
                 parse: parse.map(|json| json.0),
                 sections,
@@ -1331,7 +1332,7 @@ fn run_view(run: &sqlx::postgres::PgRow) -> anyhow::Result<RunView> {
     Ok(RunView {
         id: run.try_get("id")?,
         plugin_id: run.try_get("plugin_id")?,
-        status: run_status(run.try_get("status")?)?,
+        status: run_status(&run.try_get::<String, _>("status")?)?,
         parse: parse.map(|json| json.0),
         verdict: verdict.map(|json| json.0),
     })
@@ -1357,8 +1358,8 @@ async fn enqueue(
     Ok(())
 }
 
-fn status(value: String) -> anyhow::Result<ResumeStatus> {
-    ResumeStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad resume status {value}"))
+fn status(value: &str) -> anyhow::Result<ResumeStatus> {
+    ResumeStatus::parse(value).ok_or_else(|| anyhow::anyhow!("bad resume status {value}"))
 }
 
 /// The heading and kind a diagnosis needs for one rejected reading. The
@@ -1410,8 +1411,8 @@ async fn feedback_target(
     })
 }
 
-fn run_status(value: String) -> anyhow::Result<RunStatus> {
-    RunStatus::parse(&value).ok_or_else(|| anyhow::anyhow!("bad run status {value}"))
+fn run_status(value: &str) -> anyhow::Result<RunStatus> {
+    RunStatus::parse(value).ok_or_else(|| anyhow::anyhow!("bad run status {value}"))
 }
 
 /// Serialize a value for a jsonb column, removing NUL codepoints first.
@@ -2311,7 +2312,7 @@ mod tests {
     }
 
     /// The real trigger for "unsupported Unicode escape sequence" is U+0000:
-    /// serde_json writes it as `\u0000`, and Postgres jsonb rejects that escape
+    /// `serde_json` writes it as `\u0000`, and Postgres jsonb rejects that escape
     /// (SQLSTATE 0A000). Lone surrogates fail earlier with a different error,
     /// so this pins the failure mode the fix has to neutralise.
     #[tokio::test]

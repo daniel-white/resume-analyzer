@@ -23,6 +23,10 @@ template:
 check:
     ./scripts/check.sh
 
+# Install the fast pre-commit preflight. CI remains the full gate.
+hooks:
+    ./scripts/install-hooks.sh
+
 # Wave catalog, dirty main, and the next wave. `just factory act` runs one.
 factory *args:
     ./scripts/factory.sh {{args}}

@@ -3,7 +3,7 @@ import { apiFetch, readSetCookie } from "./session";
 export type Account = {
   email: string;
   admin: boolean;
-  timezone?: string | null;
+  timezone?: string | null | undefined;
 };
 
 export type MagicLinkResult = { ok: true } | { ok: false; message: string };

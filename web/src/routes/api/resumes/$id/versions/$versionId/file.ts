@@ -4,7 +4,7 @@ export const Route = createFileRoute("/api/resumes/$id/versions/$versionId/file"
   server: {
     handlers: {
       GET: async ({ request, params }) => {
-        const base = process.env.API_URL ?? "http://127.0.0.1:8080";
+        const base = process.env["API_URL"] ?? "http://127.0.0.1:8080";
         const path = `/api/resumes/${encodeURIComponent(params.id)}/versions/${encodeURIComponent(params.versionId)}/file`;
         const headers = new Headers();
         const cookie = request.headers.get("cookie");

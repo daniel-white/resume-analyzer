@@ -101,7 +101,7 @@ export type Verdict = {
   score: number;
   summary: string;
   factors: Factor[];
-  report?: ProviderReport | null;
+  report?: ProviderReport | null | undefined;
 };
 
 export type VersionSummary = {
@@ -139,8 +139,8 @@ export type VersionDetail = {
   status: ResumeStatus;
   created_at: string;
   parse: ParseInput | null;
-  sections?: SectionMap | null;
-  profile_summary?: ProfileSummary | null;
+  sections?: SectionMap | null | undefined;
+  profile_summary?: ProfileSummary | null | undefined;
   runs: RunView[];
 };
 
@@ -209,7 +209,7 @@ export type ExtractField = {
 export type FactorLine = {
   label: string;
   delta: string;
-  advice?: string;
+  advice?: string | undefined;
 };
 
 export type VerdictCard =
@@ -229,9 +229,9 @@ export type VerdictCard =
       kept: string[];
       missed: string[];
       factors: FactorLine[];
-      summary?: string;
-      parse?: ParseInput | null;
-      report?: ProviderReport | null;
+      summary?: string | undefined;
+      parse?: ParseInput | null | undefined;
+      report?: ProviderReport | null | undefined;
     };
 
 export type Teardown =
@@ -497,7 +497,7 @@ export async function stageResume(baseUrl: string, file: File, cookie?: string):
   if (file.size > 5 * 1024 * 1024) return { ok: false, message: "That file is over five megabytes." };
   const body = new FormData();
   body.set("file", file, file.name);
-  const response = await fetch(new URL("/api/uploads", baseUrl), { method: "POST", body, headers: cookie ? { cookie } : undefined });
+  const response = await fetch(new URL("/api/uploads", baseUrl), { method: "POST", body, ...(cookie ? { headers: { cookie } } : {}) });
   if (!response.ok) return { ok: false, message: uploadFailure(response.status, await response.text()) };
   const result = await response.json() as { id: string };
   return { ok: true, id: result.id };

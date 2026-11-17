@@ -1,13 +1,30 @@
 #!/usr/bin/env bash
-# The gate every wave has to pass. On a branch with `main` available, only the
-# halves this branch touches are built. Otherwise every half that exists runs.
+# The gate every wave has to pass. Two phases: `strict` (no warnings in Rust,
+# Cargo, TypeScript, Helm) and `behavior` (tests, e2e, factory, demo). CI runs
+# them as named steps; with no argument both run, which is what `just check` does.
+# On a branch with `main` available, only the halves this branch touches run.
 set -euo pipefail
+
+phase=${1:-all}
+case "$phase" in
+  all|strict|behavior) ;;
+  *) echo "usage: $0 [all|strict|behavior]" >&2; exit 2 ;;
+esac
+
+strict=0
+behavior=0
+case "$phase" in
+  all) strict=1; behavior=1 ;;
+  strict) strict=1 ;;
+  behavior) behavior=1 ;;
+esac
 
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
 run_rust=0
 run_web=0
+run_helm=0
 run_factory=0
 run_demo=0
 
@@ -27,7 +44,7 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
       git ls-files --others --exclude-standard
     } | sort -u
   )
-  if printf '%s\n' "$files" | grep -Eq '^(crates/|Cargo\.(toml|lock)$)'; then
+  if printf '%s\n' "$files" | grep -Eq '^(crates/|\.cargo/|Cargo\.(toml|lock)$)'; then
     run_rust=1
   fi
   if printf '%s\n' "$files" | grep -Eq '^(web/|Dockerfile\.web$|scripts/web-assets\.mjs$)'; then
@@ -39,15 +56,22 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
   if printf '%s\n' "$files" | grep -Eq '^(Dockerfile(\.web|\.model)?$|docker-bake\.hcl$|deploy/|scripts/(up|demo_test)\.sh$)'; then
     run_demo=1
   fi
+  if printf '%s\n' "$files" | grep -Eq '^(deploy/helm/|scripts/check\.sh$)'; then
+    run_helm=1
+  fi
 else
   run_rust=1
   run_web=1
+  run_helm=1
   run_factory=1
   run_demo=1
 fi
 
 if [[ ! -f Cargo.toml ]]; then
   run_rust=0
+fi
+if [[ ! -d deploy/helm ]]; then
+  run_helm=0
 fi
 if [[ ! -f web/package.json ]]; then
   run_web=0
@@ -59,24 +83,51 @@ if [[ ! -f scripts/demo_test.sh ]]; then
   run_demo=0
 fi
 
-if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_factory" == 0 && "$run_demo" == 0 ]]; then
+if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_helm" == 0 && "$run_factory" == 0 && "$run_demo" == 0 ]]; then
   echo "check: nothing to build"
   exit 0
 fi
 
-if [[ "$run_rust" == 1 ]]; then
-  echo "check: rust"
+# One install per run, before either phase needs the web toolchain.
+if [[ "$run_web" == 1 ]]; then
+  echo "check: pnpm install"
+  (cd web && pnpm install --frozen-lockfile)
+fi
+
+# ---------------------------------------------------------------- strict phase
+if [[ "$run_rust" == 1 && "$strict" == 1 ]]; then
+  echo "check: rust strict"
   cargo fmt --check
+  # .cargo/config.toml denies rustc warnings for every target; clippy denies
+  # the pedantic and cargo lint groups for the workspace crates.
+  cargo build --workspace --all-targets
   cargo clippy --workspace --all-targets -- -D warnings
+fi
+
+if [[ "$run_helm" == 1 && "$strict" == 1 ]]; then
+  echo "check: helm strict"
+  # --strict turns chart lint warnings into failures.
+  for chart in deploy/helm/*; do
+    [[ -d "$chart" ]] || continue
+    helm lint "$chart" --strict
+  done
+fi
+
+if [[ "$run_web" == 1 && "$strict" == 1 ]]; then
+  echo "check: typescript strict"
+  (cd web && pnpm typecheck)
+fi
+
+# -------------------------------------------------------------- behavior phase
+if [[ "$run_rust" == 1 && "$behavior" == 1 ]]; then
+  echo "check: rust tests"
   cargo test --workspace
 fi
 
-if [[ "$run_web" == 1 ]]; then
-  echo "check: web"
+if [[ "$run_web" == 1 && "$behavior" == 1 ]]; then
+  echo "check: web tests"
   (
     cd web
-    pnpm install --frozen-lockfile
-    pnpm typecheck
     pnpm test
     pnpm build
     if [[ -f ../scripts/web-assets.mjs ]]; then
@@ -91,7 +142,7 @@ if [[ "$run_web" == 1 ]]; then
   )
 fi
 
-if [[ "$run_factory" == 1 ]]; then
+if [[ "$run_factory" == 1 && "$behavior" == 1 ]]; then
   echo "check: factory"
   # Factory scripts resolve `main` as a local branch; on PR checkouts only
   # origin/main exists, so create a local main pointing at it.
@@ -103,7 +154,7 @@ if [[ "$run_factory" == 1 ]]; then
   bash scripts/factory_test.sh
 fi
 
-if [[ "$run_demo" == 1 ]]; then
+if [[ "$run_demo" == 1 && "$behavior" == 1 ]]; then
   echo "check: demo"
   bash scripts/demo_test.sh
 fi

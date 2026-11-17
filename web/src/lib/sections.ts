@@ -102,7 +102,7 @@ export function headingMatches(kind: SectionKind, value: string): boolean {
 /// its section headings and the lines it reports as kept.
 export function providerFound(
   kind: SectionKind,
-  input: { parse?: ParseInput | null; kept: string[] },
+  input: { parse?: ParseInput | null | undefined; kept: string[] },
 ): boolean {
   if (kind === "other") return false;
   const headings = input.parse?.profile.sections.map((section) => section.heading) ?? [];

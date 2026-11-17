@@ -6,7 +6,7 @@ export const Route = createFileRoute("/api/resumes/$id/events")({
   server: {
     handlers: {
       GET: async ({ request, params }) => {
-        const base = process.env.API_URL ?? "http://127.0.0.1:8080";
+        const base = process.env["API_URL"] ?? "http://127.0.0.1:8080";
         const path = `/api/resumes/${encodeURIComponent(params.id)}/events`;
         const headers = new Headers({ accept: "text/event-stream" });
         for (const name of ["cookie", "last-event-id"]) {

@@ -19,9 +19,9 @@ import type { SectionKind } from "~/server/resumes";
 const IS_NOT_RESUME_PREFIX = "This does not look like a résumé.";
 
 export const Route = createFileRoute("/resumes/$id")({
-  validateSearch: (search: Record<string, unknown>): { version?: string; provider?: string } => ({
-    version: typeof search.version === "string" && search.version ? search.version : undefined,
-    provider: typeof search.provider === "string" && search.provider ? search.provider : undefined,
+  validateSearch: (search: Record<string, unknown>): { version?: string | undefined; provider?: string | undefined } => ({
+    version: typeof search["version"] === "string" && search["version"] ? search["version"] : undefined,
+    provider: typeof search["provider"] === "string" && search["provider"] ? search["provider"] : undefined,
   }),
   loaderDeps: ({ search }) => ({ versionId: search.version, provider: search.provider }),
   loader: async ({ params, deps }) => {

@@ -1,0 +1,4 @@
+# Deny warnings for every target in the workspace, including build scripts and
+# tests. Dependencies are capped by Cargo, so this only binds our own code.
+[build]
+rustflags = ["-D", "warnings"]

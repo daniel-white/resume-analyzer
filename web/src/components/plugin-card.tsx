@@ -7,7 +7,7 @@ import { cn } from "~/lib/utils";
 import { LoaderCircle } from "lucide-react";
 
 type CardVerdict = Pick<Verdict, "score" | "kept" | "dropped" | "factors"> & {
-  summary?: string;
+  summary?: string | undefined;
   report?: Verdict["report"];
 };
 
@@ -34,8 +34,8 @@ export function PluginCard({
   reading: boolean;
   selected: boolean;
   onSelect: () => void;
-  parse?: ParseInput | null;
-  highlightKind?: SectionKind | null;
+  parse?: ParseInput | null | undefined;
+  highlightKind?: SectionKind | null | undefined;
 }) {
   const highlighted = highlightKind && verdict
     ? providerFound(highlightKind, { parse, kept: verdict.kept })

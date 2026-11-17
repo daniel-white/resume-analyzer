@@ -100,6 +100,7 @@ async fn health_route(
 }
 
 /// `0.0.0.0` is not a place the worker can post a callback.
+#[must_use]
 pub fn callback_url(address: SocketAddr) -> String {
     let ip = if address.ip().is_unspecified() {
         std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
@@ -112,11 +113,12 @@ pub fn callback_url(address: SocketAddr) -> String {
 pub async fn serve() {
     init_tracing();
     let config = Config::from_env();
-    if config.auth_secret.len() < 16 {
-        panic!("AUTH_SECRET must be at least 16 characters");
-    }
+    assert!(
+        config.auth_secret.len() >= 16,
+        "AUTH_SECRET must be at least 16 characters"
+    );
     let bind = config.bind.clone();
-    let s3 = health::s3_client(&config).await;
+    let s3 = health::s3_client(&config);
     let store = storage::Store::connect(&config.database_url)
         .await
         .unwrap_or_else(|err| panic!("postgres: {err}"));
@@ -208,7 +210,7 @@ mod tests {
     #[tokio::test]
     async fn health_is_unavailable_when_nothing_is_listening() {
         let config = Config::unreachable();
-        let s3 = health::s3_client(&config).await;
+        let s3 = health::s3_client(&config);
         let response = health_router(HealthState { config, s3 })
             .oneshot(
                 Request::builder()

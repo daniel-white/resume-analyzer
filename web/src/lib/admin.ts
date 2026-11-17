@@ -11,7 +11,7 @@ export type AdminStats = {
   sections: number;
 };
 
-export function analysisHandled(analysis: { handled_at?: string }): boolean {
+export function analysisHandled(analysis: { handled_at?: string | undefined }): boolean {
   return Boolean(analysis.handled_at);
 }
 

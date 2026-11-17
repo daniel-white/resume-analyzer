@@ -14,6 +14,7 @@ pub const SKEW_SECONDS: i64 = 300;
 /// Owner used by storage tests that never open a session.
 pub const DEMO_USER_ID: Uuid = Uuid::from_u128(1);
 
+#[must_use]
 pub fn version_object_key(user_id: Uuid, resume_id: Uuid, version_id: Uuid) -> String {
     format!("users/{user_id}/resumes/{resume_id}/versions/{version_id}")
 }
@@ -38,6 +39,7 @@ pub struct ParseInput {
 }
 
 impl ParseInput {
+    #[must_use]
     pub fn empty(layout_confidence: LayoutConfidence) -> Self {
         Self {
             profile: Profile {
@@ -77,6 +79,8 @@ pub struct Section {
     pub in_header: bool,
 }
 
+// These flags are the wire contract, not configuration knobs to collapse.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Layout {
     pub columns: u32,
@@ -113,6 +117,7 @@ pub enum ResumeStatus {
 }
 
 impl ResumeStatus {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Uploaded => "uploaded",
@@ -122,6 +127,7 @@ impl ResumeStatus {
         }
     }
 
+    #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "uploaded" => Self::Uploaded,
@@ -141,6 +147,7 @@ pub enum RunStatus {
 }
 
 impl RunStatus {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Requested => "requested",
@@ -148,6 +155,7 @@ impl RunStatus {
         }
     }
 
+    #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "requested" => Self::Requested,
@@ -173,6 +181,7 @@ pub enum EventName {
 }
 
 impl EventName {
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ResumeUploaded => "ResumeUploaded",
@@ -185,6 +194,7 @@ impl EventName {
         }
     }
 
+    #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "ResumeUploaded" => Self::ResumeUploaded,
@@ -274,14 +284,16 @@ pub enum ReportOutcome {
 }
 
 /// `clamp(base + sum(delta), 0, 100)`. Plugins pick the base.
+#[must_use]
 pub fn aggregate(base: i32, factors: &[Factor]) -> u8 {
     let sum = factors
         .iter()
         .fold(base, |acc, factor| acc.saturating_add(factor.delta));
-    sum.clamp(0, 100) as u8
+    u8::try_from(sum.clamp(0, 100)).expect("clamped into u8 range")
 }
 
 /// Score, then what to change, then what helped. Empty advice is skipped.
+#[must_use]
 pub fn summarize(score: u8, factors: &[Factor]) -> String {
     let fixes: Vec<&str> = factors
         .iter()
@@ -379,6 +391,7 @@ pub enum SectionKind {
 }
 
 impl SectionKind {
+    #[must_use]
     pub fn label(self) -> &'static str {
         match self {
             Self::Summary => "Summary",
@@ -397,8 +410,9 @@ impl SectionKind {
         }
     }
 
-    /// Read the stored snake_case form. Unknown labels become `Other` so a
+    /// Read the stored `snake_case` form. Unknown labels become `Other` so a
     /// stored feedback row never fails to load.
+    #[must_use]
     pub fn parse(value: &str) -> Option<Self> {
         Some(match value {
             "summary" => Self::Summary,
@@ -439,7 +453,7 @@ pub struct DetectedSection {
     pub feedback: Option<SectionVote>,
 }
 
-/// One model's reading of the resume. Distinct from ParseInput: this is our
+/// One model's reading of the resume. Distinct from `ParseInput`: this is our
 /// representation, not a vendor's extraction.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SectionMap {
@@ -583,6 +597,7 @@ pub trait Ats: Send + Sync {
 
 type HmacSha256 = hmac::Hmac<sha2::Sha256>;
 
+#[must_use]
 pub fn sign(secret: &str, timestamp: i64, body: &[u8]) -> String {
     let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("hmac key");
     mac.update(format!("{timestamp}.").as_bytes());
