@@ -33,5 +33,5 @@
   },
   "include-component-in-tag": false,
   "draft": true,
-  "bootstrap-sha": "913e59d458f5796edfc43ad6319c0ff50e10d04c"
+  "force-tag-creation": true
 }
