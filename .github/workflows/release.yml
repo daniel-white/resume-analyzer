@@ -293,7 +293,6 @@ jobs:
           cat dist/checksums-${VERSION}.txt
       - name: sign images, chart, and checksums
         env:
-          COSIGN_EXPERIMENTAL: "1"
           VERSION: ${{ needs.meta.outputs.version }}
           API_DIGEST: ${{ needs.manifest.outputs.api_digest }}
           WEB_DIGEST: ${{ needs.manifest.outputs.web_digest }}
@@ -303,10 +302,11 @@ jobs:
           cosign sign --yes "ghcr.io/daniel-white/resume-analyzer/web@${WEB_DIGEST}"
           # Sign the published chart tag.
           cosign sign --yes "oci://${CHART_REGISTRY}/${CHART}:${VERSION}"
-          # Sign the checksums file as an attestation.
+          # Cosign v3 writes a Sigstore bundle instead of a bare signature on
+          # stdout, so sign-blob must be given an explicit --bundle output.
           cosign sign-blob --yes \
-            dist/checksums-${VERSION}.txt \
-            > dist/checksums-${VERSION}.sig
+            --bundle dist/checksums-${VERSION}.sigstore.json \
+            dist/checksums-${VERSION}.txt
 
   release:
     name: release
