@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/daniel-white/resume-analyzer/compare/v0.2.0...v0.2.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* force git tags for draft releases ([#8](https://github.com/daniel-white/resume-analyzer/issues/8)) ([91955ab](https://github.com/daniel-white/resume-analyzer/commit/91955ab74ca17e5bba3d12ab3d3e063727503146))
+
 ## [0.2.0](https://github.com/daniel-white/resume-analyzer/compare/v0.1.0...v0.2.0) (2026-11-17)
 
 
