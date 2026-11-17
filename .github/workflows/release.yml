@@ -16,7 +16,10 @@ permissions:
   attestations: write
 
 env:
-  REGISTRY: ghcr.io/daniel-white
+  # Must match images.yml: bake pushes to ${REGISTRY}/${target}, and the
+  # manifest/sign/chart jobs reference the same paths. A shorter prefix here
+  # pushes to a different repository than the one the digests are read from.
+  REGISTRY: ghcr.io/daniel-white/resume-analyzer
   CHART_REGISTRY: ghcr.io/daniel-white/charts
   CHART: resume-analyzer
 
@@ -90,7 +93,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [api, web]
+        # An explicit list of combinations: a separate `target: [api, web]`
+        # axis plus these includes collapses to fewer jobs than intended.
         include:
           - target: api
             arch: amd64
@@ -145,10 +149,15 @@ jobs:
             --provenance=mode=max --sbom=true --push
       - name: record digest
         run: |
+          set -eo pipefail
           mkdir -p digests
-          image="${REGISTRY}/${CHART#charts/}/${{ matrix.target }}:${{ needs.meta.outputs.version }}-${{ matrix.arch }}"
+          image="${REGISTRY}/${{ matrix.target }}:${{ needs.meta.outputs.version }}-${{ matrix.arch }}"
           digest=$(docker buildx imagetools inspect "$image" \
             | sed -n 's/^Digest:[[:space:]]*//p' | head -1)
+          if [[ -z "$digest" ]]; then
+            echo "record digest: no digest for ${image}" >&2
+            exit 1
+          fi
           echo "${{ matrix.target }}=${digest}" > "digests/${{ matrix.target }}-${{ matrix.arch }}.txt"
       - name: upload digests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -188,6 +197,7 @@ jobs:
           SHORT_SHA: ${{ needs.meta.outputs.short_sha }}
           PRERELEASE: ${{ needs.meta.outputs.prerelease }}
         run: |
+          set -eo pipefail
           for target in api web; do
             amd=$(sed -n 's/.*=//p' "digests/${target}-amd64.txt")
             arm=$(sed -n 's/.*=//p' "digests/${target}-arm64.txt")
