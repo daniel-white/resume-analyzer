@@ -207,8 +207,15 @@ jobs:
               minor=${VERSION#*.}; minor=${minor%.*}
               refs+=("${REGISTRY}/${target}:${major}.${minor}" "${REGISTRY}/${target}:${major}")
             fi
+            # `${refs[@]/#/-t }` folds the flag and the ref into one argument
+            # ("-t <ref>"), which buildx rejects as an invalid reference.
+            # Build the -t/value pairs as separate array elements instead.
+            tags=()
+            for ref in "${refs[@]}"; do
+              tags+=(-t "$ref")
+            done
             docker buildx imagetools create \
-              "${refs[@]/#/-t }" \
+              "${tags[@]}" \
               "${REGISTRY}/${target}:${VERSION}-amd64@${amd}" \
               "${REGISTRY}/${target}:${VERSION}-arm64@${arm}"
             merged=$(docker buildx imagetools inspect "${REGISTRY}/${target}:${VERSION}" \
