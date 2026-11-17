@@ -11,9 +11,14 @@ const summary: ProfileSummary = {
   feedback: "up" as const,
 };
 
-function render(value: ProfileSummary | null = summary) {
+function render(value: ProfileSummary | null = summary, pending = false) {
   return renderToStaticMarkup(
-    <ProfileSummaryCard summary={value} resumeId="resume-1" versionId="version-1" />,
+    <ProfileSummaryCard
+      summary={value}
+      resumeId="resume-1"
+      versionId="version-1"
+      pending={pending}
+    />,
   );
 }
 
@@ -46,6 +51,13 @@ describe("profile summary", () => {
     const html = render({ text: "", engine: "extractive", model: "section-extract-v1", feedback: null });
     expect(html).toContain("after this version is parsed");
     expect(html).not.toContain("Is this summary accurate?");
+  });
+
+  it("shows an optimistic thinking box while a summary is pending", () => {
+    const html = render(null, true);
+    expect(html).toContain("Thinking");
+    expect(html).toContain("Getting ready");
+    expect(html).toContain("after this version is parsed");
   });
 
   it("shows a different layout when the document does not look like a résumé", () => {

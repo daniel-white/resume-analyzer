@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   FileText,
@@ -17,9 +17,17 @@ import {
   filterFeedback,
   type AdminFilter,
 } from "~/lib/admin";
+import {
+  applyFrame,
+  liveKey,
+  parseFrame,
+  seedRun,
+  type LiveRun,
+} from "~/lib/generation";
 import { sectionKindLabel } from "~/lib/sections";
 import { cn } from "~/lib/utils";
 import type { AdminFeedback, AdminFeedbackAnalysis } from "~/server/admin";
+import { GenerationProgress } from "./generation-progress";
 
 const FILTERS: { id: AdminFilter; label: string }[] = [
   { id: "open", label: "Open" },
@@ -41,11 +49,69 @@ export function AdminFeedbackDashboard({
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [live, setLive] = useState<Record<string, LiveRun>>({});
+  const timers = useRef<number[]>([]);
+  const settled = useRef<Set<string>>(new Set());
+
+  const refresh = useCallback(async () => {
+    try {
+      const view = await getAdminFeedback();
+      setItems(view.feedback);
+    } catch {
+      // A poll failure is not worth surfacing; the next poll or the stream
+      // will pick up the new diagnosis.
+    }
+  }, []);
+
+  const settle = useCallback(
+    (key: string) => {
+      if (settled.current.has(key)) return;
+      settled.current.add(key);
+      // The worker saves the diagnosis before it emits its `complete` frame,
+      // so a short pause is enough for the refresh to find the stored row.
+      const timer = window.setTimeout(() => {
+        settled.current.delete(key);
+        void refresh();
+        setLive((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }, 600);
+      timers.current.push(timer);
+    },
+    [refresh],
+  );
 
   useEffect(() => {
     setItems(feedback);
     setError(null);
   }, [feedback]);
+
+  useEffect(() => {
+    const source = new EventSource("/api/admin/events");
+    function onFrame(event: MessageEvent<string>) {
+      const frame = parseFrame(event.data);
+      if (!frame || frame.flow !== "feedback" || !frame.section_id) return;
+      const key = liveKey("feedback", frame.version_id, frame.section_id);
+      setLive((current) => ({ ...current, [key]: applyFrame(current[key], frame) }));
+      const finished =
+        frame.event.type === "done" ||
+        frame.event.type === "error" ||
+        (frame.event.type === "stage" && frame.event.label === "complete");
+      if (finished) settle(key);
+    }
+    source.addEventListener("GenerationStream", onFrame as EventListener);
+    return () => {
+      source.removeEventListener("GenerationStream", onFrame as EventListener);
+      source.close();
+    };
+  }, [settle]);
+
+  useEffect(() => {
+    const pending = timers.current;
+    return () => pending.forEach((timer) => window.clearTimeout(timer));
+  }, []);
 
   const stats = adminStats(items);
   const visible = filterFeedback(items, filter, query);
@@ -71,7 +137,7 @@ export function AdminFeedbackDashboard({
     }
   }
 
-  async function rerun(analysis: AdminFeedbackAnalysis) {
+  async function rerun(item: AdminFeedback, analysis: AdminFeedbackAnalysis) {
     if (busyId) return;
     setBusyId(analysis.id);
     setError(null);
@@ -82,7 +148,11 @@ export function AdminFeedbackDashboard({
         return;
       }
       setItems((current) => removeAnalysis(current, analysis.id));
-      // The worker enqueues a new diagnosis asynchronously; poll for it.
+      // Show the thinking state immediately; live frames then replace it.
+      const key = liveKey("feedback", item.version_id, item.section_id);
+      settled.current.delete(key);
+      setLive((current) => ({ ...current, [key]: seedRun(key) }));
+      // Keep polling as a fallback if the stream is unavailable.
       const poll = window.setInterval(() => {
         void refresh();
       }, 1500);
@@ -91,16 +161,6 @@ export function AdminFeedbackDashboard({
       setError("Could not rerun the diagnosis. Please try again.");
     } finally {
       setBusyId(null);
-    }
-  }
-
-  async function refresh() {
-    try {
-      const view = await getAdminFeedback();
-      setItems(view.feedback);
-    } catch {
-      // A poll failure is not worth surfacing; the next poll or navigation
-      // will pick up the new diagnosis.
     }
   }
 
@@ -175,8 +235,9 @@ export function AdminFeedbackDashboard({
               item={item}
               busyId={busyId}
               timezone={timezone}
+              live={live[liveKey("feedback", item.version_id, item.section_id)]}
               onToggle={(analysis) => void toggle(analysis)}
-              onRerun={(analysis) => void rerun(analysis)}
+              onRerun={(analysis) => void rerun(item, analysis)}
             />
           ))}
         </div>
@@ -188,19 +249,22 @@ export function AdminFeedbackDashboard({
 function FeedbackCard({
   item,
   busyId,
+  live,
   onToggle,
   onRerun,
   timezone,
 }: {
   item: AdminFeedback;
   busyId: string | null;
+  live?: LiveRun;
   onToggle: (analysis: AdminFeedbackAnalysis) => void;
   onRerun: (analysis: AdminFeedbackAnalysis) => void;
   timezone?: string | null;
 }) {
   const open = feedbackOpen(item);
+  const streaming = Boolean(live && !live.error && live.text.trim());
   return (
-    <article className="admin-feedback">
+    <article className={cn("admin-feedback", live && "is-streaming")}>
       <header className="admin-feedback-head">
         <div>
           <p className="admin-feedback-kind">
@@ -225,12 +289,26 @@ function FeedbackCard({
         </p>
       )}
 
+      {streaming ? (
+        <div
+          className="admin-analysis is-live"
+          aria-live="polite"
+        >
+          <div className="admin-analysis-meta">
+            <span>Live diagnosis</span>
+            <span>not saved yet</span>
+          </div>
+          <p className="admin-analysis-text">{live?.text}</p>
+        </div>
+      ) : null}
+
       <div className="admin-analyses">
         <h3>
           Model diagnoses
           <span>{item.analyses.length}</span>
         </h3>
-        {item.analyses.length === 0 ? (
+        {live ? <GenerationProgress run={live} compact /> : null}
+        {item.analyses.length === 0 && !streaming ? (
           <p className="admin-analysis-pending">
             No diagnosis stored yet. The model may still be reading this section.
           </p>

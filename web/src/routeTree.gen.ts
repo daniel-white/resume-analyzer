@@ -16,6 +16,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginVerifyRouteImport } from './routes/login.verify'
 import { Route as ResumesIdRouteImport } from './routes/resumes/$id'
+import { Route as ApiAdminEventsRouteImport } from './routes/api/admin/events'
 import { Route as ApiResumesIdEventsRouteImport } from './routes/api/resumes/$id/events'
 import { Route as ApiResumesIdVersionsVersionIdFileRouteImport } from './routes/api/resumes/$id/versions/$versionId/file'
 
@@ -54,6 +55,11 @@ const ResumesIdRoute = ResumesIdRouteImport.update({
   path: '/resumes/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAdminEventsRoute = ApiAdminEventsRouteImport.update({
+  id: '/api/admin/events',
+  path: '/api/admin/events',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiResumesIdEventsRoute = ApiResumesIdEventsRouteImport.update({
   id: '/api/resumes/$id/events',
   path: '/api/resumes/$id/events',
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login/': typeof LoginIndexRoute
+  '/api/admin/events': typeof ApiAdminEventsRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -84,6 +91,7 @@ export interface FileRoutesByTo {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login': typeof LoginIndexRoute
+  '/api/admin/events': typeof ApiAdminEventsRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -96,6 +104,7 @@ export interface FileRoutesById {
   '/login/verify': typeof LoginVerifyRoute
   '/resumes/$id': typeof ResumesIdRoute
   '/login/': typeof LoginIndexRoute
+  '/api/admin/events': typeof ApiAdminEventsRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -109,6 +118,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login/'
+    | '/api/admin/events'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesByTo: FileRoutesByTo
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login'
+    | '/api/admin/events'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   id:
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/login/verify'
     | '/resumes/$id'
     | '/login/'
+    | '/api/admin/events'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesById: FileRoutesById
@@ -140,6 +152,7 @@ export interface RootRouteChildren {
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRouteWithChildren
   ResumesIdRoute: typeof ResumesIdRoute
+  ApiAdminEventsRoute: typeof ApiAdminEventsRoute
   ApiResumesIdEventsRoute: typeof ApiResumesIdEventsRoute
   ApiResumesIdVersionsVersionIdFileRoute: typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResumesIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/admin/events': {
+      id: '/api/admin/events'
+      path: '/api/admin/events'
+      fullPath: '/api/admin/events'
+      preLoaderRoute: typeof ApiAdminEventsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/resumes/$id/events': {
       id: '/api/resumes/$id/events'
       path: '/api/resumes/$id/events'
@@ -230,6 +250,7 @@ const rootRouteChildren: RootRouteChildren = {
   HealthRoute: HealthRoute,
   LoginRoute: LoginRouteWithChildren,
   ResumesIdRoute: ResumesIdRoute,
+  ApiAdminEventsRoute: ApiAdminEventsRoute,
   ApiResumesIdEventsRoute: ApiResumesIdEventsRoute,
   ApiResumesIdVersionsVersionIdFileRoute:
     ApiResumesIdVersionsVersionIdFileRoute,

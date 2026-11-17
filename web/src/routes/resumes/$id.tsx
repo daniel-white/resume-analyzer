@@ -42,6 +42,8 @@ function TeardownPage() {
   const { provider } = Route.useSearch();
   const [highlightKind, setHighlightKind] = useState<SectionKind | null>(null);
   const isNotResume = view.profileSummary?.text?.startsWith(IS_NOT_RESUME_PREFIX) ?? false;
+  const version = view.comparisonVersions.find((item) => item.id === view.versionId);
+  const summaryPending = version?.status !== "complete";
 
   useEffect(() => setHighlightKind(null), [view.versionId]);
 
@@ -54,25 +56,29 @@ function TeardownPage() {
       {isNotResume ? null : (
         <ResumeComparison key={`comparison-${view.resumeId}`} versions={view.comparisonVersions} versionId={view.versionId} />
       )}
-      {isNotResume ? null : (
-        <LiveAnalysis key={view.versionId} resumeId={id} active={view.comparisonVersions.some((version) => version.status !== "complete")} />
-      )}
-      <ProfileSummaryCard
-        key={`summary-${view.versionId}`}
-        summary={view.profileSummary}
-        resumeId={view.resumeId}
-        versionId={view.versionId}
-      />
-      {isNotResume ? null : (
-        <ResumeStructure
-          key={view.versionId}
-          fields={view.extract}
-          sections={view.sections}
+      <LiveAnalysis
+        key={view.versionId}
+        resumeId={id}
+        active={view.comparisonVersions.some((version) => version.status !== "complete")}
+      >
+        <ProfileSummaryCard
+          key={`summary-${view.versionId}`}
+          summary={view.profileSummary}
           resumeId={view.resumeId}
           versionId={view.versionId}
-          onHighlight={setHighlightKind}
+          pending={summaryPending}
         />
-      )}
+        {isNotResume ? null : (
+          <ResumeStructure
+            key={view.versionId}
+            fields={view.extract}
+            sections={view.sections}
+            resumeId={view.resumeId}
+            versionId={view.versionId}
+            onHighlight={setHighlightKind}
+          />
+        )}
+      </LiveAnalysis>
       <div className="desk-split resume-content">
         <div className="desk-resume">
           <ResumeViewer key={view.file.url} file={view.file} filename={view.filename} />

@@ -9,6 +9,7 @@ members = [
     "crates/mail",
     "crates/models/feedback",
     "crates/models/sections",
+    "crates/models/stream-protocol",
     "crates/models/summary",
 ]
 

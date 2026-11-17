@@ -4,9 +4,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use base64::Engine;
+use chrono::Utc;
 use domain::{
     AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
     RunPayload, UploadedPayload,
@@ -16,11 +18,69 @@ use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
 use storage::{Objects, Store};
+use stream_protocol::{Emitter, ModelEvent};
 use summary::SummaryGenerator;
-use tracing::{Level, field, info, span};
+use tracing::{Level, field, info, span, warn};
 use uuid::Uuid;
 
-use crate::bus::Bus;
+use crate::bus::{Bus, GenerationFrame};
+
+/// Forwards parsed model lines to the browser while generation is in flight.
+/// The worker runs models in `spawn_blocking`, so this stays deliberately small
+/// and synchronous: `tokio::sync::broadcast::send` never waits for receivers.
+#[derive(Clone)]
+struct BusEmitter {
+    bus: Bus,
+    resume_id: Uuid,
+    version_id: Uuid,
+    flow: &'static str,
+    section_id: Option<String>,
+    seq: Arc<AtomicU64>,
+}
+
+impl BusEmitter {
+    fn new(
+        bus: &Bus,
+        resume_id: Uuid,
+        version_id: Uuid,
+        flow: &'static str,
+        section_id: Option<String>,
+    ) -> Self {
+        Self {
+            bus: bus.clone(),
+            resume_id,
+            version_id,
+            flow,
+            section_id,
+            seq: Arc::new(AtomicU64::new(0)),
+        }
+    }
+}
+
+impl Emitter for BusEmitter {
+    fn emit(&self, event: &ModelEvent) {
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
+        let frame = GenerationFrame {
+            resume_id: self.resume_id,
+            version_id: self.version_id,
+            flow: self.flow,
+            section_id: self.section_id.clone(),
+            seq,
+            event: event.clone(),
+        };
+        let Ok(payload) = serde_json::to_value(frame) else {
+            return;
+        };
+        self.bus.publish_stream(EventRecord {
+            id: Uuid::new_v4(),
+            resume_id: self.resume_id,
+            version_id: self.version_id,
+            name: EventName::GenerationStream,
+            payload,
+            created_at: Utc::now(),
+        });
+    }
+}
 
 pub struct Worker {
     store: Store,
@@ -159,6 +219,11 @@ impl Worker {
             EventName::AtsCallbackReceived => Ok(()),
             EventName::GenerateMarkdown => self.generate_markdown(event).await,
             EventName::AnalyzeFeedback => self.analyze_feedback(event).await,
+            // Live frames are published directly, never queued in the outbox.
+            EventName::GenerationStream => {
+                warn!("ignoring live-only GenerationStream event on the outbox");
+                Ok(())
+            }
         }
     }
 
@@ -229,13 +294,33 @@ impl Worker {
             model = field::Empty,
         );
         let _enter = span.enter();
-        let (sections, profile_summary) = tokio::task::spawn_blocking(move || {
+        let emitter = Arc::new(BusEmitter::new(
+            &self.bus,
+            event.resume_id,
+            event.version_id,
+            "summary",
+            None,
+        ));
+        emitter.emit(&ModelEvent::Stage {
+            label: "queued".to_owned(),
+        });
+        let stream = emitter.clone();
+        let generated = tokio::task::spawn_blocking(move || {
             let sections = detector.detect_document(&lines);
-            let summary = summarizer.generate(&summary_parse, &sections)?;
+            let summary = summarizer.generate_with(&summary_parse, &sections, stream.as_ref())?;
             Ok::<_, anyhow::Error>((sections, summary))
         })
-        .await?
+        .await
         .map_err(|err| anyhow::anyhow!("summary generation failed: {err}"))?;
+        let (sections, profile_summary) = match generated {
+            Ok(value) => value,
+            Err(err) => {
+                emitter.emit(&ModelEvent::Error {
+                    message: "Couldn't finish your profile summary.".to_owned(),
+                });
+                return Err(err);
+            }
+        };
         span.record("engine", &profile_summary.engine);
         span.record("model", &profile_summary.model);
         info!("profile summary generated");
@@ -246,7 +331,11 @@ impl Worker {
                 Some(&sections),
                 Some(&profile_summary),
             )
-            .await
+            .await?;
+        emitter.emit(&ModelEvent::Stage {
+            label: "complete".to_owned(),
+        });
+        Ok(())
     }
 
     async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {
@@ -305,10 +394,38 @@ impl Worker {
             model = field::Empty,
         );
         let _enter = span.enter();
-        let diagnosis_result = tokio::task::spawn_blocking(move || {
-            analyzer.analyze(&markdown.text, &original, &section_id, &heading, kind)
+        let emitter = Arc::new(BusEmitter::new(
+            &self.bus,
+            event.resume_id,
+            event.version_id,
+            "feedback",
+            Some(section_id.clone()),
+        ));
+        emitter.emit(&ModelEvent::Stage {
+            label: "queued".to_owned(),
+        });
+        let stream = emitter.clone();
+        let attempted = tokio::task::spawn_blocking(move || {
+            analyzer.analyze_with(
+                &markdown.text,
+                &original,
+                &section_id,
+                &heading,
+                kind,
+                stream.as_ref(),
+            )
         })
-        .await??;
+        .await
+        .map_err(|err| anyhow::anyhow!("feedback diagnosis panicked: {err}"))?;
+        let diagnosis_result = match attempted {
+            Ok(value) => value,
+            Err(err) => {
+                emitter.emit(&ModelEvent::Error {
+                    message: "Couldn't finish this diagnosis.".to_owned(),
+                });
+                return Err(err.into());
+            }
+        };
         span.record("engine", &diagnosis_result.engine);
         span.record("model", &diagnosis_result.model);
         info!("feedback diagnosis generated");
@@ -320,6 +437,9 @@ impl Worker {
                 &diagnosis_result.text,
             )
             .await?;
+        emitter.emit(&ModelEvent::Stage {
+            label: "complete".to_owned(),
+        });
         Ok(())
     }
 

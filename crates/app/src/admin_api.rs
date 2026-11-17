@@ -1,14 +1,20 @@
 //! Admin-only feedback triage. Same session cookie as the rest of the API;
 //! authorization is an email domain from configuration.
 
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
+use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post, put};
+use domain::EventName;
+use futures_util::Stream;
 use serde::{Deserialize, Serialize};
+use tokio::sync::broadcast::error::RecvError;
 use uuid::Uuid;
 
 use crate::api::Api;
@@ -31,6 +37,43 @@ pub fn routes() -> axum::Router<Arc<Api>> {
             put(set_analysis_handled),
         )
         .route("/api/admin/feedback/analyses/{id}", post(rerun_analysis))
+        .route("/api/admin/events", get(events))
+}
+
+/// Admin-only view of diagnoses as they are generated. Admins do not own the
+/// resumes they review, so this uses the global generation channel rather than
+/// the per-resume owner stream. Only feedback frames are forwarded.
+pub async fn events(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
+    crate::auth_api::current_admin(&api, &headers).await?;
+    let mut incoming = api.bus.subscribe_stream();
+    let stream = async_stream::stream! {
+        loop {
+            match incoming.recv().await {
+                Ok(event) => {
+                    if event.name != EventName::GenerationStream {
+                        continue;
+                    }
+                    let flow = event.payload.get("flow").and_then(|value| value.as_str());
+                    if flow != Some("feedback") {
+                        continue;
+                    }
+                    let data = serde_json::to_string(&event).unwrap_or_else(|_| "{}".to_owned());
+                    yield Ok(
+                        Event::default()
+                            .event(event.name.as_str())
+                            .id(event.id.to_string())
+                            .data(data),
+                    );
+                }
+                Err(RecvError::Lagged(_)) => continue,
+                Err(RecvError::Closed) => break,
+            }
+        }
+    };
+    Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15))))
 }
 
 async fn list_feedback(State(api): State<Arc<Api>>, headers: HeaderMap) -> Response {

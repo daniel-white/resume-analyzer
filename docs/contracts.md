@@ -252,6 +252,43 @@ id is the event id, and `data` is the event object. The stream is a live hint
 only: it does not replay. The page loads `GET /api/resumes/:id` and then
 subscribes. A resume owned by someone else is `404`.
 
+Summary and feedback generations also emit `GenerationStream` events on this
+channel. Their `payload` is a `GenerationFrame`:
+
+```json
+{
+  "id": "e7f1c2a4-...",
+  "resume_id": "9c8b7a6d-...",
+  "version_id": "1f2e3d4c-...",
+  "name": "GenerationStream",
+  "payload": {
+    "resume_id": "9c8b7a6d-...",
+    "version_id": "1f2e3d4c-...",
+    "flow": "feedback",
+    "section_id": "5a6b7c8d-...",
+    "seq": 4,
+    "event": { "type": "delta", "field": "text", "value": "The heading " }
+  },
+  "created_at": "2026-11-17T14:08:38Z"
+}
+```
+
+`flow` is `summary` or `feedback`; `section_id` is null for summary runs and
+set for a voted-down section diagnosis. `seq` increases per run and lets the
+client discard duplicates or late frames. `event` is one NDJSON line parsed
+from the model: `stage`, `delta`, `field`, `done`, or an app-generated `error`.
+Summary deltas use field `profile_text` and `field` events set `is_resume`;
+feedback deltas use field `text`. String-valued `field` events for those text
+fields are also concatenated as prose, because small models often emit a whole
+paragraph this way instead of many `delta` lines. The worker emits `queued` first and
+`complete` only after the final text has been written to Postgres. These
+frames are hints; authoritative results remain in the resume detail response.
+
+Diagnosis text is admin-only. Admins subscribe to the separate
+`GET /api/admin/events` stream, which is session-cookie protected and forwards
+only `GenerationStream` feedback frames. Owner streams never include diagnosis
+deltas.
+
 ```text
 GET /api/plugins
 ```

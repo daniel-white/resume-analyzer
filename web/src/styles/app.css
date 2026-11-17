@@ -1186,3 +1186,139 @@ select {
 .admin-rerun-button:hover:not(:disabled) { background: #8a5a120d; border-color: #8a5a1240; }
 .admin-rerun-button.is-busy { opacity: 0.6; }
 .admin-rerun-button:disabled { opacity: 0.55; cursor: default; }
+
+/* ---------------------------------------------------------------------------
+   Live generation: thinking stages, token text and gentle motion.
+   --------------------------------------------------------------------------- */
+
+.generation-progress {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #244f4226;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #244f4209, #a5b08a12);
+  animation: live-surface-in 280ms ease both;
+}
+.generation-progress.is-compact { margin-block: 0.85rem; padding: 0.7rem 0.85rem; }
+.generation-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.55rem;
+  color: #244f42;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.thinking-orbit {
+  display: inline-grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: #244f4214;
+  animation: thinking-pulse 2s ease-in-out infinite;
+}
+.thinking-orbit.is-done { animation: none; background: #1e6b4518; }
+.generation-stages {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.generation-stage {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muted-foreground);
+  font-size: 0.82rem;
+  opacity: 0;
+  animation: stage-in 300ms ease forwards;
+}
+.generation-stage:nth-child(2) { animation-delay: 70ms; }
+.generation-stage:nth-child(3) { animation-delay: 140ms; }
+.generation-stage:nth-child(4) { animation-delay: 210ms; }
+.generation-stage.is-active { color: #244f42; font-weight: 600; }
+.generation-stage.is-done { color: #5c554c; }
+.generation-stage.is-error { color: #8f2d2d; }
+.generation-stage-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+  border-radius: 50%;
+  background: #1e6b4518;
+  color: #1e6b45;
+}
+.generation-stage.is-active .generation-stage-mark { background: #244f4214; color: #244f42; }
+.generation-stage.is-error .generation-stage-mark { background: #8f2d2d14; color: #8f2d2d; }
+
+.profile-summary.is-streaming,
+.admin-feedback.is-streaming {
+  border-color: #244f4255;
+  box-shadow: 0 0 0 1px #244f4220, 0 16px 42px #244f4214;
+  animation: live-glow 2.6s ease-in-out infinite;
+}
+.profile-summary-text.is-live,
+.admin-analysis.is-live {
+  animation: live-surface-in 240ms ease both;
+}
+/* A soft typewriter caret on the last line of streamed prose. */
+.profile-summary-text.is-live > :last-child::after,
+.admin-analysis-text::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 0.12em;
+  vertical-align: -0.15em;
+  border-radius: 1px;
+  background: #244f42;
+  animation: caret-blink 1s step-end infinite;
+}
+.admin-analysis.is-live {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid #244f4233;
+  border-left: 3px solid #244f42;
+  border-radius: 8px;
+  background: #244f4208;
+}
+.admin-analysis-text { margin: 0; font-size: 13px; line-height: 1.75; }
+
+@keyframes thinking-pulse {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.75; }
+  50% { transform: scale(1.12) rotate(8deg); opacity: 1; }
+}
+@keyframes stage-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes live-surface-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes live-glow {
+  0%, 100% { box-shadow: 0 0 0 1px #244f4220, 0 16px 42px #244f4210; }
+  50% { box-shadow: 0 0 0 1px #244f4240, 0 18px 48px #244f4224; }
+}
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .generation-progress,
+  .generation-stage,
+  .profile-summary-text.is-live,
+  .admin-analysis.is-live { animation: none; opacity: 1; transform: none; }
+  .thinking-orbit,
+  .profile-summary.is-streaming,
+  .admin-feedback.is-streaming { animation: none; }
+  .profile-summary-text.is-live > :last-child::after,
+  .admin-analysis-text::after { animation: none; }
+}

@@ -126,12 +126,12 @@ dependencies = [
  "serde_json",
  "sqlx",
  "storage",
+ "stream-protocol",
  "summary",
  "testcontainers-modules",
  "time",
  "tokio",
  "tower",
- "tower-resilience",
  "tracing",
  "tracing-subscriber",
  "uuid",
@@ -1287,6 +1287,7 @@ dependencies = [
  "reqwest 0.13.5",
  "serde",
  "serde_json",
+ "stream-protocol",
  "thiserror 1.0.69",
  "tracing",
 ]
@@ -4258,6 +4259,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "stream-protocol"
+version = "0.1.0"
+dependencies = [
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "stringprep"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4313,6 +4323,7 @@ dependencies = [
  "reqwest 0.13.5",
  "serde",
  "serde_json",
+ "stream-protocol",
  "tracing",
  "tracing-subscriber",
 ]
@@ -4704,54 +4715,6 @@ name = "tower-layer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
-
-[[package]]
-name = "tower-resilience"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54265ff304016b7ed75bb75dc8c57f23864b5d91f00157ed127aded6b67a4023"
-dependencies = [
- "tower-resilience-circuitbreaker",
- "tower-resilience-core",
- "tower-resilience-retry",
-]
-
-[[package]]
-name = "tower-resilience-circuitbreaker"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "907b3e0e10be24e4b47abb41569882005025ad717ba38f735c22ec1196b72e6c"
-dependencies = [
- "futures",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tower-resilience-core",
-]
-
-[[package]]
-name = "tower-resilience-core"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25eeb90521cdd34e4ed4ba21b5492311393eac927b015ca78c94658e13f5d137"
-dependencies = [
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "tower-resilience-retry"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f063106ed2b340de8172d629ae7c965261d9cddef27d33820ce06abadb92d32"
-dependencies = [
- "futures",
- "rand 0.9.5",
- "thiserror 2.0.21",
- "tokio",
- "tower",
- "tower-resilience-core",
-]
 
 [[package]]
 name = "tower-service"

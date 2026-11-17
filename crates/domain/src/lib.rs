@@ -167,6 +167,9 @@ pub enum EventName {
     GenerateMarkdown,
     /// Diagnose one thumbs down with the markdown and the original resume.
     AnalyzeFeedback,
+    /// A live token/stage frame from a summary or diagnosis generation. Unlike
+    /// the event above, these are emitted while the model is still working.
+    GenerationStream,
 }
 
 impl EventName {
@@ -178,6 +181,7 @@ impl EventName {
             Self::AtsCallbackReceived => "AtsCallbackReceived",
             Self::GenerateMarkdown => "GenerateMarkdown",
             Self::AnalyzeFeedback => "AnalyzeFeedback",
+            Self::GenerationStream => "GenerationStream",
         }
     }
 
@@ -189,6 +193,7 @@ impl EventName {
             "AtsCallbackReceived" => Self::AtsCallbackReceived,
             "GenerateMarkdown" => Self::GenerateMarkdown,
             "AnalyzeFeedback" => Self::AnalyzeFeedback,
+            "GenerationStream" => Self::GenerationStream,
             _ => return None,
         })
     }
@@ -620,6 +625,9 @@ mod tests {
             EventName::ResumeParsed,
             EventName::AtsRunRequested,
             EventName::AtsCallbackReceived,
+            EventName::GenerateMarkdown,
+            EventName::AnalyzeFeedback,
+            EventName::GenerationStream,
         ] {
             let json = serde_json::to_value(name).unwrap();
             assert_eq!(json, name.as_str());

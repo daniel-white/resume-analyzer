@@ -11,6 +11,20 @@ as hints and reloads the route's authoritative API state. Refreshes are
 serialized, with a follow-up refresh when hints arrive during an existing one.
 The PDF/DOCX viewer remains mounted while the surrounding analysis updates.
 
+Model generation adds `GenerationStream` frames. The shared `stream-protocol`
+crate reads OpenAI-compatible SSE chunks, parses the model's NDJSON lines even
+when a chunk splits a line, and exposes stages and text deltas to the worker.
+The worker forwards each line as a `GenerationStream` event on the owning
+resume's channel, then writes the final text to Postgres and emits `complete`.
+The page renders Claude-style stage progress, a spinner, and streamed text
+without reloading the route on every token. A refresh happens after completion
+so the stored result becomes authoritative. Legacy whole-blob model replies are
+still parsed into the same final result.
+
+Streamed feedback diagnosis is admin-only. The admin dashboard uses
+`GET /api/admin/events`, a cookie-protected global stream that forwards only
+feedback `GenerationStream` frames; resume owners never receive diagnosis text.
+
 Events are not replayed. The page refreshes state on every stream open,
 including automatic browser reconnection, to recover updates missed during
 disconnects or between initial page loading and subscribing. Stream errors

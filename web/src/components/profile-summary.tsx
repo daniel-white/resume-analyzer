@@ -3,7 +3,11 @@ import { useEffect, useState } from "react";
 import Markdown from "react-markdown";
 
 import { voteResumeSection } from "~/fns/resumes.functions";
+import { liveKey, seedRun } from "~/lib/generation";
 import type { ProfileSummary, SectionVote } from "~/server/resumes";
+import { cn } from "~/lib/utils";
+import { GenerationProgress } from "./generation-progress";
+import { useLiveRun } from "./live-analysis";
 import { VoteButtons } from "./resume-structure";
 
 const PROFILE_SUMMARY_ID = "profile-summary";
@@ -13,25 +17,36 @@ export function ProfileSummaryCard({
   summary,
   resumeId,
   versionId,
+  pending = false,
 }: {
   summary: ProfileSummary | null;
   resumeId: string;
   versionId: string;
+  pending?: boolean;
 }) {
   const [current, setCurrent] = useState(summary);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const key = liveKey("summary", versionId);
+  const live = useLiveRun(key);
 
   useEffect(() => {
     setCurrent(summary);
     setError(null);
   }, [summary]);
 
-  const isNotResume = current != null && current.text.startsWith(IS_NOT_RESUME_PREFIX);
-  const isEmpty = current != null && current.text.trim() === "";
+  // While the model writes, its tokens replace the stored text. Once the run
+  // clears, the refreshed route value takes over with no visible jump.
+  const liveText = live?.text ?? "";
+  const streaming = Boolean(live && !live.done && !live.error && liveText.trim());
+  const text = liveText.trim() ? liveText : (current?.text ?? "");
+  const isNotResume = text.startsWith(IS_NOT_RESUME_PREFIX);
+  const isEmpty = text.trim() === "";
+  // Show the thinking state immediately, before the first token frame arrives.
+  const progressRun = live ?? (pending && isEmpty && !isNotResume ? seedRun(key) : undefined);
 
   async function vote(choice: SectionVote) {
-    if (!current || busy || isNotResume) return;
+    if (!current || busy || isNotResume || streaming) return;
     const previous = current.feedback ?? null;
     const next = previous === choice ? null : choice;
     setBusy(true);
@@ -56,29 +71,36 @@ export function ProfileSummaryCard({
   }
 
   return (
-    <section className="profile-summary" aria-labelledby="profile-summary-heading">
+    <section
+      className={cn("profile-summary", streaming && "is-streaming")}
+      aria-labelledby="profile-summary-heading"
+    >
       <div className="profile-summary-heading">
         <span className="profile-summary-icon"><UserRound size={20} aria-hidden="true" /></span>
         <div>
           <p className="profile-summary-eyebrow">
-            {isNotResume ? "Not a résumé" : "Model impression"}
+            {streaming ? "Writing now" : isNotResume ? "Not a résumé" : "Model impression"}
           </p>
           <h2 id="profile-summary-heading">
             {isNotResume ? "This doesn’t look like a résumé" : "Who the model thinks you are"}
           </h2>
         </div>
       </div>
-      {current && !isEmpty ? (
+      {progressRun ? <GenerationProgress run={progressRun} /> : null}
+      {!isEmpty ? (
         <>
-          <div className="profile-summary-text">
+          <div
+            className={cn("profile-summary-text", streaming && "is-live")}
+            aria-live={streaming ? "polite" : undefined}
+          >
             <Markdown allowedElements={["strong", "em"]} unwrapDisallowed>
-              {current.text}
+              {text}
             </Markdown>
           </div>
-          {!isNotResume ? (
+          {!isNotResume && !streaming && current ? (
             <>
               <p className="profile-summary-model">
-                {current.engine === "ollama" ? "Local LLM" : "Extractive fallback"} · {current.model}
+                Local LLM · {current.model}
                 <span>Generated from your résumé; may be inaccurate.</span>
               </p>
               <div className="structure-vote" role="group" aria-label="Is this profile summary accurate?">
@@ -92,11 +114,12 @@ export function ProfileSummaryCard({
                 />
               </div>
             </>
-          ) : (
+          ) : null}
+          {isNotResume && !streaming ? (
             <p className="profile-summary-model">
               <span>Upload a document with work experience, education, skills, or projects.</span>
             </p>
-          )}
+          ) : null}
         </>
       ) : (
         <p className="profile-summary-pending">
