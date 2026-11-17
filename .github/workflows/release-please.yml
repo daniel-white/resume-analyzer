@@ -17,6 +17,9 @@ jobs:
       # via `version.workspace = true` (googleapis/release-please#2111), so the
       # simple strategy bumps Cargo.toml, Cargo.lock and Chart.yaml through the
       # toml/yaml extra-files in release-please-config.json instead.
+      # Draft releases get no git tag on GitHub until published, so the config
+      # sets force-tag-creation: without the tag, release-please cannot find
+      # the last release and re-bootstraps the changelog on every run.
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
