@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/daniel-white/resume-analyzer/compare/v0.2.2...v0.2.3) (2026-11-17)
+
+
+### Bug Fixes
+
+* pass separate -t arguments to imagetools create ([#12](https://github.com/daniel-white/resume-analyzer/issues/12)) ([53e36fa](https://github.com/daniel-white/resume-analyzer/commit/53e36fa01a028d1569f8b2cacd637c0e169f91b9))
+
 ## [0.2.2](https://github.com/daniel-white/resume-analyzer/compare/v0.2.1...v0.2.2) (2026-11-17)
 
 
