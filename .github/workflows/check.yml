@@ -38,11 +38,14 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://resume:resume@localhost:5432/resume
+      CI_IMAGE: resume-analyzer-ci:local
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+      - name: set up buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
       - name: install nix
         uses: cachix/install-nix-action@3dc140bfc76c49fbd4dd958429132e3746bcb086 # v31
         with:
@@ -67,9 +70,39 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('web/pnpm-lock.yaml') }}
           restore-keys: playwright-${{ runner.os }}-
+      - name: cache cargo
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'flake.lock') }}
+          restore-keys: cargo-${{ runner.os }}-
+      # Build the pinned CI environment image (Dockerfile.ci) with GHA layer
+      # caching. Strict checks run inside this image to reduce host dependency
+      # conflicts; behavior checks run on the runner where docker/minikube access
+      # may be required by demo/factory gates.
+      - name: build ci image
+        run: |
+          docker buildx build \
+            --load \
+            --tag "${CI_IMAGE}" \
+            --file Dockerfile.ci \
+            --cache-from type=gha,scope=ci-amd64 \
+            --cache-to type=gha,scope=ci-amd64,mode=max \
+            .
       # Warning-free is a named, fail-fast step: rustc + cargo clippy (pedantic
       # and cargo groups), tsc with the strict tsconfig, and helm lint --strict.
       - name: strict - no warnings (rust, cargo, typescript, helm)
-        run: nix develop --command ./scripts/check.sh strict
+        run: |
+          docker run --rm --network host \
+            -v "$PWD:/workspace" -w /workspace \
+            -v "$HOME/.cargo/registry:/root/.cargo/registry" \
+            -v "$HOME/.cargo/git:/root/.cargo/git" \
+            -v "$HOME/.local/share/pnpm/store:/root/.local/share/pnpm/store" \
+            -e DATABASE_URL -e CARGO_TERM_COLOR -e RUSTFLAGS -e CI=true \
+            "${CI_IMAGE}" \
+            nix develop .#default --command ./scripts/check.sh strict
       - name: gate - tests, e2e, factory, demo
         run: nix develop --command ./scripts/check.sh behavior
