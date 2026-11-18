@@ -11,6 +11,9 @@ WORKDIR /src
 # Pin the actual toolchain from rust-toolchain.toml so the build uses the
 # same compiler even if a stale RUST_VERSION is exported in the shell.
 COPY rust-toolchain.toml ./
+# Cargo config (e.g. -D warnings) must apply to chef/cook/build so Docker
+# builds fail the same way local and CI checks do.
+COPY .cargo .cargo
 # Keep compiler output deterministic. This also avoids writing incremental
 # state into a layer that would otherwise be part of the exported cache.
 ENV CARGO_INCREMENTAL=0

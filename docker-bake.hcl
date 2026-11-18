@@ -45,6 +45,12 @@ variable "CACHE_WRITE" {
   default = "false"
 }
 
+# GitHub Actions cache backend for BuildKit. When enabled, CI can cache Docker
+# layers (including Rust build layers) in the Actions cache without a registry.
+variable "CACHE_GHA" {
+  default = "false"
+}
+
 target "_common" {
   args = {
     RUST_VERSION = "${RUST_VERSION}"
@@ -78,12 +84,18 @@ group "release" {
 }
 
 target "api" {
-  inherits = ["_common"]
+  inherits   = ["_common"]
   context    = "."
   dockerfile = "Dockerfile"
   tags       = ["${REGISTRY}/api:${TAG}"]
-  cache-from = CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/api:buildcache-${CACHE_ARCH}"]
-  cache-to = CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/api:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = concat(
+    CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/api:buildcache-${CACHE_ARCH}"],
+    CACHE_GHA != "true" ? [] : ["type=gha,scope=api-${CACHE_ARCH}"]
+  )
+  cache-to = concat(
+    CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/api:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"],
+    CACHE_GHA != "true" || CACHE_WRITE != "true" ? [] : ["type=gha,scope=api-${CACHE_ARCH},mode=max"]
+  )
 }
 
 target "model" {
@@ -109,12 +121,28 @@ target "web" {
   args = {
     PNPM_VERSION = "${PNPM_VERSION}"
   }
-  cache-from = CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH}"]
-  cache-to = CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = concat(
+    CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH}"],
+    CACHE_GHA != "true" ? [] : ["type=gha,scope=web-${CACHE_ARCH}"]
+  )
+  cache-to = concat(
+    CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"],
+    CACHE_GHA != "true" || CACHE_WRITE != "true" ? [] : ["type=gha,scope=web-${CACHE_ARCH},mode=max"]
+  )
 }
 
 target "providers" {
   context    = "providers"
   dockerfile = "Dockerfile"
   tags       = ["${REGISTRY}/ats:${TAG}"]
+}
+
+# CI environment image used by GitHub Actions to run ./scripts/check.sh inside a
+# container, minimizing host toolchain/dependency conflicts.
+target "ci" {
+  context    = "."
+  dockerfile = "Dockerfile.ci"
+  tags       = ["${REGISTRY}/ci:${TAG}"]
+  cache-from = CACHE_GHA != "true" ? [] : ["type=gha,scope=ci-${CACHE_ARCH}"]
+  cache-to   = CACHE_GHA != "true" || CACHE_WRITE != "true" ? [] : ["type=gha,scope=ci-${CACHE_ARCH},mode=max"]
 }

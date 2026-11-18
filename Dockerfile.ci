@@ -1,0 +1,28 @@
+# syntax=docker/dockerfile:1.7
+
+# CI environment image: provides the pinned Nix dev shell used by
+# ./scripts/check.sh so GitHub Actions can run checks inside an image and avoid
+# host toolchain/dependency conflicts. The dev shell closure is realized at
+# build time and cached in image layers.
+FROM nixos/nix:2.24.11
+
+# git is required by scripts/check.sh (e.g. git diff/ls-files). bash/coreutils
+# are present in nixos/nix, but ensure common tools are available.
+RUN nix-env -iA nixpkgs.git nixpkgs.bash nixpkgs.coreutils nixpkgs.findutils nixpkgs.gnugrep nixpkgs.gawk \
+    && nix-store --gc || true
+
+RUN mkdir -p /etc/nix \
+    && printf 'experimental-features = nix-command flakes\nsandbox = false\n' >> /etc/nix/nix.conf
+
+WORKDIR /workspace
+
+# Only the flake inputs needed to realize the dev shell. rust-toolchain.toml is
+# read by flake.nix to pin the Rust toolchain.
+COPY flake.nix flake.lock rust-toolchain.toml ./
+
+# Realize the default dev shell so its packages are present in the Nix store
+# layer. CI mounts the checkout at runtime and runs scripts/check.sh inside it.
+RUN nix develop .#default --profile /nix/var/nix/profiles/devshell --command true
+
+ENV NIX_CONFIG="experimental-features = nix-command flakes"
+CMD ["bash"]

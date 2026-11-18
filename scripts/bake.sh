@@ -23,6 +23,10 @@ if [[ -z "${GIT_SHA:-}" ]]; then
 fi
 
 export RUST_VERSION NODEJS_VERSION PNPM_VERSION SOURCE_DATE_EPOCH BUILD_DATE GIT_SHA
+# Do not export empty defaults for bake variables: an empty environment value
+# overrides the HCL defaults (e.g. REGISTRY would become "" and the tag would
+# render as "/ci:local"). Callers pass cache/tag variables explicitly with
+# --var, so there is nothing else to export here.
 
 "$root/scripts/bake-manifests"
 

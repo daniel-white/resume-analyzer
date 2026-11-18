@@ -106,10 +106,11 @@ jobs:
         env:
           TAG: ${{ needs.meta.outputs.version }}-${{ matrix.arch }}
           CACHE_ARCH: ${{ matrix.arch }}
-          # PRs from forks can't read GHCR cache without credentials; skip cache
-          # entirely on pull_request runs.
+          # PRs from forks can't read GHCR cache without credentials; skip registry
+          # cache on pull_request runs. GHA cache still speeds up Rust/Docker builds.
           CACHE_REGISTRY: ${{ needs.meta.outputs.push == 'true' && env.CACHE_REGISTRY || '' }}
-          CACHE_WRITE: ${{ needs.meta.outputs.cache_write }}
+          CACHE_WRITE: "true"
+          CACHE_GHA: "true"
         run: |
           source scripts/versions.sh
           args=(
@@ -117,6 +118,7 @@ jobs:
             --var "CACHE_ARCH=${CACHE_ARCH}"
             --var "CACHE_REGISTRY=${CACHE_REGISTRY}"
             --var "CACHE_WRITE=${CACHE_WRITE}"
+            --var "CACHE_GHA=${CACHE_GHA}"
             --provenance=mode=max --sbom=true
           )
           [[ "${{ needs.meta.outputs.push }}" == "true" ]] && args+=(--push)

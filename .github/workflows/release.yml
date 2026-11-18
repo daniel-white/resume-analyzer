@@ -251,6 +251,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
           ref: ${{ needs.meta.outputs.tag }}
+      # Opt into caching Helm's repository/plugin state for chart packaging.
+      # setup-helm caches the binary itself in the runner tool cache; this keeps
+      # chart inputs cached too so repeat/release reruns avoid re-fetching them.
+      - name: cache helm
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/helm
+            ~/.local/share/helm
+          key: helm-${{ runner.os }}-v3.19.1-${{ hashFiles('deploy/helm/**/Chart.yaml', 'deploy/helm/**/Chart.lock') }}
+          restore-keys: helm-${{ runner.os }}-v3.19.1-
       - name: install helm
         uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
