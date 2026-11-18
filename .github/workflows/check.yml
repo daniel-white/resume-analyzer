@@ -38,7 +38,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://resume:resume@localhost:5432/resume
-      CI_IMAGE: resume-analyzer-ci:local
+      CI_IMAGE: resume-analyzer/ci:local
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -82,16 +82,18 @@ jobs:
       # Build the pinned CI environment image (Dockerfile.ci) with GHA layer
       # caching. Strict checks run inside this image to reduce host dependency
       # conflicts; behavior checks run on the runner where docker/minikube access
-      # may be required by demo/factory gates.
+      # may be required by demo/factory gates. CACHE_GHA is an opt-in flag shared
+      # by all bake targets, so image caching is configured in one place.
       - name: build ci image
+        env:
+          CACHE_GHA: "true"
+          CACHE_WRITE: "true"
         run: |
-          docker buildx build \
-            --load \
-            --tag "${CI_IMAGE}" \
-            --file Dockerfile.ci \
-            --cache-from type=gha,scope=ci-amd64 \
-            --cache-to type=gha,scope=ci-amd64,mode=max \
-            .
+          ./scripts/bake.sh --load \
+            --var "TAG=local" \
+            --var "CACHE_GHA=${CACHE_GHA}" \
+            --var "CACHE_WRITE=${CACHE_WRITE}" \
+            ci
       # Warning-free is a named, fail-fast step: rustc + cargo clippy (pedantic
       # and cargo groups), tsc with the strict tsconfig, and helm lint --strict.
       - name: strict - no warnings (rust, cargo, typescript, helm)

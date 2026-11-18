@@ -121,8 +121,14 @@ target "web" {
   args = {
     PNPM_VERSION = "${PNPM_VERSION}"
   }
-  cache-from = CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH}"]
-  cache-to = CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"]
+  cache-from = concat(
+    CACHE_REGISTRY == "" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH}"],
+    CACHE_GHA != "true" ? [] : ["type=gha,scope=web-${CACHE_ARCH}"]
+  )
+  cache-to = concat(
+    CACHE_REGISTRY == "" || CACHE_WRITE != "true" ? [] : ["type=registry,ref=${CACHE_REGISTRY}/web:buildcache-${CACHE_ARCH},mode=max,oci-mediatypes=true,image-manifest=true"],
+    CACHE_GHA != "true" || CACHE_WRITE != "true" ? [] : ["type=gha,scope=web-${CACHE_ARCH},mode=max"]
+  )
 }
 
 target "providers" {
