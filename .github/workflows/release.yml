@@ -330,8 +330,9 @@ jobs:
           # Sign the immutable multi-arch image indexes by digest.
           cosign sign --yes "ghcr.io/daniel-white/resume-analyzer/api@${API_DIGEST}"
           cosign sign --yes "ghcr.io/daniel-white/resume-analyzer/web@${WEB_DIGEST}"
-          # Sign the published chart tag.
-          cosign sign --yes "oci://${CHART_REGISTRY}/${CHART}:${VERSION}"
+          # Sign the published chart tag. cosign takes a plain OCI reference;
+          # the Helm-style oci:// prefix makes it resolve "oci" as the host.
+          cosign sign --yes "${CHART_REGISTRY}/${CHART}:${VERSION}"
           # Cosign v3 writes a Sigstore bundle instead of a bare signature on
           # stdout, so sign-blob must be given an explicit --bundle output.
           cosign sign-blob --yes \
