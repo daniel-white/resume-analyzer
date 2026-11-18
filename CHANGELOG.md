@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/daniel-white/resume-analyzer/compare/v0.2.3...v0.2.4) (2026-11-18)
+
+
+### Bug Fixes
+
+* authenticate cosign to GHCR before signing ([#14](https://github.com/daniel-white/resume-analyzer/issues/14)) ([1b8a332](https://github.com/daniel-white/resume-analyzer/commit/1b8a33224892fadc4ba594e2ed5d18a7e346f895))
+
 ## [0.2.3](https://github.com/daniel-white/resume-analyzer/compare/v0.2.2...v0.2.3) (2026-11-17)
 
 
