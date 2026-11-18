@@ -103,6 +103,6 @@ jobs:
             -v "$HOME/.local/share/pnpm/store:/root/.local/share/pnpm/store" \
             -e DATABASE_URL -e CARGO_TERM_COLOR -e RUSTFLAGS -e CI=true \
             "${CI_IMAGE}" \
-            nix develop .#default --command ./scripts/check.sh strict
+            bash -lc 'git config --global --add safe.directory /workspace && nix develop .#default --command ./scripts/check.sh strict'
       - name: gate - tests, e2e, factory, demo
         run: nix develop --command ./scripts/check.sh behavior
