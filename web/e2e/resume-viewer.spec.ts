@@ -50,8 +50,12 @@ test("PDF toolbar remains clickable after scrolling the document", async ({ page
   // WebKit's react-doc-viewer does not expose a scrollable PDF content layer,
   // so skip the scroll/toolbar interaction check on that engine.
   if (test.info().project.name !== "webkit") {
-    await content.evaluate((element) => { element.scrollTop = 150; });
-    await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    // PDF.js resizes its page after the zoom label updates. Retry the scroll so
+    // a slow render cannot clamp scrollTop to zero before the content grows.
+    await expect.poll(() => content.evaluate((element) => {
+      element.scrollTop = 150;
+      return element.scrollTop;
+    })).toBeGreaterThan(0);
     await expect.poll(() => viewer.evaluate((element) => {
       const toolbar = element.querySelector(".rdv-pdf-controls")!.getBoundingClientRect();
       const text = element.querySelector(".textLayer")!.getBoundingClientRect();

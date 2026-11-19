@@ -121,7 +121,7 @@ jobs:
             --var "CACHE_GHA=${CACHE_GHA}"
             --provenance=mode=max --sbom=true
           )
-          [[ "${{ needs.meta.outputs.push }}" == "true" ]] && args+=(--push)
+          [[ "${{ needs.meta.outputs.push }}" == "true" ]] && args+=(--push --var DEV_BUILD=false)
           ./scripts/bake.sh release "${args[@]}"
       - name: record per-arch digests
         if: needs.meta.outputs.push == 'true'

@@ -804,6 +804,7 @@ select {
 .account-trigger { color: var(--ink); border-color: #20251e40; background: transparent; border-radius: 6px; min-height: 44px; }
 .account-trigger:hover, .account-trigger[data-state="open"] { color: var(--ink); background: var(--secondary); }
 .public-navigation { justify-content: space-between; }
+.public-links { display: inline-flex; align-items: center; gap: 22px; }
 .public-home { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; text-decoration: none; }
 .public-home:hover { text-decoration: underline; text-underline-offset: 5px; }
 .account-menu, .delete-menu, .confirmation-dialog { color: var(--ink); border-color: var(--border); box-shadow: 0 12px 40px #20251e15; }
@@ -1023,6 +1024,41 @@ select {
 .structure-section:hover { border-color: #a5b08a; }
 .structure-section:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .structure-section.is-selected { border-color: #596d36; background: var(--secondary); box-shadow: inset 3px 0 0 #596d36; }
+
+/* About: an ordinary app page with compact Fluent-style detail cards. */
+.about-page {
+  width: min(100%, 48rem);
+  margin: 44px auto 72px;
+}
+.about-intro { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.about-app-icon { display: grid; place-items: center; flex: none; width: 64px; height: 64px; border-radius: 16px; background: var(--ink); color: var(--lime); }
+.about-intro h1 { margin: 0; font-family: var(--font-serif); font-size: clamp(1.75rem, 4vw, 2.25rem); font-weight: 400; line-height: 1.2; }
+.about-tagline { margin: 4px 0 0; color: var(--muted-foreground); font-size: 13px; }
+.about-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.about-badge { padding: 2px 8px; border-radius: 999px; background: var(--lime); color: var(--ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+.about-badge-dev { border: 1px solid #e8c46a; background: #fff4d6; color: #7a5200; }
+.about-sections { display: grid; gap: 16px; }
+.about-section { padding: 22px 24px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.about-section-title { margin: 0 0 14px; color: #596d36; font-family: var(--font-sans); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.about-section > p { margin: 0 0 10px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.about-section > p:first-of-type { color: var(--ink); font-weight: 600; }
+.about-rows { display: grid; margin: 0; }
+.about-rows > div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: 16px; align-items: center; padding: 13px 0; border-top: 1px solid #eff0e9; }
+.about-rows > div:first-child { padding-top: 0; border-top: 0; }
+.about-rows > div:last-child { padding-bottom: 0; }
+.about-rows dt { color: var(--muted-foreground); font-size: 12px; }
+.about-rows dd { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; margin: 0; font-size: 12px; }
+.about-version { font-weight: 700; }
+.about-separator { color: #a5aa9e; }
+.about-rows code { padding: 2px 6px; border-radius: 5px; background: #f2f3ec; font-family: var(--font-mono); font-size: 11px; user-select: text; }
+.about-build-state { color: var(--muted-foreground); }
+@media (max-width: 640px) {
+  .about-page { margin-block: 24px 48px; }
+  .about-app-icon { width: 52px; height: 52px; border-radius: 13px; }
+  .about-section { padding: 18px; }
+  .about-rows > div { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .about-rows dd { gap: 6px; }
+}
 .structure-kind {
   flex: none;
   padding: 0.15rem 0.4rem;

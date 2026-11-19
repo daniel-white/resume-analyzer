@@ -20,6 +20,13 @@ RUN --mount=type=cache,id=resume-analyzer-pnpm,target=/pnpm/store,sharing=locked
 COPY web/src ./src
 COPY web/public ./public
 COPY web/vite.config.ts web/tsconfig.json ./
+# Vite reads the semver from web/package.json (already copied above) and the
+# commit from the bake argument, so both sides of the About page report real
+# build metadata.
+ARG GIT_SHA=unknown
+ARG DEV_BUILD=true
+ENV FRONTEND_COMMIT=${GIT_SHA}
+ENV DEV_BUILD=${DEV_BUILD}
 COPY scripts/web-assets.mjs ./web-assets.mjs
 # The timestamp only affects the build step, so keep it below the install
 # layer to avoid invalidating the pnpm store and dependency layer.

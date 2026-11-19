@@ -124,7 +124,7 @@ export function LandingPage() {
         </section>
         <section className="landing-bottom"><span aria-hidden="true">✳</span><h2>Your experience deserves<br />to come through.</h2><a href="#upload" className="landing-primary">Let’s give it another read <ArrowUpRight size={20} /></a></section>
       </main>
-      <footer className="landing-footer"><Link to="/" className="landing-brand"><BookOpen size={19} /> The Other Read</Link><p>Simulated ATS readers. Real perspective.<br />Not affiliated with hiring platforms. No interview guarantees.</p><a href="#upload">Back to your next move <ArrowUpRight size={15} /></a></footer>
+      <footer className="landing-footer"><Link to="/" className="landing-brand"><BookOpen size={19} /> The Other Read</Link><p>Simulated ATS readers. Real perspective.<br />Not affiliated with hiring platforms. No interview guarantees.</p><Link to="/about">About</Link><a href="#upload">Back to your next move <ArrowUpRight size={15} /></a></footer>
     </div>
   );
 }

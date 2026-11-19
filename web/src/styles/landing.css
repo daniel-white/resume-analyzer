@@ -106,7 +106,7 @@ body:has(.landing)::after { display: none; }
 .landing-footer { display: flex; align-items: center; justify-content: space-between; gap: 30px; padding-block: 30px; }
 .landing-footer .landing-brand { font-size: 18px; }
 .landing-footer p { color: #808677; font-size: 9px; line-height: 1.9; }
-.landing-footer > a:last-child { display: inline-flex; align-items: center; gap: 9px; font-size: 10px; }
+.landing-footer > a { display: inline-flex; align-items: center; gap: 9px; font-size: 10px; }
 @media (min-width: 1500px) { .landing-hero { padding-block: 105px; } }
 @media (max-width: 1000px) {
   .landing-nav, .landing-hero, .landing-upload-section, .landing-how, .landing-footer { width: calc(100% - 56px); }
@@ -165,7 +165,7 @@ body:has(.landing)::after { display: none; }
 /* Keep real copy readable; the miniature resume remains an illustration. */
 .landing-eyebrow { font-size: var(--type-label); letter-spacing: 0.1em; }
 .hero-promises, .upload-privacy, .upload-privacy small, .landing-no-account,
-.uploaded-file small, .landing-footer p, .landing-footer > a:last-child {
+.uploaded-file small, .landing-footer p, .landing-footer > a {
   font-size: var(--type-small); line-height: 1.6;
 }
 .upload-intro > p, .landing-upload p, .landing-steps p, .how-heading > p:last-child {

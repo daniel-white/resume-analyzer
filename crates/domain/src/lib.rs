@@ -11,6 +11,14 @@ pub const DOCX: &str = "application/vnd.openxmlformats-officedocument.wordproces
 pub const MAX_UPLOAD_BYTES: usize = 5 * 1024 * 1024;
 pub const SKEW_SECONDS: i64 = 300;
 
+/// Build metadata shared by the API and the frontend's About page.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildInfo {
+    pub version: String,
+    pub commit: String,
+    pub dev: bool,
+}
+
 /// Owner used by storage tests that never open a session.
 pub const DEMO_USER_ID: Uuid = Uuid::from_u128(1);
 

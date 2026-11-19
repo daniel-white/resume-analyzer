@@ -1,7 +1,7 @@
 import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { DropdownMenu } from "radix-ui";
-import { BookOpen, ChevronDown, Files, Gauge, LoaderCircle, LogOut, UserRound } from "lucide-react";
+import { BookOpen, ChevronDown, Files, Gauge, Info, LoaderCircle, LogOut, UserRound } from "lucide-react";
 
 import { signOut } from "~/fns/auth.functions";
 
@@ -31,6 +31,7 @@ export function SiteHeader({ email, admin = false }: { email: string; admin?: bo
       <Link to="/" className="landing-brand"><span><BookOpen size={23} aria-hidden="true" /></span>The Other Read<span className="landing-beta">BETA</span></Link>
       <nav aria-label="Main navigation">
         <Link to="/" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Files size={16} aria-hidden="true" /> Your résumés</Link>
+        <Link to="/about" className="nav-library"><Info size={16} aria-hidden="true" /> About</Link>
         {admin ? <Link to="/admin" className="nav-library" activeOptions={{ exact: true }} activeProps={{ className: "nav-library is-active", "aria-current": "page" }}><Gauge size={16} aria-hidden="true" /> Feedback triage</Link> : null}
       </nav>
       <DropdownMenu.Root>

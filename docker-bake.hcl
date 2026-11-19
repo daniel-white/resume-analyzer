@@ -32,6 +32,11 @@ variable "SOURCE_DATE_EPOCH" {
 variable "BUILD_DATE" {
   default = "1970-01-01T00:00:00Z"
 }
+# Local images and PR builds advertise themselves as dev builds. Releases set
+# this to false so the About page shows a release build.
+variable "DEV_BUILD" {
+  default = "true"
+}
 
 # Registry-backed BuildKit cache. Empty means no cache import/export, which is
 # the local-development default. CI sets these per target and architecture.
@@ -59,6 +64,7 @@ target "_common" {
     GIT_SHA = "${GIT_SHA}"
     SOURCE_DATE_EPOCH = "${SOURCE_DATE_EPOCH}"
     BUILD_DATE = "${BUILD_DATE}"
+    DEV_BUILD = "${DEV_BUILD}"
   }
   labels = {
     "org.opencontainers.image.source" = "https://github.com/daniel-white/resume-analyzer"

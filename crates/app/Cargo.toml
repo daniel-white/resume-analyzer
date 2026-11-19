@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 publish.workspace = true
+build = "build.rs"
 
 [[bin]]
 name = "resume-analyzer"
@@ -57,3 +58,6 @@ zip = "9"
 
 [lints]
 workspace = true
+
+[build-dependencies]
+vergen-gix = "10"
