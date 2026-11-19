@@ -107,8 +107,13 @@ test("skills pop in one at a time as stream frames arrive and push the cloud wid
       name: "Infection control protocols",
       category: "domain", nature: "domain", prominence: 3, confidence: 70,
     }),
+    skillFrame(5, "skill", {
+      name: "Uncertain guess",
+      category: "other", nature: "soft", prominence: 1, confidence: 19,
+    }),
   ] });
   await expect(tags).toHaveCount(4);
+  await expect(cloud).not.toContainText("Uncertain guess");
   await expect(tags.nth(1)).toHaveAttribute("data-nature", "people");
   await expect.poll(async () => (await cloud.locator(".skill-tags").boundingBox())?.height ?? 0)
     .toBeGreaterThan(before?.height ?? 0);

@@ -93,6 +93,7 @@ export const designedSkills = {
       nature: "technical" as const,
       importance: 88,
       confidence: 92,
+      confidence_reason: "Named tool with a dedicated skills section.",
       evidence: [{ section_id: "skills-1", quote: "Analytical Engines" }],
     },
     {
@@ -102,6 +103,7 @@ export const designedSkills = {
       nature: "people" as const,
       importance: 76,
       confidence: 84,
+      confidence_reason: "Shown through work with stakeholders.",
       evidence: [{ section_id: "experience-1", quote: "Analyst" }],
     },
     {
@@ -111,6 +113,7 @@ export const designedSkills = {
       nature: "soft" as const,
       importance: 64,
       confidence: 78,
+      confidence_reason: "Clear writing shown in the experience entry.",
       evidence: [{ section_id: "experience-1", quote: "Analyst" }],
     },
     {
@@ -120,6 +123,7 @@ export const designedSkills = {
       nature: "hard" as const,
       importance: 80,
       confidence: 88,
+      confidence_reason: "Central to the described analytical work.",
       evidence: [{ section_id: "experience-1", quote: "Analyst" }],
     },
     {
@@ -129,6 +133,7 @@ export const designedSkills = {
       nature: "domain" as const,
       importance: 52,
       confidence: 70,
+      confidence_reason: "Domain knowledge supported by the role history.",
       evidence: [{ section_id: "experience-1", quote: "Analyst" }],
     },
     {
@@ -138,6 +143,7 @@ export const designedSkills = {
       nature: "hard" as const,
       importance: 61,
       confidence: 65,
+      confidence_reason: "Named in the skills list but not shown in an accomplishment.",
       evidence: [{ section_id: "skills-1", quote: "Data visualization" }],
     },
   ],

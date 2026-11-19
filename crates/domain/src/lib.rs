@@ -179,8 +179,6 @@ pub enum EventName {
     ResumeParsed,
     AtsRunRequested,
     AtsCallbackReceived,
-    /// Extract evidence-backed skills from the parsed version.
-    AnalyzeSkills,
     /// Build the version's markdown rendering, once after the first thumbs down.
     GenerateMarkdown,
     /// Diagnose one thumbs down with the markdown and the original resume.
@@ -198,7 +196,6 @@ impl EventName {
             Self::ResumeParsed => "ResumeParsed",
             Self::AtsRunRequested => "AtsRunRequested",
             Self::AtsCallbackReceived => "AtsCallbackReceived",
-            Self::AnalyzeSkills => "AnalyzeSkills",
             Self::GenerateMarkdown => "GenerateMarkdown",
             Self::AnalyzeFeedback => "AnalyzeFeedback",
             Self::GenerationStream => "GenerationStream",
@@ -212,7 +209,6 @@ impl EventName {
             "ResumeParsed" => Self::ResumeParsed,
             "AtsRunRequested" => Self::AtsRunRequested,
             "AtsCallbackReceived" => Self::AtsCallbackReceived,
-            "AnalyzeSkills" => Self::AnalyzeSkills,
             "GenerateMarkdown" => Self::GenerateMarkdown,
             "AnalyzeFeedback" => Self::AnalyzeFeedback,
             "GenerationStream" => Self::GenerationStream,
@@ -589,6 +585,9 @@ pub struct Skill {
     pub nature: SkillNature,
     pub importance: u8,
     pub confidence: u8,
+    /// The model's short explanation of its confidence, stored for later review.
+    #[serde(default)]
+    pub confidence_reason: String,
     pub evidence: Vec<SkillEvidence>,
 }
 
@@ -600,10 +599,11 @@ pub struct SkillSet {
     pub model: String,
 }
 
-/// Extract the skill map once a version has a parse and section reading.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnalyzeSkillsPayload {
-    pub version_id: Uuid,
+/// One read of the résumé produces both model impressions in the same call.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProfileImpression {
+    pub profile_summary: ProfileSummary,
+    pub skills: SkillSet,
 }
 
 /// A markdown rendering of the detected sections. Built once per version,
@@ -774,7 +774,6 @@ mod tests {
             EventName::ResumeParsed,
             EventName::AtsRunRequested,
             EventName::AtsCallbackReceived,
-            EventName::AnalyzeSkills,
             EventName::GenerateMarkdown,
             EventName::AnalyzeFeedback,
             EventName::GenerationStream,

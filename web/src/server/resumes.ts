@@ -1,5 +1,6 @@
 import { apiFetch } from "./session";
 import { medianScore } from "../lib/grades";
+import { isPresentableConfidence } from "../lib/skill-confidence";
 
 export type ResumeStatus = "uploaded" | "parsed" | "running" | "complete";
 export type RunStatus = "requested" | "complete";
@@ -71,6 +72,7 @@ export type Skill = {
   nature: SkillNature;
   importance: number;
   confidence: number;
+  confidence_reason: string;
   evidence: SkillEvidence[];
 };
 
@@ -444,6 +446,15 @@ export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
   });
 }
 
+/** Storage keeps every extraction; only confident skills reach the page. */
+function presentedSkills(set: SkillSet | null | undefined): SkillSet | null {
+  if (!set) return null;
+  return {
+    ...set,
+    skills: set.skills.filter((skill) => isPresentableConfidence(skill.confidence)),
+  };
+}
+
 export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: string): Teardown {
   const version = versionId
     ? detail.versions.find((item) => item.id === versionId)
@@ -464,7 +475,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
       scores: pluginCards(plugins, item.runs).map((card) => ({
         id: card.id, name: card.name, score: card.pending ? null : card.score,
       })),
-      skills: (item.skills?.skills ?? []).map((skill) => ({
+      skills: (presentedSkills(item.skills)?.skills ?? []).map((skill) => ({
         name: skill.name, canonical: skill.canonical,
         nature: skill.nature, importance: skill.importance,
       })),
@@ -479,7 +490,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     parse: version.parse,
     sections: version.sections ?? null,
     profileSummary: version.profile_summary ?? null,
-    skills: version.skills ?? null,
+    skills: presentedSkills(version.skills),
     cards: pluginCards(plugins, version.runs),
   };
 }

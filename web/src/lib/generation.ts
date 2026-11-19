@@ -4,6 +4,8 @@
  * frames into the small piece of UI state each card needs.
  */
 
+import { isPresentableConfidence } from "./skill-confidence";
+
 export type ModelEvent =
   | { type: "stage"; label: string }
   | { type: "delta"; field: string; value: string }
@@ -156,13 +158,15 @@ function liveSkill(value: unknown): LiveSkill | null {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
   if (!key) return null;
+  const confidence = numberIn(value["confidence"], 0, 100, 50);
+  if (!isPresentableConfidence(confidence)) return null;
   return {
     key,
     name,
     category: typeof value["category"] === "string" ? value["category"] : "tool",
     nature: typeof value["nature"] === "string" ? value["nature"] : "",
     prominence: numberIn(value["prominence"], 1, 5, 3),
-    confidence: numberIn(value["confidence"], 0, 100, 50),
+    confidence,
   };
 }
 

@@ -10,14 +10,13 @@ use std::time::Duration;
 use base64::Engine;
 use chrono::Utc;
 use domain::{
-    AnalyzeFeedbackPayload, AnalyzeSkillsPayload, Ats, EventName, EventRecord,
-    GenerateMarkdownPayload, ResumeFile, RunPayload, UploadedPayload,
+    AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
+    RunPayload, UploadedPayload,
 };
 use feedback::{FeedbackAnalyzer, markdown};
 use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
-use skills::SkillExtractor;
 use storage::{Objects, Store};
 use stream_protocol::{Emitter, ModelEvent};
 use summary::SummaryGenerator;
@@ -83,6 +82,26 @@ impl Emitter for BusEmitter {
     }
 }
 
+/// One model reply feeds two live cards: prose to the impression card and skill
+/// fields to the tag cloud. The skills stage belongs to the second card.
+#[derive(Clone)]
+struct ImpressionEmitter {
+    summary: BusEmitter,
+    skills: BusEmitter,
+}
+
+impl Emitter for ImpressionEmitter {
+    fn emit(&self, event: &ModelEvent) {
+        match event {
+            ModelEvent::Field { name, .. } if name == "skill" || name == "skills" => {
+                self.skills.emit(event);
+            }
+            ModelEvent::Stage { label } if label == "mapping" => self.skills.emit(event),
+            _ => self.summary.emit(event),
+        }
+    }
+}
+
 pub struct Worker {
     store: Store,
     objects: Arc<dyn Objects>,
@@ -95,7 +114,6 @@ pub struct Worker {
     detector: SectionDetector,
     summarizer: SummaryGenerator,
     feedback: FeedbackAnalyzer,
-    skills: SkillExtractor,
 }
 
 impl Worker {
@@ -118,7 +136,6 @@ impl Worker {
             detector: SectionDetector::heuristic(),
             summarizer: SummaryGenerator::from_env(),
             feedback: FeedbackAnalyzer::from_env(),
-            skills: SkillExtractor::from_env(),
         }
     }
 
@@ -144,14 +161,6 @@ impl Worker {
     #[must_use]
     pub fn feedback(mut self, feedback: FeedbackAnalyzer) -> Self {
         self.feedback = feedback;
-        self
-    }
-
-    /// The skill extractor that maps evidence to tags. Tests override it to
-    /// point at a stub chat endpoint.
-    #[must_use]
-    pub fn skills(mut self, skills: SkillExtractor) -> Self {
-        self.skills = skills;
         self
     }
 
@@ -233,7 +242,6 @@ impl Worker {
             EventName::ResumeParsed => self.parsed(event).await,
             EventName::AtsRunRequested => self.requested(event).await,
             EventName::AtsCallbackReceived => Ok(()),
-            EventName::AnalyzeSkills => self.analyze_skills(event).await,
             EventName::GenerateMarkdown => self.generate_markdown(event).await,
             EventName::AnalyzeFeedback => self.analyze_feedback(event).await,
             // Live frames are published directly, never queued in the outbox.
@@ -299,106 +307,86 @@ impl Worker {
         let detector = self.detector.clone();
         let summarizer = self.summarizer.clone();
         let summary_parse = parse.clone();
-        // One span per upload, so every summary.chat span below is attributable
-        // to the resume and version that triggered it.
+        // One span per upload, so every model span below is attributable to the
+        // resume and version that triggered it.
         let span = span!(
             Level::INFO,
-            "resume.upload.summary",
+            "resume.upload.impression",
             resume_id = %event.resume_id,
             version_id = %event.version_id,
             engine = field::Empty,
             model = field::Empty,
+            skills = field::Empty,
         );
         let _enter = span.enter();
-        let emitter = Arc::new(BusEmitter::new(
+        let summary_emitter = Arc::new(BusEmitter::new(
             &self.bus,
             event.resume_id,
             event.version_id,
             "summary",
             None,
         ));
-        emitter.emit(&ModelEvent::Stage {
-            label: "queued".to_owned(),
-        });
-        let stream = emitter.clone();
-        let generated = tokio::task::spawn_blocking(move || {
-            let sections = detector.detect_document(&lines);
-            let summary = summarizer.generate_with(&summary_parse, &sections, stream.as_ref())?;
-            Ok::<_, anyhow::Error>((sections, summary))
-        })
-        .await
-        .map_err(|err| anyhow::anyhow!("summary generation failed: {err}"))?;
-        let (sections, profile_summary) = match generated {
-            Ok(value) => value,
-            Err(err) => {
-                emitter.emit(&ModelEvent::Error {
-                    message: "Couldn't finish your profile summary.".to_owned(),
-                });
-                return Err(err);
-            }
-        };
-        span.record("engine", &profile_summary.engine);
-        span.record("model", &profile_summary.model);
-        info!("profile summary generated");
-        self.store
-            .save_parse(
-                event.version_id,
-                &parse,
-                Some(&sections),
-                Some(&profile_summary),
-            )
-            .await?;
-        emitter.emit(&ModelEvent::Stage {
-            label: "complete".to_owned(),
-        });
-        Ok(())
-    }
-
-    async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {
-        let ids: Vec<&str> = self.plugins.iter().map(|plugin| plugin.id()).collect();
-        self.store.fanout(event.version_id, &ids).await
-    }
-
-    /// Map evidence to skills in its own outbox event. Each model field frame
-    /// is streamed to the browser as it arrives, so tags can appear one by one
-    /// before the validated set is stored.
-    async fn analyze_skills(&self, event: &EventRecord) -> anyhow::Result<()> {
-        let payload: AnalyzeSkillsPayload = serde_json::from_value(event.payload.clone())?;
-        let Some((parse, sections)) = self.store.parse_and_sections(payload.version_id).await?
-        else {
-            return Ok(());
-        };
-        let emitter = Arc::new(BusEmitter::new(
+        let skills_emitter = Arc::new(BusEmitter::new(
             &self.bus,
             event.resume_id,
             event.version_id,
             "skills",
             None,
         ));
-        emitter.emit(&ModelEvent::Stage {
-            label: "queued".to_owned(),
+        for emitter in [&summary_emitter, &skills_emitter] {
+            emitter.emit(&ModelEvent::Stage {
+                label: "queued".to_owned(),
+            });
+        }
+        let stream = Arc::new(ImpressionEmitter {
+            summary: (*summary_emitter).clone(),
+            skills: (*skills_emitter).clone(),
         });
-        let extractor = self.skills.clone();
-        let stream = emitter.clone();
-        let attempted = tokio::task::spawn_blocking(move || {
-            extractor.generate_with(&parse, &sections, stream.as_ref())
+        let generated = tokio::task::spawn_blocking(move || {
+            let sections = detector.detect_document(&lines);
+            let impression =
+                summarizer.generate_with(&summary_parse, &sections, stream.as_ref())?;
+            Ok::<_, anyhow::Error>((sections, impression))
         })
         .await
-        .map_err(|err| anyhow::anyhow!("skills generation panicked: {err}"))?;
-        let skills = match attempted {
+        .map_err(|err| anyhow::anyhow!("profile impression generation failed: {err}"))?;
+        let (sections, impression) = match generated {
             Ok(value) => value,
             Err(err) => {
-                emitter.emit(&ModelEvent::Error {
-                    message: "Couldn't finish your skill map.".to_owned(),
-                });
+                for emitter in [&summary_emitter, &skills_emitter] {
+                    emitter.emit(&ModelEvent::Error {
+                        message: "Couldn't finish your profile impression.".to_owned(),
+                    });
+                }
                 return Err(err);
             }
         };
-        self.store.save_skills(payload.version_id, &skills).await?;
-        emitter.emit(&ModelEvent::Stage {
-            label: "complete".to_owned(),
-        });
+        span.record("engine", &impression.profile_summary.engine);
+        span.record("model", &impression.profile_summary.model);
+        span.record("skills", impression.skills.skills.len());
+        info!("profile impression generated");
+        self.store
+            .save_parse(
+                event.version_id,
+                &parse,
+                Some(&sections),
+                Some(&impression.profile_summary),
+            )
+            .await?;
+        self.store
+            .save_skills(event.version_id, &impression.skills)
+            .await?;
+        for emitter in [&summary_emitter, &skills_emitter] {
+            emitter.emit(&ModelEvent::Stage {
+                label: "complete".to_owned(),
+            });
+        }
         Ok(())
+    }
+
+    async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {
+        let ids: Vec<&str> = self.plugins.iter().map(|plugin| plugin.id()).collect();
+        self.store.fanout(event.version_id, &ids).await
     }
 
     /// Build the markdown rendering once, then diagnose every down vote that

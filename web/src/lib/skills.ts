@@ -1,4 +1,5 @@
 import type { LiveSkill } from "./generation";
+import { isPresentableConfidence } from "./skill-confidence";
 import type {
   SectionMap,
   Skill,
@@ -72,31 +73,35 @@ export function nature(value: string, fallback: SkillCategory): SkillNature {
 }
 
 export function storedCloud(set: SkillSet | null): CloudSkill[] {
-  return (set?.skills ?? []).map((skill) => ({
-    key: skill.canonical || skill.name.toLowerCase(),
-    name: skill.name,
-    category: skill.category,
-    nature: skill.nature,
-    importance: skill.importance,
-    confidence: skill.confidence,
-    live: false,
-  }));
+  return (set?.skills ?? [])
+    .filter((skill) => isPresentableConfidence(skill.confidence))
+    .map((skill) => ({
+      key: skill.canonical || skill.name.toLowerCase(),
+      name: skill.name,
+      category: skill.category,
+      nature: skill.nature,
+      importance: skill.importance,
+      confidence: skill.confidence,
+      live: false,
+    }));
 }
 
 /** Streamed tags size by the model's prominence; the stored map has the final score. */
 export function liveCloud(skills: LiveSkill[]): CloudSkill[] {
-  return skills.map((skill) => {
-    const fallback = category(skill.category);
-    return {
-      key: skill.key,
-      name: skill.name,
-      category: fallback,
-      nature: nature(skill.nature, fallback),
-      importance: Math.min(100, skill.prominence * 20),
-      confidence: skill.confidence,
-      live: true,
-    };
-  });
+  return skills
+    .filter((skill) => isPresentableConfidence(skill.confidence))
+    .map((skill) => {
+      const fallback = category(skill.category);
+      return {
+        key: skill.key,
+        name: skill.name,
+        category: fallback,
+        nature: nature(skill.nature, fallback),
+        importance: Math.min(100, skill.prominence * 20),
+        confidence: skill.confidence,
+        live: true,
+      };
+    });
 }
 
 export function filterCloud(

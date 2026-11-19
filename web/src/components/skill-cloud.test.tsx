@@ -33,6 +33,7 @@ const skills: SkillSet = {
       nature: "people",
       importance: 90,
       confidence: 88,
+      confidence_reason: "Grounded in experience.",
       evidence: [{ section_id: "experience-1", quote: "Taught patients" }],
     },
     {
@@ -42,6 +43,7 @@ const skills: SkillSet = {
       nature: "hard",
       importance: 60,
       confidence: 70,
+      confidence_reason: "Named in the skills section.",
       evidence: [{ section_id: "skills-1", quote: "Coordination" }],
     },
   ],

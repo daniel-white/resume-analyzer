@@ -24,6 +24,7 @@ const stored: SkillSet = {
       nature: "people",
       importance: 82,
       confidence: 90,
+      confidence_reason: "Shown in a concrete accomplishment.",
       evidence: [{ section_id: "experience-1", quote: "Taught patients." }],
     },
     {
@@ -33,6 +34,7 @@ const stored: SkillSet = {
       nature: "hard",
       importance: 44,
       confidence: 60,
+      confidence_reason: "Only named in a bare skills list.",
       evidence: [{ section_id: "skills-1", quote: "Reconciliation" }],
     },
   ],
@@ -106,6 +108,37 @@ describe("skill cloud helpers", () => {
     expect(tags.every((tag) => !tag.live)).toBe(true);
     expect(filterCloud(tags, "people").map((tag) => tag.name)).toEqual(["Patient education"]);
     expect(filterCloud(tags, "all")).toHaveLength(2);
+  });
+
+  it("hides skills under 20% confidence while leaving their storage intact", () => {
+    const hidden = {
+      ...fixtureSkill(0),
+      name: "Faint signal",
+      canonical: "faint-signal",
+      confidence: 19,
+    };
+    const boundary = {
+      ...fixtureSkill(0),
+      name: "Just enough",
+      canonical: "just-enough",
+      confidence: 20,
+    };
+    const set: SkillSet = { ...stored, skills: [hidden, boundary, fixtureSkill(1)] };
+    expect(stored.skills).toHaveLength(2);
+    expect(storedCloud(set).map((tag) => tag.name)).toEqual([
+      "Just enough",
+      "Box office reconciliation",
+    ]);
+    expect(liveCloud([
+      {
+        key: "faint-signal", name: "Faint signal", category: "method", nature: "hard",
+        prominence: 5, confidence: 19,
+      },
+      {
+        key: "just-enough", name: "Just enough", category: "method", nature: "hard",
+        prominence: 5, confidence: 20,
+      },
+    ]).map((tag) => tag.name)).toEqual(["Just enough"]);
   });
 
   it("flags a skill whose only proof is a bare list entry", () => {

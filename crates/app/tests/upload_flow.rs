@@ -6,7 +6,6 @@ use std::sync::Arc;
 use app::{Api, Bus, Worker, api_router, compiled_plugins};
 use domain::{DOCX, PDF};
 use futures_util::StreamExt;
-use skills::SkillExtractor;
 use storage::MemoryObjects;
 use summary::SummaryGenerator;
 use testcontainers_modules::postgres::Postgres;
@@ -106,46 +105,55 @@ async fn chat_sink() -> String {
                     reliable pieces, to review code with empathy, and to leave each project easier \
                     to operate than she found it. She documents tradeoffs, measures before \
                     optimizing, and keeps the people using her software in view.";
-                let content = if request.contains("skill-extractor-v1") {
-                    // Quote a line from the request's own sections so the
-                    // extractor's evidence validation accepts this fixture.
-                    let sections = serde_json::from_str::<serde_json::Value>(&request)
-                        .ok()
-                        .and_then(|json| json["messages"][1]["content"].as_str().map(str::to_owned))
-                        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-                        .and_then(|json| json["resume"]["sections"].as_array().cloned());
-                    let first = sections.and_then(|list| list.first().cloned());
-                    match first {
-                        Some(section) => {
-                            let id = section["id"].as_str().unwrap_or("section-1");
-                            let text = section["text"].as_str().unwrap_or("");
-                            let quote = text.lines().next().unwrap_or(text).trim();
-                            if quote.is_empty() {
-                                serde_json::json!({ "skills": [] }).to_string()
-                            } else {
-                                serde_json::json!({
-                                    "skills": [{
-                                        "name": "Analytical engines",
-                                        "canonical": "analytical-engines",
-                                        "category": "tool",
-                                        "nature": "technical",
-                                        "prominence": 4,
-                                        "confidence": 85,
-                                        "evidence": [{ "section_id": id, "quote": quote }],
-                                    }],
-                                })
-                                .to_string()
-                            }
-                        }
-                        None => serde_json::json!({ "skills": [] }).to_string(),
-                    }
-                } else {
+                // One NDJSON reply carries both impressions. The quote comes
+                // from the request's own section so Rust's evidence check accepts
+                // it without a second chat call.
+                let sections = serde_json::from_str::<serde_json::Value>(&request)
+                    .ok()
+                    .and_then(|json| json["messages"][1]["content"].as_str().map(str::to_owned))
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+                    .and_then(|json| json["resume"]["sections"].as_array().cloned());
+                let first = sections.and_then(|list| list.first().cloned());
+                let mut lines = vec![
+                    serde_json::json!({ "type": "stage", "label": "reading" }).to_string(),
+                    serde_json::json!({ "type": "stage", "label": "understanding" }).to_string(),
+                    serde_json::json!({ "type": "stage", "label": "mapping" }).to_string(),
                     serde_json::json!({
-                        "is_resume": true,
-                        "profile_text": profile,
+                        "type": "field", "name": "is_resume", "value": true
                     })
-                    .to_string()
-                };
+                    .to_string(),
+                ];
+                if let Some(section) = first {
+                    let id = section["id"].as_str().unwrap_or("section-1");
+                    let text = section["text"].as_str().unwrap_or("");
+                    let quote = text.lines().next().unwrap_or(text).trim();
+                    if !quote.is_empty() {
+                        lines.push(
+                            serde_json::json!({
+                                "type": "field",
+                                "name": "skill",
+                                "value": {
+                                    "name": "Analytical engines",
+                                    "category": "tool",
+                                    "nature": "technical",
+                                    "prominence": 4,
+                                    "confidence": 85,
+                                    "confidence_reason": "Cited from a concrete résumé line.",
+                                    "evidence": [{ "section_id": id, "quote": quote }],
+                                },
+                            })
+                            .to_string(),
+                        );
+                    }
+                }
+                lines.push(
+                    serde_json::json!({
+                        "type": "delta", "field": "profile_text", "value": profile
+                    })
+                    .to_string(),
+                );
+                lines.push(serde_json::json!({ "type": "done" }).to_string());
+                let content = lines.join("\n");
                 let reply = serde_json::json!({
                     "choices": [{ "message": { "content": content } }],
                 })
@@ -348,11 +356,9 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
         bus.clone(),
         base.clone(),
     )
-    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
-    .skills(SkillExtractor::from_env_with(&chat, "stub"));
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
     let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
-        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
-        .skills(SkillExtractor::from_env_with(&chat, "stub"));
+        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
     let client = reqwest::Client::new();
     let accepted = upload(&base, &cookie, "before.pdf", &plain_pdf()).await;
     let id = accepted["id"].as_str().unwrap();
@@ -523,6 +529,15 @@ async fn one_callback(
     assert!(version["parse"]["layout"]["columns"].is_number());
     assert!(version["profile_summary"]["text"].is_string());
     assert_eq!(version["profile_summary"]["engine"], "chat");
+    // The same chat reply produced and stored the grounded skill map.
+    let tags = version["skills"]["skills"].as_array().expect("skill set");
+    assert_eq!(tags.len(), 1);
+    assert_eq!(tags[0]["canonical"], "analytical-engines");
+    assert_eq!(tags[0]["confidence"], 85);
+    assert_eq!(
+        tags[0]["confidence_reason"],
+        "Cited from a concrete résumé line."
+    );
     let verdict = &version["runs"][0]["verdict"];
     assert!(verdict["kept"].is_array());
     assert!(verdict["dropped"].is_array());
@@ -578,7 +593,6 @@ async fn upload_reaches_a_callback() {
     let chat = chat_sink().await;
     let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
         .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
-        .skills(SkillExtractor::from_env_with(&chat, "stub"))
         .notifications(
             mail::Smtp::new("127.0.0.1", smtp_port),
             "http://127.0.0.1:3000",
@@ -708,8 +722,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
         bus.clone(),
         old_base.clone(),
     )
-    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
-    .skills(SkillExtractor::from_env_with(&chat, "stub"));
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
     let old = upload(&old_base, &cookie, "old.pdf", &plain_pdf()).await;
     old_worker.drain().await.unwrap();
     let client = reqwest::Client::new();
@@ -795,7 +808,6 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
     assert!(healthy, "provider never became healthy");
     let worker = Worker::new(store.clone(), objects, active, bus, base.clone())
         .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
-        .skills(SkillExtractor::from_env_with(&chat, "stub"))
         .endpoints(HashMap::from([("indy_hackers_hiring".into(), endpoint)]));
     let detail_url = format!("{base}/api/resumes/{}", old_detail.id);
     assert_eq!(

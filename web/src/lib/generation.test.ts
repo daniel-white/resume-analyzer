@@ -73,7 +73,7 @@ describe("generation stream", () => {
     expect(run.text).toBe("You build systems.");
   });
 
-  it("accumulates one live skill per streamed skill field", () => {
+  it("accumulates live skills and skips those under 20% confidence", () => {
     const key = liveKey("skills", "version-1");
     let run = applyFrame(seedRun(key), frame(1, { type: "stage", label: "mapping" }, "skills", null));
     run = applyFrame(run, frame(2, {
@@ -98,10 +98,22 @@ describe("generation stream", () => {
       value: { name: "Patient education", category: "practice", nature: "people" },
     }, "skills", null));
     run = applyFrame(run, frame(5, { type: "field", name: "skill", value: { name: 42 } }, "skills", null));
+    run = applyFrame(run, frame(6, {
+      type: "field",
+      name: "skill",
+      value: { name: "Faint signal", confidence: 19 },
+    }, "skills", null));
+    run = applyFrame(run, frame(7, {
+      type: "field",
+      name: "skill",
+      value: { name: "Just enough", confidence: 20 },
+    }, "skills", null));
 
-    expect(run.skills).toHaveLength(2);
+    expect(run.skills).toHaveLength(3);
     expect(run.skills[0]).toMatchObject({ key: "triage", nature: "hard", prominence: 5 });
     expect(run.skills[1]).toMatchObject({ key: "patient-education", nature: "people" });
+    expect(run.skills[2]).toMatchObject({ key: "just-enough", confidence: 20 });
+    expect(run.skills.some((skill) => skill.key === "faint-signal")).toBe(false);
     expect(run.text).toBe("");
   });
 
