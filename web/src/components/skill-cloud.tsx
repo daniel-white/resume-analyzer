@@ -87,7 +87,7 @@ export function SkillCloud({
 
   return (
     <section
-      className={cn("card skill-cloud", streaming && "is-streaming")}
+      className={cn("skill-cloud", streaming && "is-streaming")}
       aria-labelledby="skill-cloud-heading"
     >
       <div className="skill-cloud-heading">

@@ -1364,6 +1364,16 @@ select {
    colours the tag, nature outlines it; new tags pop in and push neighbours.
    --------------------------------------------------------------------------- */
 
+/* The same clearly labelled surrounding box as the model impression, so the
+   evidence map reads as its own panel rather than loose tags on the page. */
+.skill-cloud {
+  margin-top: 1rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid #c8d3b5;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #f5f8ee 0%, #fffef9 72%);
+  box-shadow: 0 6px 24px #20251e05;
+}
 .skill-cloud-heading { display: flex; align-items: center; gap: 0.75rem; }
 .skill-cloud.is-streaming { border-color: #244f4255; box-shadow: 0 12px 34px #244f4210; }
 .skill-cloud-icon {

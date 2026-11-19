@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -56,6 +59,18 @@ function cloud() {
 }
 
 describe("skill cloud", () => {
+  it("sits in the same surrounding box as the model impression", () => {
+    expect(cloud()).toContain('class="skill-cloud"');
+    const css = readFileSync(
+      fileURLToPath(new URL("../styles/app.css", import.meta.url)),
+      "utf8",
+    );
+    const rule = css.match(/\.skill-cloud \{[^}]*\}/)?.[0] ?? "";
+    for (const property of ["padding:", "border: 1px", "border-radius:", "background:", "box-shadow:"]) {
+      expect(rule, `missing ${property} on .skill-cloud`).toContain(property);
+    }
+  });
+
   it("renders one tag per stored skill with both taxonomy axes", () => {
     const html = cloud();
     expect(html).toContain('data-testid="skill-tag"');

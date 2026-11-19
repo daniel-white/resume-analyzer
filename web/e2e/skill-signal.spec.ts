@@ -14,6 +14,9 @@ test("stored skills filter by contextual nature and focus their evidence", async
   await ready(page);
   const cloud = page.getByRole("region", { name: "Skills in this résumé" });
   await expect(cloud).toBeVisible();
+  // The evidence map sits in the same bordered, padded box as the model impression.
+  await expect(cloud).toHaveCSS("border-width", "1px");
+  await expect(cloud).toHaveCSS("border-radius", "14px");
   await expect(cloud.getByTestId("skill-tag")).toHaveCount(6);
 
   await cloud.getByRole("button", { name: /^People/ }).click();
