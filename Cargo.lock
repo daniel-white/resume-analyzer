@@ -124,6 +124,7 @@ dependencies = [
  "sections",
  "serde",
  "serde_json",
+ "skills",
  "sqlx",
  "storage",
  "stream-protocol",
@@ -5129,6 +5130,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "skills"
+version = "0.2.4"
+dependencies = [
+ "anyhow",
+ "domain",
+ "serde",
+ "serde_json",
+ "stream-protocol",
+ "tracing",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5463,6 +5476,7 @@ dependencies = [
  "reqwest 0.13.5",
  "serde",
  "serde_json",
+ "skills",
  "stream-protocol",
  "tracing",
  "tracing-subscriber",

@@ -22,6 +22,7 @@ import {
   type ResumeStatus,
   type ResumeSummary,
   type RunView,
+  type SkillSet,
   type Verdict,
 } from "./resumes";
 
@@ -553,6 +554,34 @@ describe("version selection", () => {
     };
     expect(teardown({ ...detail, versions: [withSummary] }, plugins, "version-1"))
       .toMatchObject({ profileSummary });
+  });
+
+  it("hides low-confidence skills from the page and comparison deltas", () => {
+    const skill = (name: string, canonical: string, confidence: number): SkillSet["skills"][number] => ({
+      name, canonical, category: "method", nature: "hard",
+      importance: 60, confidence, confidence_reason: "Grounded in the file.",
+      evidence: [{ section_id: "experience-1", quote: name }],
+    });
+    const set = (skills: SkillSet["skills"]): SkillSet => ({
+      engine: "skills-v1", model: "test", skills,
+    });
+    const oldVersion = {
+      ...version("complete", parse({}), [], "old.pdf", 1),
+      skills: set([skill("Faint signal", "faint-signal", 19), skill("Real skill", "real-skill", 70)]),
+    };
+    const newVersion = {
+      ...version("complete", parse({}), [], "new.pdf", 2),
+      skills: set([skill("Real skill", "real-skill", 90), skill("Fresh skill", "fresh-skill", 20)]),
+    };
+    const view = teardown({ ...detail, versions: [newVersion, oldVersion] }, plugins, "version-2");
+    if (view.kind !== "complete") throw new Error("expected complete view");
+
+    expect(newVersion.skills?.skills).toHaveLength(2);
+    expect(view.skills?.skills.map((item) => item.name)).toEqual(["Real skill", "Fresh skill"]);
+    expect(view.comparisonVersions[0]?.skills?.map((item) => item.name)).toEqual([
+      "Real skill", "Fresh skill",
+    ]);
+    expect(view.comparisonVersions[1]?.skills?.map((item) => item.name)).toEqual(["Real skill"]);
   });
 
   it("does not silently show the latest results for a missing version", () => {

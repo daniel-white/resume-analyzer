@@ -79,6 +79,10 @@ const server = createServer(async (request, response) => {
         if (body.onConnectResumes) seeded.onConnectResumes = body.onConnectResumes;
         for (const stream of seeded.streams) {
           if (body.event) stream.write(`event: ${body.event}\ndata: {}\n\n`);
+          for (const payload of body.frames ?? []) {
+            const data = JSON.stringify({ name: "GenerationStream", payload });
+            stream.write(`event: GenerationStream\ndata: ${data}\n\n`);
+          }
           if (body.disconnect) stream.end();
         }
         return send(response, 204, "");

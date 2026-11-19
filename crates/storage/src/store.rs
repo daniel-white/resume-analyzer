@@ -5,7 +5,8 @@ use domain::{
     AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, CallbackPayload, EventName,
     FeedbackAnalysis, GenerateMarkdownPayload, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary,
     ResumeDetail, ResumeMarkdown, ResumeStatus, ResumeSummary, RunPayload, RunStatus, RunView,
-    SectionKind, SectionMap, SectionVote, UploadedPayload, Verdict, VersionDetail, VersionSummary,
+    SectionKind, SectionMap, SectionVote, SkillSet, UploadedPayload, Verdict, VersionDetail,
+    VersionSummary,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -314,7 +315,7 @@ impl Store {
         };
         let versions = sqlx::query(
             "select id, number, filename, media_type, status, created_at, parse, sections,
-                    profile_summary
+                    profile_summary, skills
              from versions
              where resume_id = $1
              order by number desc",
@@ -386,6 +387,9 @@ impl Store {
                     }
                 });
             }
+            let skills: Option<SkillSet> = version
+                .try_get::<Option<Json<SkillSet>>, _>("skills")?
+                .map(|json| json.0);
             details.push(VersionDetail {
                 id: version_id,
                 number: version.try_get("number")?,
@@ -396,6 +400,7 @@ impl Store {
                 parse: parse.map(|json| json.0),
                 sections,
                 profile_summary,
+                skills,
                 runs: runs
                     .iter()
                     .filter(|run| run.try_get::<Uuid, _>("version_id").ok() == Some(version_id))
@@ -545,6 +550,16 @@ impl Store {
             .await?;
         }
         tx.commit().await?;
+        Ok(())
+    }
+
+    /// Store the validated skill map produced with the profile impression.
+    pub async fn save_skills(&self, version_id: Uuid, skills: &SkillSet) -> anyhow::Result<()> {
+        sqlx::query("update versions set skills = $2 where id = $1")
+            .bind(version_id)
+            .bind(jsonb(skills)?)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -2456,8 +2471,9 @@ mod tests {
             .await
             .unwrap();
 
-        // `create_resume` enqueues `ResumeUploaded` and `save_parse` enqueues
-        // `ResumeParsed`, so drain both before the thumbs down.
+        // `create_resume` enqueues `ResumeUploaded`; `save_parse` enqueues
+        // `ResumeParsed`. Drain both before the thumbs down so only feedback
+        // work remains.
         for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
             let claimed = store.claim().await.unwrap().unwrap();
             assert_eq!(claimed.name, expected);

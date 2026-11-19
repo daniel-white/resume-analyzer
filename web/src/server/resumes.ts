@@ -1,5 +1,6 @@
 import { apiFetch } from "./session";
 import { medianScore } from "../lib/grades";
+import { isPresentableConfidence } from "../lib/skill-confidence";
 
 export type ResumeStatus = "uploaded" | "parsed" | "running" | "complete";
 export type RunStatus = "requested" | "complete";
@@ -44,6 +45,48 @@ export type ProfileSummary = {
   engine: string;
   model: string;
   feedback?: SectionVote | null;
+};
+
+/** Job-agnostic: a chef's knife and a developer's editor are both tools. */
+export type SkillCategory =
+  | "tool"
+  | "method"
+  | "craft"
+  | "practice"
+  | "domain"
+  | "creative"
+  | "other";
+
+/** The second axis: how the skill functions in this particular résumé. */
+export type SkillNature = "technical" | "hard" | "people" | "soft" | "domain";
+
+export type SkillEvidence = {
+  section_id: string;
+  quote: string;
+};
+
+export type Skill = {
+  name: string;
+  canonical: string;
+  category: SkillCategory;
+  nature: SkillNature;
+  importance: number;
+  confidence: number;
+  confidence_reason: string;
+  evidence: SkillEvidence[];
+};
+
+export type SkillSet = {
+  skills: Skill[];
+  engine: string;
+  model: string;
+};
+
+export type SkillSummary = {
+  name: string;
+  canonical: string;
+  nature: SkillNature;
+  importance: number;
 };
 
 export type Section = {
@@ -114,6 +157,7 @@ export type VersionSummary = {
 
 export type ComparisonVersion = VersionSummary & {
   scores: { id: string; name: string; score: number | null }[];
+  skills?: SkillSummary[] | undefined;
 };
 
 export type ResumeSummary = {
@@ -141,6 +185,7 @@ export type VersionDetail = {
   parse: ParseInput | null;
   sections?: SectionMap | null | undefined;
   profile_summary?: ProfileSummary | null | undefined;
+  skills?: SkillSet | null | undefined;
   runs: RunView[];
 };
 
@@ -250,6 +295,7 @@ export type Teardown =
       parse?: ParseInput | null;
       sections: SectionMap | null;
       profileSummary: ProfileSummary | null;
+      skills: SkillSet | null;
       cards: VerdictCard[];
     };
 
@@ -400,6 +446,15 @@ export function pluginCards(plugins: Plugin[], runs: RunView[]): VerdictCard[] {
   });
 }
 
+/** Storage keeps every extraction; only confident skills reach the page. */
+function presentedSkills(set: SkillSet | null | undefined): SkillSet | null {
+  if (!set) return null;
+  return {
+    ...set,
+    skills: set.skills.filter((skill) => isPresentableConfidence(skill.confidence)),
+  };
+}
+
 export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: string): Teardown {
   const version = versionId
     ? detail.versions.find((item) => item.id === versionId)
@@ -420,6 +475,10 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
       scores: pluginCards(plugins, item.runs).map((card) => ({
         id: card.id, name: card.name, score: card.pending ? null : card.score,
       })),
+      skills: (presentedSkills(item.skills)?.skills ?? []).map((skill) => ({
+        name: skill.name, canonical: skill.canonical,
+        nature: skill.nature, importance: skill.importance,
+      })),
     })),
     filename: version.filename,
     file: {
@@ -431,6 +490,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     parse: version.parse,
     sections: version.sections ?? null,
     profileSummary: version.profile_summary ?? null,
+    skills: presentedSkills(version.skills),
     cards: pluginCards(plugins, version.runs),
   };
 }

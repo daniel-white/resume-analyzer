@@ -1,8 +1,9 @@
 import { ArrowDown, ArrowRight, ArrowUp, ChevronDown, GitCompareArrows, Minus, ScanText } from "lucide-react";
 import { useState } from "react";
 
+import { NATURE_LABELS } from "~/lib/skills";
 import { compareVersions, comparisonMessage } from "~/lib/version-comparison";
-import type { ComparisonVersion } from "~/server/resumes";
+import type { ComparisonVersion, SkillSummary } from "~/server/resumes";
 import { letterGrade, scoreTone } from "./score";
 
 const marked = new Set(["greenline", "levr", "workdaye", "ash", "smart_resume", "indy_hackers_hiring", "blast_track"]);
@@ -21,6 +22,17 @@ function ScoreChange({ delta }: { delta: number | null }) {
   return <span className={`score-change ${delta > 0 ? "up" : delta < 0 ? "down" : "unchanged"}`}>
     <Icon size={16} aria-hidden="true" />
     {delta === 0 ? "Unchanged" : `${delta > 0 ? "Up" : "Down"} ${Math.abs(delta)} ${Math.abs(delta) === 1 ? "point" : "points"}`}
+  </span>;
+}
+
+function SkillChip({ skill, suffix }: { skill: SkillSummary; suffix?: string }) {
+  return <span
+    className={`skill-change-chip skill-change-chip--${skill.nature}`}
+    data-testid="skill-change"
+    title={`${NATURE_LABELS[skill.nature]} skill`}
+  >
+    {skill.name}
+    {suffix ? <span className="skill-change-delta">{suffix}</span> : null}
   </span>;
 }
 
@@ -97,6 +109,38 @@ export function ResumeComparison({ versions, versionId }: {
         <td><ComparisonScore value={row.before} /></td><td><ComparisonScore value={row.after} /></td><td><ScoreChange delta={row.delta} /></td>
       </tr>)}</tbody>
     </table></div>
+    {(comparison.skills.added.length > 0
+      || comparison.skills.removed.length > 0
+      || comparison.skills.moved.length > 0) ? (
+      <div className="comparison-skills" aria-label="Skill changes between versions">
+        <p className="comparison-skills-heading">Skill signal changes</p>
+        {comparison.skills.added.length > 0 ? (
+          <p className="comparison-skill-group">
+            <span className="comparison-skill-label">Gained</span>
+            {comparison.skills.added.map((skill) => <SkillChip key={skill.canonical} skill={skill} />)}
+          </p>
+        ) : null}
+        {comparison.skills.moved.length > 0 ? (
+          <p className="comparison-skill-group">
+            <span className="comparison-skill-label">Changed importance</span>
+            {comparison.skills.moved.map((skill) => (
+              <SkillChip
+                key={skill.canonical}
+                skill={skill}
+                suffix={`${skill.delta > 0 ? "+" : ""}${skill.delta}`}
+              />
+            ))}
+          </p>
+        ) : null}
+        {comparison.skills.removed.length > 0 ? (
+          <p className="comparison-skill-group">
+            <span className="comparison-skill-label">No longer detected</span>
+            {comparison.skills.removed.map((skill) => <SkillChip key={skill.canonical} skill={skill} />)}
+          </p>
+        ) : null}
+        <p className="comparison-note">Importance is measured from evidence in each résumé, not from a job description.</p>
+      </div>
+    ) : null}
     <p className="comparison-note">Simulated ATS scores are feedback on parsing, not a measure of your potential or a prediction of hiring outcomes.</p>
     </details>
   </section>;

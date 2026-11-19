@@ -3,6 +3,21 @@
 Strict by default. `./scripts/check.sh` is the gate; a red gate is a blocker,
 not a follow-up. CI runs the same script.
 
+## Commits
+
+- Use semantic commit subjects for commits and pull requests:
+  `<type>(<optional scope>): <short imperative summary>`.
+- Types are `feat` (new behavior), `fix` (bug fix), `docs`, `test`, `refactor`,
+  `perf`, `build`, `ci`, and `chore`. Use `feat!` or `fix!`, or a
+  `BREAKING CHANGE:` footer, for breaking changes.
+- Keep the subject lowercase except proper nouns and acronyms, under 72
+  characters, with no trailing period. Describe the behavior change, not the
+  file list.
+- Use the body for motivation and tradeoffs. Keep one logical change per commit
+  and reference issues or pull requests in footers when useful.
+- Squash or rebase noisy work in progress before handoff. Never rewrite commits
+  already merged to `main`.
+
 ## Rust and Cargo
 
 - All workspace crates inherit `[workspace.lints]` from the root `Cargo.toml`.

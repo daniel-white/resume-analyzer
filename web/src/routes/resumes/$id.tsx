@@ -13,6 +13,7 @@ import { ResumeVersions } from "~/components/resume-versions";
 import { ResumeComparison } from "~/components/resume-comparison";
 import { ResumeStructure } from "~/components/resume-structure";
 import { ProfileSummaryCard } from "~/components/profile-summary";
+import { SkillCloud } from "~/components/skill-cloud";
 import { getTeardown } from "~/fns/resumes.functions";
 import type { SectionKind } from "~/server/resumes";
 
@@ -41,11 +42,21 @@ function TeardownPage() {
   const { id } = Route.useParams();
   const { provider } = Route.useSearch();
   const [highlightKind, setHighlightKind] = useState<SectionKind | null>(null);
+  const [focusedSectionId, setFocusedSectionId] = useState<string | null>(null);
   const isNotResume = view.profileSummary?.text?.startsWith(IS_NOT_RESUME_PREFIX) ?? false;
   const version = view.comparisonVersions.find((item) => item.id === view.versionId);
   const summaryPending = version?.status !== "complete";
 
-  useEffect(() => setHighlightKind(null), [view.versionId]);
+  useEffect(() => {
+    setHighlightKind(null);
+    setFocusedSectionId(null);
+  }, [view.versionId]);
+
+  function focusEvidence(sectionId: string) {
+    const section = view.sections?.sections.find((item) => item.id === sectionId);
+    setFocusedSectionId(sectionId);
+    if (section) setHighlightKind(section.kind);
+  }
 
   return (
     <Page wide>
@@ -59,7 +70,8 @@ function TeardownPage() {
       <LiveAnalysis
         key={view.versionId}
         resumeId={id}
-        active={view.comparisonVersions.some((version) => version.status !== "complete")}
+        active={view.comparisonVersions.some((version) => version.status !== "complete")
+          || (view.kind === "reading") || (view.skills === null && !isNotResume)}
       >
         <ProfileSummaryCard
           key={`summary-${view.versionId}`}
@@ -69,14 +81,25 @@ function TeardownPage() {
           pending={summaryPending}
         />
         {isNotResume ? null : (
-          <ResumeStructure
-            key={view.versionId}
-            fields={view.extract}
-            sections={view.sections}
-            resumeId={view.resumeId}
-            versionId={view.versionId}
-            onHighlight={setHighlightKind}
-          />
+          <>
+            <SkillCloud
+              key={`skills-${view.versionId}`}
+              skills={view.skills}
+              sections={view.sections}
+              versionId={view.versionId}
+              pending={view.kind === "reading"}
+              onFocusSection={focusEvidence}
+            />
+            <ResumeStructure
+              key={view.versionId}
+              fields={view.extract}
+              sections={view.sections}
+              resumeId={view.resumeId}
+              versionId={view.versionId}
+              onHighlight={setHighlightKind}
+              selectedId={focusedSectionId}
+            />
+          </>
         )}
       </LiveAnalysis>
       <div className="desk-split resume-content">

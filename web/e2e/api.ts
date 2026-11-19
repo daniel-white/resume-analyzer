@@ -58,6 +58,97 @@ const designedParse = {
   layout_confidence: "structural" as const,
 };
 
+const designedSections = {
+  engine: "sections-v1",
+  model: "qwen2.5:0.5b",
+  sections: [
+    {
+      id: "experience-1",
+      kind: "experience" as const,
+      heading: "Experience",
+      body: "Analyst",
+      confidence: 0.9,
+      feedback: null,
+    },
+    {
+      id: "skills-1",
+      kind: "skills" as const,
+      heading: "Skills",
+      body: "Analytical Engines, Data visualization",
+      confidence: 0.9,
+      feedback: null,
+    },
+  ],
+};
+
+/** Deliberately spans every job-agnostic category and contextual nature. */
+export const designedSkills = {
+  engine: "skills-v1",
+  model: "qwen2.5:0.5b",
+  skills: [
+    {
+      name: "Analytical engines",
+      canonical: "analytical-engines",
+      category: "tool" as const,
+      nature: "technical" as const,
+      importance: 88,
+      confidence: 92,
+      confidence_reason: "Named tool with a dedicated skills section.",
+      evidence: [{ section_id: "skills-1", quote: "Analytical Engines" }],
+    },
+    {
+      name: "Stakeholder education",
+      canonical: "stakeholder-education",
+      category: "practice" as const,
+      nature: "people" as const,
+      importance: 76,
+      confidence: 84,
+      confidence_reason: "Shown through work with stakeholders.",
+      evidence: [{ section_id: "experience-1", quote: "Analyst" }],
+    },
+    {
+      name: "Clear technical writing",
+      canonical: "clear-technical-writing",
+      category: "craft" as const,
+      nature: "soft" as const,
+      importance: 64,
+      confidence: 78,
+      confidence_reason: "Clear writing shown in the experience entry.",
+      evidence: [{ section_id: "experience-1", quote: "Analyst" }],
+    },
+    {
+      name: "Risk analysis",
+      canonical: "risk-analysis",
+      category: "method" as const,
+      nature: "hard" as const,
+      importance: 80,
+      confidence: 88,
+      confidence_reason: "Central to the described analytical work.",
+      evidence: [{ section_id: "experience-1", quote: "Analyst" }],
+    },
+    {
+      name: "Computing history",
+      canonical: "computing-history",
+      category: "domain" as const,
+      nature: "domain" as const,
+      importance: 52,
+      confidence: 70,
+      confidence_reason: "Domain knowledge supported by the role history.",
+      evidence: [{ section_id: "experience-1", quote: "Analyst" }],
+    },
+    {
+      name: "Data visualization",
+      canonical: "data-visualization",
+      category: "creative" as const,
+      nature: "hard" as const,
+      importance: 61,
+      confidence: 65,
+      confidence_reason: "Named in the skills list but not shown in an accomplishment.",
+      evidence: [{ section_id: "skills-1", quote: "Data visualization" }],
+    },
+  ],
+};
+
 function run(pluginId: string, scored: Verdict | null, parse: typeof designedParse | null = null) {
   return {
     id: `run-${pluginId}`,
@@ -92,6 +183,8 @@ function resume(input: {
       feedback: null,
     } : null,
     runs: input.runs,
+    sections: input.parse ? designedSections : null,
+    skills: input.parse ? designedSkills : null,
   };
   return {
     id: input.id,
@@ -131,6 +224,16 @@ export const stored = resume({
 type SeedVersion = (typeof designed)["versions"][number];
 export type SeedResume = Omit<typeof designed, "versions"> & { versions: SeedVersion[] };
 
+/** A GenerationStream frame the stub can push to every open SSE connection. */
+export type SeedFrame = {
+  resume_id: string;
+  version_id: string;
+  flow: "summary" | "feedback" | "skills";
+  section_id: string | null;
+  seq: number;
+  event: { type: string } & Record<string, unknown>;
+};
+
 export type ApiOptions = {
   signedIn?: boolean;
   resumes?: SeedResume[];
@@ -161,7 +264,13 @@ export async function installApi(page: Page, options: ApiOptions = {}) {
     },
   ]);
   return {
-    update: async (data: { resumes?: SeedResume[]; onConnectResumes?: SeedResume[]; event?: string; disconnect?: boolean }) => {
+    update: async (data: {
+      resumes?: SeedResume[];
+      onConnectResumes?: SeedResume[];
+      event?: string;
+      frames?: SeedFrame[];
+      disconnect?: boolean;
+    }) => {
       const result = await page.request.post(`${api}/__seed/${id}`, { data });
       if (!result.ok()) throw new Error(`update failed: ${result.status()}`);
     },

@@ -82,6 +82,26 @@ impl Emitter for BusEmitter {
     }
 }
 
+/// One model reply feeds two live cards: prose to the impression card and skill
+/// fields to the tag cloud. The skills stage belongs to the second card.
+#[derive(Clone)]
+struct ImpressionEmitter {
+    summary: BusEmitter,
+    skills: BusEmitter,
+}
+
+impl Emitter for ImpressionEmitter {
+    fn emit(&self, event: &ModelEvent) {
+        match event {
+            ModelEvent::Field { name, .. } if name == "skill" || name == "skills" => {
+                self.skills.emit(event);
+            }
+            ModelEvent::Stage { label } if label == "mapping" => self.skills.emit(event),
+            _ => self.summary.emit(event),
+        }
+    }
+}
+
 pub struct Worker {
     store: Store,
     objects: Arc<dyn Objects>,
@@ -287,58 +307,80 @@ impl Worker {
         let detector = self.detector.clone();
         let summarizer = self.summarizer.clone();
         let summary_parse = parse.clone();
-        // One span per upload, so every summary.chat span below is attributable
-        // to the resume and version that triggered it.
+        // One span per upload, so every model span below is attributable to the
+        // resume and version that triggered it.
         let span = span!(
             Level::INFO,
-            "resume.upload.summary",
+            "resume.upload.impression",
             resume_id = %event.resume_id,
             version_id = %event.version_id,
             engine = field::Empty,
             model = field::Empty,
+            skills = field::Empty,
         );
         let _enter = span.enter();
-        let emitter = Arc::new(BusEmitter::new(
+        let summary_emitter = Arc::new(BusEmitter::new(
             &self.bus,
             event.resume_id,
             event.version_id,
             "summary",
             None,
         ));
-        emitter.emit(&ModelEvent::Stage {
-            label: "queued".to_owned(),
+        let skills_emitter = Arc::new(BusEmitter::new(
+            &self.bus,
+            event.resume_id,
+            event.version_id,
+            "skills",
+            None,
+        ));
+        for emitter in [&summary_emitter, &skills_emitter] {
+            emitter.emit(&ModelEvent::Stage {
+                label: "queued".to_owned(),
+            });
+        }
+        let stream = Arc::new(ImpressionEmitter {
+            summary: (*summary_emitter).clone(),
+            skills: (*skills_emitter).clone(),
         });
-        let stream = emitter.clone();
         let generated = tokio::task::spawn_blocking(move || {
             let sections = detector.detect_document(&lines);
-            let summary = summarizer.generate_with(&summary_parse, &sections, stream.as_ref())?;
-            Ok::<_, anyhow::Error>((sections, summary))
+            let impression =
+                summarizer.generate_with(&summary_parse, &sections, stream.as_ref())?;
+            Ok::<_, anyhow::Error>((sections, impression))
         })
         .await
-        .map_err(|err| anyhow::anyhow!("summary generation failed: {err}"))?;
-        let (sections, profile_summary) = match generated {
+        .map_err(|err| anyhow::anyhow!("profile impression generation failed: {err}"))?;
+        let (sections, impression) = match generated {
             Ok(value) => value,
             Err(err) => {
-                emitter.emit(&ModelEvent::Error {
-                    message: "Couldn't finish your profile summary.".to_owned(),
-                });
+                for emitter in [&summary_emitter, &skills_emitter] {
+                    emitter.emit(&ModelEvent::Error {
+                        message: "Couldn't finish your profile impression.".to_owned(),
+                    });
+                }
                 return Err(err);
             }
         };
-        span.record("engine", &profile_summary.engine);
-        span.record("model", &profile_summary.model);
-        info!("profile summary generated");
+        span.record("engine", &impression.profile_summary.engine);
+        span.record("model", &impression.profile_summary.model);
+        span.record("skills", impression.skills.skills.len());
+        info!("profile impression generated");
         self.store
             .save_parse(
                 event.version_id,
                 &parse,
                 Some(&sections),
-                Some(&profile_summary),
+                Some(&impression.profile_summary),
             )
             .await?;
-        emitter.emit(&ModelEvent::Stage {
-            label: "complete".to_owned(),
-        });
+        self.store
+            .save_skills(event.version_id, &impression.skills)
+            .await?;
+        for emitter in [&summary_emitter, &skills_emitter] {
+            emitter.emit(&ModelEvent::Stage {
+                label: "complete".to_owned(),
+            });
+        }
         Ok(())
     }
 

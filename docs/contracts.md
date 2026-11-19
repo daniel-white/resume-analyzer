@@ -66,7 +66,8 @@ than or equal to 1. `name`, `email`, and `phone` are strings or null.
 ## Events
 
 `name` is exactly one of `ResumeUploaded`, `ResumeParsed`, `AtsRunRequested`,
-`AtsCallbackReceived`.
+`AtsCallbackReceived`, `GenerateMarkdown`, `AnalyzeFeedback`,
+`GenerationStream`.
 
 ```json
 {
@@ -87,6 +88,9 @@ Payloads:
 | `ResumeParsed` | `{ "parse": ParseInput }` |
 | `AtsRunRequested` | `{ "run_id", "plugin_id" }` |
 | `AtsCallbackReceived` | `{ "run_id", "plugin_id", "parse": ParseInput, "verdict": Verdict }` |
+| `GenerateMarkdown` | `{ "version_id" }` |
+| `AnalyzeFeedback` | `{ "version_id", "user_id", "section_id", "section_heading", "section_kind" }` |
+| `GenerationStream` | a `GenerationFrame`, described with the SSE stream below |
 
 `media_type` is `application/pdf` or
 `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
@@ -100,6 +104,22 @@ The plugin reads the file itself and does not receive the verification parse.
 It posts the signed callback to that URL. The worker does not store the
 in-process return value. An empty verification parse still fans out. Nothing
 waits for the user to approve it. A new version does not rerun the previous one.
+
+`ResumeUploaded` reads the file once, detects sections, and makes one combined
+model request for the profile impression: owner-facing prose, a verbatim-quoted
+skill per `field` event, and the progress stages. Rust drops any skill whose
+quote is not found in the cited stored section, merges aliases, and computes
+importance from prominence and evidence breadth. The one returned
+`ProfileImpression` is saved as the profile summary and the validated skill set;
+there is no second model read and no separate skill outbox event. A skill quoted
+solely from a bare list is kept but flagged as needing a concrete example in the
+UI. Confidence below 20% is also kept in the stored set, but Rust drops those
+skill frames from `GenerationStream` and the page hides them; the threshold is
+inclusive, so 20% is presented. An empty, fully grounded result is valid; a
+model that invents every quote is an error and neither reading is saved. Live
+frames route by content: prose, `is_resume`, and the `reading` and `understanding`
+stages go to the `summary` flow, while skill fields and the `mapping` stage go
+to the `skills` flow. `queued` and `complete` stages are sent to both flows.
 
 When the registry gains a plugin, an authenticated detail visit reconciles the
 newest parsed version with the active registry. Missing runs and their
@@ -222,6 +242,8 @@ GET /api/resumes/:id
       "status": "running",
       "created_at": "...",
       "parse": null,
+      "sections": null,
+      "skills": null,
       "runs": [
         {
           "id": "uuid",
@@ -241,7 +263,37 @@ GET /api/resumes/:id
 stored and no vendor has been requested yet. A run's `status` is `requested` or
 `complete`. The version's `parse` is the verification ParseInput, or null while
 the file is still unread. A run's `parse` is what that plugin read, or null.
-`verdict` is a Verdict or null. Runs belong to one version.
+`verdict` is a Verdict or null. Runs belong to one version. `sections` is the
+app's `SectionMap` (detected headings, kinds, and bodies), or null while unread.
+`skills` is the validated `SkillSet`, or null until the upload's combined
+impression finishes:
+
+```json
+{
+  "engine": "ollama",
+  "model": "llama-3.2-3b-instruct-q4_k_m",
+  "skills": [{
+    "name": "Triage",
+    "canonical": "triage",
+    "category": "method",
+    "nature": "hard",
+    "importance": 86,
+    "confidence": 91,
+    "confidence_reason": "Grounded in a concrete accomplishment.",
+    "evidence": [{ "section_id": "uuid", "quote": "Triaged patients in the emergency department." }]
+  }]
+}
+```
+
+`category` is job-agnostic: `tool`, `method`, `craft`, `practice`, `domain`,
+`creative`, or `other`. `nature` is the contextual second axis: `technical`,
+`hard`, `people`, `soft`, or `domain`. `importance` and `confidence` are 0–100;
+`importance` is computed in Rust, not by the model or the UI. `confidence_reason`
+is the model's short explanation of its confidence and is stored for review.
+Each `evidence` quote is copied verbatim from the cited `sections` entry. The
+comparison view sends a compact summary (`name`, `canonical`, `nature`,
+`importance`) of presented skills per version and derives gained, lost, and
+shifted tags from it.
 
 ```text
 GET /api/resumes/:id/events
@@ -252,8 +304,8 @@ id is the event id, and `data` is the event object. The stream is a live hint
 only: it does not replay. The page loads `GET /api/resumes/:id` and then
 subscribes. A resume owned by someone else is `404`.
 
-Summary and feedback generations also emit `GenerationStream` events on this
-channel. Their `payload` is a `GenerationFrame`:
+Summary, feedback, and skill generations also emit `GenerationStream` events on
+this channel. Their `payload` is a `GenerationFrame`:
 
 ```json
 {
@@ -273,8 +325,8 @@ channel. Their `payload` is a `GenerationFrame`:
 }
 ```
 
-`flow` is `summary` or `feedback`; `section_id` is null for summary runs and
-set for a voted-down section diagnosis. `seq` increases per run and lets the
+`flow` is `summary`, `feedback`, or `skills`; `section_id` is null for summary
+and skill runs and set for a voted-down section diagnosis. `seq` increases per run and lets the
 client discard duplicates or late frames. `event` is one NDJSON line parsed
 from the model: `stage`, `delta`, `field`, `done`, or an app-generated `error`.
 Summary deltas use field `profile_text` and `field` events set `is_resume`;
@@ -283,6 +335,35 @@ fields are also concatenated as prose, because small models often emit a whole
 paragraph this way instead of many `delta` lines. The worker emits `queued` first and
 `complete` only after the final text has been written to Postgres. These
 frames are hints; authoritative results remain in the resume detail response.
+
+The skill flow emits one `field` event named `skill` per tag, with an object as
+`value` instead of a string:
+
+```json
+{
+  "type": "field",
+  "name": "skill",
+  "value": {
+    "name": "Triage",
+    "canonical": "triage",
+    "category": "method",
+    "nature": "hard",
+    "prominence": 5,
+    "confidence": 91,
+    "confidence_reason": "Grounded in a concrete accomplishment.",
+    "evidence": [{ "section_id": "uuid", "quote": "Triaged patients..." }]
+  }
+}
+```
+
+The client treats these as provisional: each frame pops a new tag into the
+cloud while quote validation and importance scoring finish on the server. The
+worker drops skill frames under 20% confidence before they reach the event
+stream, though those skills remain in the stored set. A
+tag is only authoritative once `versions.skills` appears on the next detail
+read. `prominence` (1–5) sizes live tags; the stored `importance` (0–100)
+replaces it. `nature` may be omitted by a small model, in which case the client
+and server both derive it from `category`.
 
 Diagnosis text is admin-only. Admins subscribe to the separate
 `GET /api/admin/events` stream, which is session-cookie protected and forwards

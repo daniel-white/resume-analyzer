@@ -1358,3 +1358,180 @@ select {
   .profile-summary-text.is-live > :last-child::after,
   .admin-analysis-text::after { animation: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Skill Signal: a live tag cloud with a second, contextual axis. Category
+   colours the tag, nature outlines it; new tags pop in and push neighbours.
+   --------------------------------------------------------------------------- */
+
+/* The same clearly labelled surrounding box as the model impression, so the
+   evidence map reads as its own panel rather than loose tags on the page. */
+.skill-cloud {
+  margin-top: 1rem;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid #c8d3b5;
+  border-radius: 14px;
+  background: linear-gradient(115deg, #f5f8ee 0%, #fffef9 72%);
+  box-shadow: 0 6px 24px #20251e05;
+}
+.skill-cloud-heading { display: flex; align-items: center; gap: 0.75rem; }
+.skill-cloud.is-streaming { border-color: #244f4255; box-shadow: 0 12px 34px #244f4210; }
+.skill-cloud-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: var(--secondary);
+  color: #244f42;
+}
+.skill-cloud-eyebrow {
+  margin: 0 0 0.15rem;
+  color: #244f42;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.skill-cloud h2 { margin: 0; font-family: var(--font-serif); font-size: var(--type-section); font-weight: 400; }
+
+.skill-filters { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.35rem 0 0.9rem; }
+.skill-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fffef9;
+  color: var(--muted-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 160ms, border-color 160ms, color 160ms;
+}
+.skill-filter:hover:not(:disabled) { border-color: #a5b08a; color: var(--foreground); }
+.skill-filter:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.skill-filter:disabled { opacity: 0.45; cursor: default; }
+.skill-filter.is-active { border-color: #244f42; background: #244f42; color: #fff; }
+.skill-filter-count { font-family: var(--font-mono); font-size: 0.65rem; opacity: 0.75; }
+
+.skill-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem 0.6rem; margin: 0; padding: 0; list-style: none; }
+.skill-tags > li { display: inline-flex; }
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef1e7;
+  color: #2f3a24;
+  font-family: var(--font-sans);
+  line-height: 1.25;
+  white-space: nowrap;
+  cursor: pointer;
+  transform-origin: center;
+  animation: skill-pop-in 320ms cubic-bezier(0.22, 1.4, 0.36, 1) both;
+  transition: transform 200ms, box-shadow 200ms, background 160ms;
+}
+.skill-tag:hover { transform: translateY(-2px); box-shadow: 0 4px 12px #244f4218; }
+.skill-tag:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.skill-tag.is-selected { border-color: #244f42; box-shadow: 0 0 0 2px #244f4233; }
+.skill-tag.is-live { cursor: default; background: #e7f3ec; color: #17543a; }
+.skill-tag--tool { background: #e8eef5; color: #24405c; }
+.skill-tag--method { background: #f2ecf7; color: #4d3568; }
+.skill-tag--craft { background: #f6efe3; color: #63461f; }
+.skill-tag--practice { background: #e6f1ec; color: #20513c; }
+.skill-tag--domain { background: #f6e9e7; color: #6d332c; }
+.skill-tag--creative { background: #f5e8f0; color: #6a2f52; }
+.skill-tag--other { background: #eeeee9; color: #45473c; }
+.skill-tag--technical { border-color: #87b8a0; }
+.skill-tag--hard { border-color: #c9a66b; }
+.skill-tag--people { border-color: #b98cbf; }
+.skill-tag--soft { border-color: #9ab0d0; }
+
+@keyframes skill-pop-in {
+  0% { opacity: 0; transform: scale(0.4) rotate(-8deg); }
+  60% { opacity: 1; transform: scale(1.12) rotate(2deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+
+.skill-note { margin: 0.8rem 0 0; color: var(--muted-foreground); font-size: 0.78rem; line-height: 1.5; }
+.skill-note--warn { color: #8a5a12; }
+.skill-pending { margin: 0.9rem 0 0; color: var(--muted-foreground); font-size: 0.85rem; }
+.skill-evidence {
+  margin-top: 0.9rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcf7;
+  animation: live-surface-in 240ms ease both;
+}
+.skill-evidence-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.skill-evidence-kind {
+  color: var(--muted-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.skill-evidence ul { display: grid; gap: 0.6rem; margin: 0; padding: 0; list-style: none; }
+.skill-evidence blockquote {
+  margin: 0;
+  padding-left: 0.7rem;
+  border-left: 2px solid #a5b08a;
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.skill-evidence button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #244f42;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.skill-evidence button:hover { text-decoration: underline; }
+
+.comparison-skills { margin: 1rem 0; padding: 0.85rem 0.9rem; border: 1px solid var(--border); border-radius: 10px; background: var(--secondary); }
+.comparison-skills-heading { margin: 0 0 0.55rem; font-size: 0.8rem; font-weight: 600; }
+.comparison-skill-group { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.45rem 0; font-size: 0.78rem; }
+.comparison-skill-label { flex: 0 0 8.5rem; color: var(--muted-foreground); }
+.skill-change-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #a5b08a;
+  border-radius: 999px;
+  background: #fffef9;
+}
+.skill-change-delta { font-family: var(--font-mono); font-size: 0.7rem; color: #244f42; }
+.skill-change-chip--technical { border-color: #87b8a0; }
+.skill-change-chip--hard { border-color: #c9a66b; }
+.skill-change-chip--people { border-color: #b98cbf; }
+.skill-change-chip--soft { border-color: #9ab0d0; }
+.skill-change-chip--domain { border-color: #c98d85; }
+
+@media (prefers-reduced-motion: reduce) {
+  .skill-tag, .skill-evidence { animation: none; }
+  .skill-tag { transition: none; }
+  .skill-tag:hover { transform: none; }
+}
