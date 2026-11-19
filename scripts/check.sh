@@ -27,6 +27,7 @@ run_web=0
 run_helm=0
 run_factory=0
 run_demo=0
+run_notes=0
 
 base=""
 if git rev-parse --verify --quiet main >/dev/null; then
@@ -59,12 +60,16 @@ if [[ -n "$base" && "$(git rev-parse HEAD)" != "$(git rev-parse "$base")" ]]; th
   if printf '%s\n' "$files" | grep -Eq '^(deploy/helm/|scripts/check\.sh$)'; then
     run_helm=1
   fi
+  if printf '%s\n' "$files" | grep -Eq '^(CHANGELOG\.md$|version\.txt$|release-notes/|scripts/release-notes(\.prompt\.md|\.test\.mjs|\.mjs)$|web/src/generated/release-notes\.md$)'; then
+    run_notes=1
+  fi
 else
   run_rust=1
   run_web=1
   run_helm=1
   run_factory=1
   run_demo=1
+  run_notes=1
 fi
 
 if [[ ! -f Cargo.toml ]]; then
@@ -83,7 +88,7 @@ if [[ ! -f scripts/demo_test.sh ]]; then
   run_demo=0
 fi
 
-if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_helm" == 0 && "$run_factory" == 0 && "$run_demo" == 0 ]]; then
+if [[ "$run_rust" == 0 && "$run_web" == 0 && "$run_helm" == 0 && "$run_factory" == 0 && "$run_demo" == 0 && "$run_notes" == 0 ]]; then
   echo "check: nothing to build"
   exit 0
 fi
@@ -118,7 +123,17 @@ if [[ "$run_web" == 1 && "$strict" == 1 ]]; then
   (cd web && pnpm typecheck)
 fi
 
+if [[ "$run_notes" == 1 && "$strict" == 1 ]]; then
+  echo "check: release notes are deterministic"
+  node scripts/release-notes.mjs check
+fi
+
 # -------------------------------------------------------------- behavior phase
+if [[ "$run_notes" == 1 && "$behavior" == 1 ]]; then
+  echo "check: release notes parsing"
+  node --test scripts/release-notes.test.mjs
+fi
+
 if [[ "$run_rust" == 1 && "$behavior" == 1 ]]; then
   echo "check: rust tests"
   cargo test --workspace

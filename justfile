@@ -23,6 +23,12 @@ template:
 check:
     ./scripts/check.sh
 
+# Regenerate and verify the About page release notes from CHANGELOG.md.
+# The LLM editing step runs only in the release-please workflow.
+release-notes:
+    node scripts/release-notes.mjs generate
+    node scripts/release-notes.mjs check
+
 # Install the fast pre-commit preflight. CI remains the full gate.
 hooks:
     ./scripts/install-hooks.sh

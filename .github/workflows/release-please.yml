@@ -13,6 +13,10 @@ jobs:
       contents: write      # create tags, releases, and push version commits
       pull-requests: write # open and update version PRs
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
       # The rust strategy cannot bump workspaces whose members inherit versions
       # via `version.workspace = true` (googleapis/release-please#2111), so the
       # simple strategy bumps Cargo.toml, Cargo.lock and Chart.yaml through the
@@ -20,7 +24,64 @@ jobs:
       # Keep draft releases off: GitHub does not create a git tag for a draft
       # release until it is published, so release-please cannot find the last
       # release on the next run and re-bootstraps the whole changelog.
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           config-file: release-please-config.json
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: cache release-notes model
+        if: ${{ steps.release.outputs.pull_request_number != '' }}
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .release-notes-model
+          key: llama-q4_k_m-eb72f2a08dd2b9edd07ffacfe5aa56938b7939b0
+      # The About page ships a markdown file generated from CHANGELOG.md. On
+      # every release-please PR run a local llama.cpp server rewrites the draft
+      # into crisp, user-facing markdown. The generator strips hashes, PR
+      # numbers, links, and internal work before anything reaches the bundle;
+      # the result is committed to the release PR, so builds are reproducible
+      # and never call an LLM at verification or build time.
+      - name: refresh release notes on the release PR
+        if: ${{ steps.release.outputs.pull_request_number != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.release.outputs.pull_request_number }}
+        run: |
+          set -euo pipefail
+          gh pr checkout "$PR_NUMBER"
+          version=$(tr -d '[:space:]' < version.txt)
+
+          model_dir=.release-notes-model
+          model_file="$model_dir/llama-3.2-3b-instruct-q4_k_m.gguf"
+          mkdir -p "$model_dir"
+          if [[ ! -f "$model_file" || $(stat -c%s "$model_file") -lt 1000000000 ]]; then
+            curl --fail --location --http1.1 \
+              --retry 5 --retry-all-errors --retry-delay 5 \
+              --output "$model_file.partial" \
+              "https://huggingface.co/hugging-quants/Llama-3.2-3B-Instruct-Q4_K_M-GGUF/resolve/eb72f2a08dd2b9edd07ffacfe5aa56938b7939b0/llama-3.2-3b-instruct-q4_k_m.gguf?download=true"
+            mv "$model_file.partial" "$model_file"
+          fi
+
+          docker run -d --name release-notes-llama --network host \
+            -v "$PWD/$model_dir:/models:ro" \
+            ghcr.io/ggml-org/llama.cpp:server@sha256:5b43086e3ba7ea5794d72904654f6cd41224a9b1c6ac0398f4940ee380d30f23 \
+            -m /models/llama-3.2-3b-instruct-q4_k_m.gguf \
+            --host 127.0.0.1 --port 8080 -c 8192 -np 1 -ngl 0 -b 512 -ub 512
+          for _ in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8080/health >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:8080/health >/dev/null
+
+          node scripts/release-notes.mjs edit
+          node scripts/release-notes.mjs check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "release-notes/${version}.md" web/src/generated/release-notes.md
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): refine notes for v${version}"
+            git push origin "HEAD:$(git branch --show-current)"
+          fi
