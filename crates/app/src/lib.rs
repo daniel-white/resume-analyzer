@@ -8,6 +8,7 @@ mod config;
 mod health;
 mod objects;
 mod providers;
+mod version;
 mod worker;
 
 use std::net::SocketAddr;
@@ -80,6 +81,7 @@ pub fn api_router(api: Arc<Api>) -> Router {
         )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
+        .route("/api/version", get(version::route))
         .route("/api/uploads", post(api::stage_resume))
         .route("/api/callbacks/{plugin_id}", post(api::callback))
         .merge(auth_api::routes())

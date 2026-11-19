@@ -304,6 +304,20 @@ GET /api/plugins
 This build compiles in one plugin, `stub`. The four simulated systems replace
 it without changing this document. Each of them receives the raw file.
 
+```text
+GET /api/version
+```
+
+Build metadata for the About page. No session or database is required.
+
+```json
+{ "version": "0.2.4", "commit": "9f3c1a2", "dev": true }
+```
+
+`version` is the workspace semver from `Cargo.toml`. `commit` is the first seven
+characters of the git commit, or `unknown` when the build has no git metadata.
+`dev` is true for local builds and false for release images.
+
 ## Verdict
 
 ```json

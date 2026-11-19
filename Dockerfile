@@ -34,6 +34,12 @@ COPY --from=planner /src/recipe.json recipe.json
 RUN --mount=type=cache,id=resume-analyzer-cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=resume-analyzer-cargo-git,target=/usr/local/cargo/git,sharing=locked \
     cargo chef cook --release --locked --recipe-path recipe.json -p app
+# vergen reads VERGEN_GIT_SHA instead of discovering .git, which is not in the
+# build context. DEV_BUILD keeps local and release images distinguishable.
+ARG GIT_SHA=unknown
+ARG DEV_BUILD=true
+ENV VERGEN_GIT_SHA=${GIT_SHA}
+ENV DEV_BUILD=${DEV_BUILD}
 # Keep the cook layer independent of the commit timestamp. SOURCE_DATE_EPOCH
 # is only consumed by the source build below.
 ARG SOURCE_DATE_EPOCH=0
