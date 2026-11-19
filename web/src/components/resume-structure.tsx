@@ -18,6 +18,7 @@ export function ResumeStructure({
   versionId,
   onHighlight,
   initialSelectedId = null,
+  selectedId: controlledId,
 }: {
   sections: SectionMap | null;
   fields?: ExtractField[] | null;
@@ -25,19 +26,30 @@ export function ResumeStructure({
   versionId: string;
   onHighlight: (kind: DetectedSection["kind"] | null) => void;
   initialSelectedId?: string | null;
+  /** When present, the page owns the open section (skill evidence can focus one). */
+  selectedId?: string | null;
 }) {
   const [map, setMap] = useState<SectionMap | null>(sections);
-  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
+  const [internalId, setInternalId] = useState<string | null>(initialSelectedId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const selectedId = controlledId === undefined ? internalId : controlledId;
 
   // Initialize selectedId only once on mount, not on every sections change
   useEffect(() => {
     setMap(sections);
   }, [sections]);
 
-  if (initialSelectedId && !selectedId) {
-    setSelectedId(initialSelectedId);
+  useEffect(() => {
+    if (!selectedId || typeof document === "undefined") return;
+    document.getElementById(`structure-button-${selectedId}`)?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  }, [selectedId]);
+
+  if (controlledId === undefined && initialSelectedId && !internalId) {
+    setInternalId(initialSelectedId);
   }
 
   if (!map || map.sections.length === 0) {
@@ -58,7 +70,7 @@ export function ResumeStructure({
 
   function select(section: DetectedSection) {
     const next = selectedId === section.id ? null : section.id;
-    setSelectedId(next);
+    if (controlledId === undefined) setInternalId(next);
     onHighlight(next ? section.kind : null);
   }
 
@@ -103,6 +115,7 @@ export function ResumeStructure({
             <li key={section.id}>
               <button
                 type="button"
+                id={`structure-button-${section.id}`}
                 className={cn("structure-section", open && "is-selected")}
                 aria-expanded={open}
                 aria-controls={open ? `structure-body-${section.id}` : undefined}

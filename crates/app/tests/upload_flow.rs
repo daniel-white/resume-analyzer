@@ -6,6 +6,7 @@ use std::sync::Arc;
 use app::{Api, Bus, Worker, api_router, compiled_plugins};
 use domain::{DOCX, PDF};
 use futures_util::StreamExt;
+use skills::SkillExtractor;
 use storage::MemoryObjects;
 use summary::SummaryGenerator;
 use testcontainers_modules::postgres::Postgres;
@@ -92,12 +93,11 @@ async fn chat_sink() -> String {
                         length = value.trim().parse().unwrap_or(0);
                     }
                 }
-                if length > 0 {
-                    let mut body = vec![0u8; length];
-                    if reader.read_exact(&mut body).await.is_err() {
-                        return;
-                    }
+                let mut body = vec![0u8; length];
+                if length > 0 && reader.read_exact(&mut body).await.is_err() {
+                    return;
                 }
+                let request = String::from_utf8_lossy(&body);
                 // Between 50 and 260 words: the generator rejects shorter text.
                 let profile = "Ada Lovelace writes careful, well-tested systems and explains her \
                     decisions clearly. She has spent several years building backend services, data \
@@ -106,11 +106,46 @@ async fn chat_sink() -> String {
                     reliable pieces, to review code with empathy, and to leave each project easier \
                     to operate than she found it. She documents tradeoffs, measures before \
                     optimizing, and keeps the people using her software in view.";
-                let content = serde_json::json!({
-                    "is_resume": true,
-                    "profile_text": profile,
-                })
-                .to_string();
+                let content = if request.contains("skill-extractor-v1") {
+                    // Quote a line from the request's own sections so the
+                    // extractor's evidence validation accepts this fixture.
+                    let sections = serde_json::from_str::<serde_json::Value>(&request)
+                        .ok()
+                        .and_then(|json| json["messages"][1]["content"].as_str().map(str::to_owned))
+                        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+                        .and_then(|json| json["resume"]["sections"].as_array().cloned());
+                    let first = sections.and_then(|list| list.first().cloned());
+                    match first {
+                        Some(section) => {
+                            let id = section["id"].as_str().unwrap_or("section-1");
+                            let text = section["text"].as_str().unwrap_or("");
+                            let quote = text.lines().next().unwrap_or(text).trim();
+                            if quote.is_empty() {
+                                serde_json::json!({ "skills": [] }).to_string()
+                            } else {
+                                serde_json::json!({
+                                    "skills": [{
+                                        "name": "Analytical engines",
+                                        "canonical": "analytical-engines",
+                                        "category": "tool",
+                                        "nature": "technical",
+                                        "prominence": 4,
+                                        "confidence": 85,
+                                        "evidence": [{ "section_id": id, "quote": quote }],
+                                    }],
+                                })
+                                .to_string()
+                            }
+                        }
+                        None => serde_json::json!({ "skills": [] }).to_string(),
+                    }
+                } else {
+                    serde_json::json!({
+                        "is_resume": true,
+                        "profile_text": profile,
+                    })
+                    .to_string()
+                };
                 let reply = serde_json::json!({
                     "choices": [{ "message": { "content": content } }],
                 })
@@ -313,9 +348,11 @@ async fn blast_track_reconciles_a_completed_resume_and_completes_new_uploads() {
         bus.clone(),
         base.clone(),
     )
-    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+    .skills(SkillExtractor::from_env_with(&chat, "stub"));
     let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
-        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
+        .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+        .skills(SkillExtractor::from_env_with(&chat, "stub"));
     let client = reqwest::Client::new();
     let accepted = upload(&base, &cookie, "before.pdf", &plain_pdf()).await;
     let id = accepted["id"].as_str().unwrap();
@@ -541,6 +578,7 @@ async fn upload_reaches_a_callback() {
     let chat = chat_sink().await;
     let worker = Worker::new(store.clone(), objects, plugins, bus, base.clone())
         .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+        .skills(SkillExtractor::from_env_with(&chat, "stub"))
         .notifications(
             mail::Smtp::new("127.0.0.1", smtp_port),
             "http://127.0.0.1:3000",
@@ -670,7 +708,8 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
         bus.clone(),
         old_base.clone(),
     )
-    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"));
+    .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+    .skills(SkillExtractor::from_env_with(&chat, "stub"));
     let old = upload(&old_base, &cookie, "old.pdf", &plain_pdf()).await;
     old_worker.drain().await.unwrap();
     let client = reqwest::Client::new();
@@ -756,6 +795,7 @@ async fn indy_hackers_hiring_reconciles_old_resumes_and_completes_new_uploads() 
     assert!(healthy, "provider never became healthy");
     let worker = Worker::new(store.clone(), objects, active, bus, base.clone())
         .summarizer(SummaryGenerator::from_env_with(&chat, "stub"))
+        .skills(SkillExtractor::from_env_with(&chat, "stub"))
         .endpoints(HashMap::from([("indy_hackers_hiring".into(), endpoint)]));
     let detail_url = format!("{base}/api/resumes/{}", old_detail.id);
     assert_eq!(

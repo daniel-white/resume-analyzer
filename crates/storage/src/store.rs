@@ -2,10 +2,11 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, CallbackPayload, EventName,
-    FeedbackAnalysis, GenerateMarkdownPayload, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary,
-    ResumeDetail, ResumeMarkdown, ResumeStatus, ResumeSummary, RunPayload, RunStatus, RunView,
-    SectionKind, SectionMap, SectionVote, UploadedPayload, Verdict, VersionDetail, VersionSummary,
+    AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, AnalyzeSkillsPayload,
+    CallbackPayload, EventName, FeedbackAnalysis, GenerateMarkdownPayload, PROFILE_SUMMARY_ID,
+    ParseInput, ProfileSummary, ResumeDetail, ResumeMarkdown, ResumeStatus, ResumeSummary,
+    RunPayload, RunStatus, RunView, SectionKind, SectionMap, SectionVote, SkillSet,
+    UploadedPayload, Verdict, VersionDetail, VersionSummary,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -314,7 +315,7 @@ impl Store {
         };
         let versions = sqlx::query(
             "select id, number, filename, media_type, status, created_at, parse, sections,
-                    profile_summary
+                    profile_summary, skills
              from versions
              where resume_id = $1
              order by number desc",
@@ -386,6 +387,9 @@ impl Store {
                     }
                 });
             }
+            let skills: Option<SkillSet> = version
+                .try_get::<Option<Json<SkillSet>>, _>("skills")?
+                .map(|json| json.0);
             details.push(VersionDetail {
                 id: version_id,
                 number: version.try_get("number")?,
@@ -396,6 +400,7 @@ impl Store {
                 parse: parse.map(|json| json.0),
                 sections,
                 profile_summary,
+                skills,
                 runs: runs
                     .iter()
                     .filter(|run| run.try_get::<Uuid, _>("version_id").ok() == Some(version_id))
@@ -544,7 +549,37 @@ impl Store {
             )
             .await?;
         }
+        // A second, independent model call. It is queued with the parse so it
+        // can retry without ever holding up ATS fanout or callback storage.
+        let skills_queued = sqlx::query(
+            "select 1 as present from outbox where version_id = $1 and name = 'AnalyzeSkills' limit 1",
+        )
+        .bind(version_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if skills_queued.is_none() {
+            let payload = serde_json::to_value(AnalyzeSkillsPayload { version_id })?;
+            enqueue(
+                &mut tx,
+                resume_id,
+                version_id,
+                EventName::AnalyzeSkills,
+                &payload,
+            )
+            .await?;
+        }
         tx.commit().await?;
+        Ok(())
+    }
+
+    /// Store one validated skill map. A retry of `AnalyzeSkills` replaces the
+    /// earlier map rather than appending duplicate skills.
+    pub async fn save_skills(&self, version_id: Uuid, skills: &SkillSet) -> anyhow::Result<()> {
+        sqlx::query("update versions set skills = $2 where id = $1")
+            .bind(version_id)
+            .bind(jsonb(skills)?)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
@@ -1827,6 +1862,11 @@ mod tests {
         store.finish(claimed.id, claimed.token).await.unwrap();
         let run = store.claim().await.unwrap().unwrap();
         store.finish(run.id, run.token).await.unwrap();
+        // `save_parse` queues skill extraction as its own outbox event. Drain
+        // it before the ATS run so the callback fixture gets a RunPayload.
+        let skills = store.claim().await.unwrap().unwrap();
+        assert_eq!(skills.name, EventName::AnalyzeSkills);
+        store.finish(skills.id, skills.token).await.unwrap();
         let requested = store.claim().await.unwrap().unwrap();
         let payload: RunPayload = serde_json::from_value(requested.payload).unwrap();
         store.finish(requested.id, requested.token).await.unwrap();
@@ -2456,9 +2496,14 @@ mod tests {
             .await
             .unwrap();
 
-        // `create_resume` enqueues `ResumeUploaded` and `save_parse` enqueues
-        // `ResumeParsed`, so drain both before the thumbs down.
-        for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
+        // `create_resume` enqueues `ResumeUploaded`; `save_parse` enqueues
+        // `ResumeParsed` and the separate `AnalyzeSkills` call. Drain all three
+        // before the thumbs down so only feedback work remains.
+        for expected in [
+            EventName::ResumeUploaded,
+            EventName::ResumeParsed,
+            EventName::AnalyzeSkills,
+        ] {
             let claimed = store.claim().await.unwrap().unwrap();
             assert_eq!(claimed.name, expected);
             store.finish(claimed.id, claimed.token).await.unwrap();
@@ -2592,7 +2637,11 @@ mod tests {
             .save_parse(other_version, &parse, Some(&sections), Some(&summary))
             .await
             .unwrap();
-        for expected in [EventName::ResumeUploaded, EventName::ResumeParsed] {
+        for expected in [
+            EventName::ResumeUploaded,
+            EventName::ResumeParsed,
+            EventName::AnalyzeSkills,
+        ] {
             let claimed = store.claim().await.unwrap().unwrap();
             assert_eq!(claimed.name, expected);
             store.finish(claimed.id, claimed.token).await.unwrap();

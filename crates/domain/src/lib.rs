@@ -179,6 +179,8 @@ pub enum EventName {
     ResumeParsed,
     AtsRunRequested,
     AtsCallbackReceived,
+    /// Extract evidence-backed skills from the parsed version.
+    AnalyzeSkills,
     /// Build the version's markdown rendering, once after the first thumbs down.
     GenerateMarkdown,
     /// Diagnose one thumbs down with the markdown and the original resume.
@@ -196,6 +198,7 @@ impl EventName {
             Self::ResumeParsed => "ResumeParsed",
             Self::AtsRunRequested => "AtsRunRequested",
             Self::AtsCallbackReceived => "AtsCallbackReceived",
+            Self::AnalyzeSkills => "AnalyzeSkills",
             Self::GenerateMarkdown => "GenerateMarkdown",
             Self::AnalyzeFeedback => "AnalyzeFeedback",
             Self::GenerationStream => "GenerationStream",
@@ -209,6 +212,7 @@ impl EventName {
             "ResumeParsed" => Self::ResumeParsed,
             "AtsRunRequested" => Self::AtsRunRequested,
             "AtsCallbackReceived" => Self::AtsCallbackReceived,
+            "AnalyzeSkills" => Self::AnalyzeSkills,
             "GenerateMarkdown" => Self::GenerateMarkdown,
             "AnalyzeFeedback" => Self::AnalyzeFeedback,
             "GenerationStream" => Self::GenerationStream,
@@ -483,6 +487,125 @@ pub struct ProfileSummary {
     pub feedback: Option<SectionVote>,
 }
 
+/// Broad, job-agnostic buckets for a skill tag. Every occupation is welcome:
+/// a chef's knife, a nurse's triage protocol, and a developer's language are
+/// all tools or methods here, never assumed to be software.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillCategory {
+    Tool,
+    Method,
+    Craft,
+    Practice,
+    Domain,
+    Creative,
+    Other,
+}
+
+impl SkillCategory {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Tool => "Tool",
+            Self::Method => "Method",
+            Self::Craft => "Craft",
+            Self::Practice => "Practice",
+            Self::Domain => "Domain",
+            Self::Creative => "Creative",
+            Self::Other => "Other",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value.trim().to_ascii_lowercase().as_str() {
+            "tool" | "tools" | "technology" => Self::Tool,
+            "method" | "methods" => Self::Method,
+            "craft" | "trade" => Self::Craft,
+            "practice" | "practices" => Self::Practice,
+            "domain" => Self::Domain,
+            "creative" => Self::Creative,
+            "other" => Self::Other,
+            _ => return None,
+        })
+    }
+}
+
+/// How a skill functions in this résumé's story. This is a second axis beside
+/// `SkillCategory`: a chef's knife is a tool and technical, while patient
+/// education is a practice and people-shaped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillNature {
+    Technical,
+    Hard,
+    People,
+    Soft,
+    Domain,
+}
+
+impl SkillNature {
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Technical => "Technical",
+            Self::Hard => "Hard",
+            Self::People => "People",
+            Self::Soft => "Soft",
+            Self::Domain => "Domain",
+        }
+    }
+
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        Some(match value.trim().to_ascii_lowercase().as_str() {
+            "technical" | "tech" => Self::Technical,
+            "hard" => Self::Hard,
+            "people" | "leadership" => Self::People,
+            "soft" => Self::Soft,
+            "domain" => Self::Domain,
+            _ => return None,
+        })
+    }
+}
+
+/// A verbatim snippet from one detected section that supports a skill. The
+/// generator validates the quote against the stored section before saving it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillEvidence {
+    pub section_id: String,
+    pub quote: String,
+}
+
+/// One extracted skill. `name` is as written in the résumé; `canonical` merges
+/// aliases such as `Postgres` and `PostgreSQL`. `importance` is computed in
+/// Rust from the model's prominence and the evidence, not invented by the UI.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Skill {
+    pub name: String,
+    pub canonical: String,
+    pub category: SkillCategory,
+    /// Contextual role of the skill: technical, hard, people, soft, or domain.
+    pub nature: SkillNature,
+    pub importance: u8,
+    pub confidence: u8,
+    pub evidence: Vec<SkillEvidence>,
+}
+
+/// All validated skills for one version, with the model that produced them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillSet {
+    pub skills: Vec<Skill>,
+    pub engine: String,
+    pub model: String,
+}
+
+/// Extract the skill map once a version has a parse and section reading.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnalyzeSkillsPayload {
+    pub version_id: Uuid,
+}
+
 /// A markdown rendering of the detected sections. Built once per version,
 /// after the first thumbs down, so a feedback analysis reads the same sections
 /// the user saw instead of re-parsing the file.
@@ -579,6 +702,9 @@ pub struct VersionDetail {
     pub sections: Option<SectionMap>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile_summary: Option<ProfileSummary>,
+    /// Evidence-backed skill map, when the model has finished it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skills: Option<SkillSet>,
     pub runs: Vec<RunView>,
 }
 
@@ -648,6 +774,7 @@ mod tests {
             EventName::ResumeParsed,
             EventName::AtsRunRequested,
             EventName::AtsCallbackReceived,
+            EventName::AnalyzeSkills,
             EventName::GenerateMarkdown,
             EventName::AnalyzeFeedback,
             EventName::GenerationStream,

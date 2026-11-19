@@ -12,12 +12,13 @@ function frame(
   seq: number,
   event: GenerationFrame["event"],
   flow: GenerationFrame["flow"] = "feedback",
+  sectionId: string | null = flow === "summary" ? null : "section-1",
 ): GenerationFrame {
   return {
     resume_id: "resume-1",
     version_id: "version-1",
     flow,
-    section_id: flow === "summary" ? null : "section-1",
+    section_id: sectionId,
     seq,
     event,
   };
@@ -70,6 +71,38 @@ describe("generation stream", () => {
       frame(3, { type: "field", name: "profile_text", value: "systems." }, "summary"),
     );
     expect(run.text).toBe("You build systems.");
+  });
+
+  it("accumulates one live skill per streamed skill field", () => {
+    const key = liveKey("skills", "version-1");
+    let run = applyFrame(seedRun(key), frame(1, { type: "stage", label: "mapping" }, "skills", null));
+    run = applyFrame(run, frame(2, {
+      type: "field",
+      name: "skill",
+      value: {
+        name: "Triage", category: "method", nature: "hard",
+        prominence: 5, confidence: 90,
+      },
+    }, "skills", null));
+    run = applyFrame(run, frame(3, {
+      type: "field",
+      name: "skill",
+      value: {
+        name: "Triage", category: "method", nature: "hard",
+        prominence: 5, confidence: 90,
+      },
+    }, "skills", null));
+    run = applyFrame(run, frame(4, {
+      type: "field",
+      name: "skill",
+      value: { name: "Patient education", category: "practice", nature: "people" },
+    }, "skills", null));
+    run = applyFrame(run, frame(5, { type: "field", name: "skill", value: { name: 42 } }, "skills", null));
+
+    expect(run.skills).toHaveLength(2);
+    expect(run.skills[0]).toMatchObject({ key: "triage", nature: "hard", prominence: 5 });
+    expect(run.skills[1]).toMatchObject({ key: "patient-education", nature: "people" });
+    expect(run.text).toBe("");
   });
 
   it("surfaces model errors as a finished run", () => {

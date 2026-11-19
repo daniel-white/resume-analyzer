@@ -10,13 +10,14 @@ use std::time::Duration;
 use base64::Engine;
 use chrono::Utc;
 use domain::{
-    AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
-    RunPayload, UploadedPayload,
+    AnalyzeFeedbackPayload, AnalyzeSkillsPayload, Ats, EventName, EventRecord,
+    GenerateMarkdownPayload, ResumeFile, RunPayload, UploadedPayload,
 };
 use feedback::{FeedbackAnalyzer, markdown};
 use plugins::structure;
 use sections::SectionDetector;
 use serde::Serialize;
+use skills::SkillExtractor;
 use storage::{Objects, Store};
 use stream_protocol::{Emitter, ModelEvent};
 use summary::SummaryGenerator;
@@ -94,6 +95,7 @@ pub struct Worker {
     detector: SectionDetector,
     summarizer: SummaryGenerator,
     feedback: FeedbackAnalyzer,
+    skills: SkillExtractor,
 }
 
 impl Worker {
@@ -116,6 +118,7 @@ impl Worker {
             detector: SectionDetector::heuristic(),
             summarizer: SummaryGenerator::from_env(),
             feedback: FeedbackAnalyzer::from_env(),
+            skills: SkillExtractor::from_env(),
         }
     }
 
@@ -141,6 +144,14 @@ impl Worker {
     #[must_use]
     pub fn feedback(mut self, feedback: FeedbackAnalyzer) -> Self {
         self.feedback = feedback;
+        self
+    }
+
+    /// The skill extractor that maps evidence to tags. Tests override it to
+    /// point at a stub chat endpoint.
+    #[must_use]
+    pub fn skills(mut self, skills: SkillExtractor) -> Self {
+        self.skills = skills;
         self
     }
 
@@ -222,6 +233,7 @@ impl Worker {
             EventName::ResumeParsed => self.parsed(event).await,
             EventName::AtsRunRequested => self.requested(event).await,
             EventName::AtsCallbackReceived => Ok(()),
+            EventName::AnalyzeSkills => self.analyze_skills(event).await,
             EventName::GenerateMarkdown => self.generate_markdown(event).await,
             EventName::AnalyzeFeedback => self.analyze_feedback(event).await,
             // Live frames are published directly, never queued in the outbox.
@@ -345,6 +357,48 @@ impl Worker {
     async fn parsed(&self, event: &EventRecord) -> anyhow::Result<()> {
         let ids: Vec<&str> = self.plugins.iter().map(|plugin| plugin.id()).collect();
         self.store.fanout(event.version_id, &ids).await
+    }
+
+    /// Map evidence to skills in its own outbox event. Each model field frame
+    /// is streamed to the browser as it arrives, so tags can appear one by one
+    /// before the validated set is stored.
+    async fn analyze_skills(&self, event: &EventRecord) -> anyhow::Result<()> {
+        let payload: AnalyzeSkillsPayload = serde_json::from_value(event.payload.clone())?;
+        let Some((parse, sections)) = self.store.parse_and_sections(payload.version_id).await?
+        else {
+            return Ok(());
+        };
+        let emitter = Arc::new(BusEmitter::new(
+            &self.bus,
+            event.resume_id,
+            event.version_id,
+            "skills",
+            None,
+        ));
+        emitter.emit(&ModelEvent::Stage {
+            label: "queued".to_owned(),
+        });
+        let extractor = self.skills.clone();
+        let stream = emitter.clone();
+        let attempted = tokio::task::spawn_blocking(move || {
+            extractor.generate_with(&parse, &sections, stream.as_ref())
+        })
+        .await
+        .map_err(|err| anyhow::anyhow!("skills generation panicked: {err}"))?;
+        let skills = match attempted {
+            Ok(value) => value,
+            Err(err) => {
+                emitter.emit(&ModelEvent::Error {
+                    message: "Couldn't finish your skill map.".to_owned(),
+                });
+                return Err(err);
+            }
+        };
+        self.store.save_skills(payload.version_id, &skills).await?;
+        emitter.emit(&ModelEvent::Stage {
+            label: "complete".to_owned(),
+        });
+        Ok(())
     }
 
     /// Build the markdown rendering once, then diagnose every down vote that

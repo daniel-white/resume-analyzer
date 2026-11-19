@@ -28,6 +28,7 @@ mail = { path = "../mail" }
 plugins = { path = "../plugins" }
 reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
 sections = { path = "../models/sections" }
+skills = { path = "../models/skills" }
 summary = { path = "../models/summary" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -49,6 +50,7 @@ http-body-util = "0.1"
 mail = { path = "../mail" }
 reqwest = { version = "0.13", default-features = false, features = ["json", "multipart", "rustls", "stream"] }
 serde_json = "1"
+skills = { path = "../models/skills" }
 storage = { path = "../storage" }
 testcontainers-modules = { version = "0.15", features = ["postgres"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time"] }

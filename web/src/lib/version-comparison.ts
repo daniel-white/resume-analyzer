@@ -1,6 +1,7 @@
 import type { ComparisonVersion } from "~/server/resumes";
 
 import { medianScore } from "./grades";
+import { skillDiff } from "./skills";
 
 export function compareVersions(from: ComparisonVersion, to: ComparisonVersion) {
   const rows = from.scores.map((system) => {
@@ -23,6 +24,7 @@ export function compareVersions(from: ComparisonVersion, to: ComparisonVersion) 
     down: matched.filter((row) => row.delta < 0).length,
     unchanged: matched.filter((row) => row.delta === 0).length,
     matched: matched.length,
+    skills: skillDiff(from.skills ?? [], to.skills ?? []),
   };
 }
 

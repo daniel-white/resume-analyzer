@@ -168,13 +168,17 @@ pub async fn serve() {
     let analyzer = feedback::FeedbackAnalyzer::from_env();
     let warming = analyzer.clone();
     tokio::task::spawn_blocking(move || warming.warm());
+    let skill_extractor = skills::SkillExtractor::from_env();
+    let warming = skill_extractor.clone();
+    tokio::task::spawn_blocking(move || warming.warm());
     let worker = Arc::new(
         Worker::new(store, objects, plugins, bus, callback)
             .endpoints(fleet.endpoints)
             .notifications(api.mail.clone(), &config.app_origin)
             .detector(detector)
             .summarizer(summarizer)
-            .feedback(analyzer),
+            .feedback(analyzer)
+            .skills(skill_extractor),
     );
     worker.spawn();
     let cleanup_api = api.clone();

@@ -4,8 +4,12 @@ import { describe, expect, it } from "vitest";
 import type { ComparisonVersion } from "~/server/resumes";
 import { ResumeComparison } from "./resume-comparison";
 
-function version(number: number, scores: ComparisonVersion["scores"]): ComparisonVersion {
-  return { id: `v${number}`, number, filename: "resume.pdf", status: "complete", created_at: "2026-11-07", scores };
+function version(
+  number: number,
+  scores: ComparisonVersion["scores"],
+  skills: ComparisonVersion["skills"] = [],
+): ComparisonVersion {
+  return { id: `v${number}`, number, filename: "resume.pdf", status: "complete", created_at: "2026-11-07", scores, skills };
 }
 
 describe("comparison rows", () => {
@@ -21,6 +25,27 @@ describe("comparison rows", () => {
     expect(html).toContain('comparison-numeric-score">77</span>');
     expect(html).toContain('comparison-numeric-score">93</span>');
     expect(html).toContain("Up 16 points");
+  });
+
+  it("shows gained, shifted and lost skills beside the score changes", () => {
+    const html = renderToStaticMarkup(<ResumeComparison versionId="v2" versions={[
+      version(1, [{ id: "greenline", name: "Greenline", score: 70 }], [
+        { name: "Charting", canonical: "charting", nature: "hard", importance: 70 },
+        { name: "Triage", canonical: "triage", nature: "hard", importance: 50 },
+      ]),
+      version(2, [{ id: "greenline", name: "Greenline", score: 70 }], [
+        { name: "Triage", canonical: "triage", nature: "hard", importance: 82 },
+        { name: "Mentoring", canonical: "mentoring", nature: "people", importance: 60 },
+      ]),
+    ]} />);
+    expect(html).toContain("Skill signal changes");
+    expect(html).toContain("Gained");
+    expect(html).toContain("Mentoring");
+    expect(html).toContain("Changed importance");
+    expect(html).toContain("+32");
+    expect(html).toContain("No longer detected");
+    expect(html).toContain("Charting");
+    expect(html).toContain("data-testid=\"skill-change\"");
   });
 
   it("uses a fallback icon for unknown systems and leaves missing scores pending", () => {

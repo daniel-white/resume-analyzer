@@ -11,7 +11,17 @@ export type ModelEvent =
   | { type: "done" }
   | { type: "error"; message: string };
 
-export type GenerationFlow = "summary" | "feedback";
+export type GenerationFlow = "summary" | "feedback" | "skills";
+
+/** One skill as it streams in. The validated score arrives with the stored map. */
+export type LiveSkill = {
+  key: string;
+  name: string;
+  category: string;
+  nature: string;
+  prominence: number;
+  confidence: number;
+};
 
 export type GenerationFrame = {
   resume_id: string;
@@ -26,6 +36,7 @@ export type LiveRun = {
   key: string;
   stages: string[];
   text: string;
+  skills: LiveSkill[];
   done: boolean;
   error: string | null;
   seq: number;
@@ -65,6 +76,7 @@ export function seedRun(key: string): LiveRun {
     key,
     stages: ["queued"],
     text: "",
+    skills: [],
     done: false,
     error: null,
     seq: 0,
@@ -105,6 +117,14 @@ export function applyFrame(run: LiveRun | undefined, frame: GenerationFrame): Li
       next.done = true;
       break;
     case "field": {
+      // The skill model sends one object per tag, so each frame is one tag.
+      if (frame.flow === "skills" && event.name === "skill") {
+        const skill = liveSkill(event.value);
+        if (skill && !next.skills.some((item) => item.key === skill.key)) {
+          next.skills = [...next.skills, skill].slice(0, 40);
+        }
+        break;
+      }
       // Small models sometimes put the whole prose in a `field` instead of
       // `delta`. Accept the string form for the flow's text field so the live
       // view and the final result agree.
@@ -117,9 +137,39 @@ export function applyFrame(run: LiveRun | undefined, frame: GenerationFrame): Li
   return next;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function numberIn(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/** Validate a streamed skill object before it becomes a live tag. */
+function liveSkill(value: unknown): LiveSkill | null {
+  if (!isRecord(value) || typeof value["name"] !== "string") return null;
+  const name = value["name"].trim();
+  if (!name || name.length > 60) return null;
+  const key = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!key) return null;
+  return {
+    key,
+    name,
+    category: typeof value["category"] === "string" ? value["category"] : "tool",
+    nature: typeof value["nature"] === "string" ? value["nature"] : "",
+    prominence: numberIn(value["prominence"], 1, 5, 3),
+    confidence: numberIn(value["confidence"], 0, 100, 50),
+  };
+}
+
 const STAGE_LABELS: Record<string, string> = {
   queued: "Getting ready",
   reading: "Reading the document",
+  mapping: "Finding your skills",
   understanding: "Finding the through-line",
   comparing: "Comparing against the original",
   diagnosing: "Working out what went wrong",
