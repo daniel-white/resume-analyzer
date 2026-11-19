@@ -109,5 +109,21 @@ jobs:
             -e DATABASE_URL -e CARGO_TERM_COLOR -e RUSTFLAGS -e CI=true \
             "${CI_IMAGE}" \
             bash -lc 'git config --global --add safe.directory /workspace && nix develop .#default --command ./scripts/check.sh strict'
+      # The strict container runs as root and writes through the host mounts
+      # above. Restore the runner user's ownership before the host-side behavior
+      # step reuses those caches; otherwise pnpm/cargo get EACCES updating them.
+      - name: restore host ownership after strict checks
+        run: |
+          for path in \
+            target \
+            web/node_modules \
+            "$HOME/.cargo/registry" \
+            "$HOME/.cargo/git" \
+            "$HOME/.local/share/pnpm/store"
+          do
+            if [[ -e "$path" ]]; then
+              sudo chown -R "$(id -u):$(id -g)" "$path"
+            fi
+          done
       - name: gate - tests, e2e, factory, demo
         run: nix develop --command ./scripts/check.sh behavior
