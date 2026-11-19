@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { BookOpen } from "lucide-react";
+import { Tabs } from "radix-ui";
+import Markdown from "react-markdown";
 
 import { Page } from "~/components/page";
 import { PublicHeader } from "~/components/public-header";
+import releaseNotes from "~/generated/release-notes.md?raw";
 import { getBackendBuild, type BuildInfo } from "~/fns/version.functions";
 import { frontendBuild } from "~/server/version";
 
@@ -12,7 +15,7 @@ export const Route = createFileRoute("/about")({
       { title: "About — The Other Read" },
       {
         name: "description",
-        content: "Version, build, license, and copyright information for The Other Read.",
+        content: "Version, build, license, and release notes for The Other Read.",
       },
     ],
   }),
@@ -40,19 +43,35 @@ function AboutPage() {
           </div>
         </header>
 
-        <div className="about-sections">
-          <section className="about-section" aria-labelledby="about-build-title">
-            <h2 className="about-section-title" id="about-build-title">Build information</h2>
-            <BuildRows frontend={frontendBuild} backend={backend} dev={dev} />
-          </section>
+        <Tabs.Root defaultValue="general" className="about-tabs">
+          <Tabs.List className="about-tab-list" aria-label="About sections">
+            <Tabs.Trigger className="about-tab" value="general">General</Tabs.Trigger>
+            <Tabs.Trigger className="about-tab" value="changelog">Changelog</Tabs.Trigger>
+            <Tabs.Trigger className="about-tab" value="license">License</Tabs.Trigger>
+            <Tabs.Trigger className="about-tab" value="build">Build</Tabs.Trigger>
+          </Tabs.List>
 
-          <section className="about-section" aria-labelledby="about-license-title">
-            <h2 className="about-section-title" id="about-license-title">License</h2>
+          <Tabs.Content className="about-tab-panel" value="general">
+            <p>The Other Read turns a résumé into a clearer, structured read with a model you control.</p>
+            <p>Copyright © 2026 The Other Read contributors. Released under the MIT License.</p>
+          </Tabs.Content>
+
+          <Tabs.Content className="about-tab-panel about-changelog" value="changelog">
+            <Markdown allowedElements={["h2", "h3", "p", "ul", "li", "strong", "em"]} unwrapDisallowed>
+              {releaseNotes}
+            </Markdown>
+          </Tabs.Content>
+
+          <Tabs.Content className="about-tab-panel" value="license">
             <p>MIT License. Copyright © 2026 The Other Read contributors.</p>
             <p>Permission is granted, free of charge, to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of this software, provided that the copyright notice and this permission notice are included in all copies or substantial portions of the software.</p>
             <p>The software is provided “as is”, without warranty of any kind.</p>
-          </section>
-        </div>
+          </Tabs.Content>
+
+          <Tabs.Content className="about-tab-panel" value="build">
+            <BuildRows frontend={frontendBuild} backend={backend} dev={dev} />
+          </Tabs.Content>
+        </Tabs.Root>
       </section>
     </Page>
   );
