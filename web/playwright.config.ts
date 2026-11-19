@@ -12,6 +12,9 @@ export default defineConfig({
   forbidOnly: !!process.env["CI"],
   retries: process.env["CI"] ? 1 : 0,
   reporter: process.env["CI"] ? "line" : "list",
+  // Eight workers made upload and admin clicks flaky under local load; four
+  // finishes the suite faster in practice because there is less contention.
+  workers: 4,
   use: {
     baseURL,
     trace: "on-first-retry",

@@ -89,6 +89,10 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, { plugins });
     }
 
+    if (pathname === "/api/version" && method === "GET") {
+      return sendJson(response, 200, { version: "4.5.6", commit: "abc1234", dev: true });
+    }
+
     const scenario = scenarios.get(seedId(request));
     if (!scenario) return sendJson(response, 401, { error: "unauthorized" });
 
@@ -173,6 +177,16 @@ const server = createServer(async (request, response) => {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
       if (!scenario.admin) return sendJson(response, 403, { error: "forbidden" });
       return sendJson(response, 200, { feedback: scenario.adminFeedback ?? [] });
+    }
+
+    if (pathname === "/api/admin/events" && method === "GET") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      if (!scenario.admin) return sendJson(response, 403, { error: "forbidden" });
+      response.writeHead(200, { "content-type": "text/event-stream", "cache-control": "private, no-store" });
+      response.write(": connected\n\n");
+      scenario.streams.add(response);
+      response.on("close", () => scenario.streams.delete(response));
+      return;
     }
 
     const adminAnalysis = pathname.match(/^\/api\/admin\/feedback\/analyses\/([^/]+)$/);
