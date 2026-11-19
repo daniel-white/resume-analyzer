@@ -804,6 +804,7 @@ select {
 .account-trigger { color: var(--ink); border-color: #20251e40; background: transparent; border-radius: 6px; min-height: 44px; }
 .account-trigger:hover, .account-trigger[data-state="open"] { color: var(--ink); background: var(--secondary); }
 .public-navigation { justify-content: space-between; }
+.public-links { display: inline-flex; align-items: center; gap: 22px; }
 .public-home { display: inline-flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600; text-decoration: none; }
 .public-home:hover { text-decoration: underline; text-underline-offset: 5px; }
 .account-menu, .delete-menu, .confirmation-dialog { color: var(--ink); border-color: var(--border); box-shadow: 0 12px 40px #20251e15; }
@@ -1023,6 +1024,58 @@ select {
 .structure-section:hover { border-color: #a5b08a; }
 .structure-section:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .structure-section.is-selected { border-color: #596d36; background: var(--secondary); box-shadow: inset 3px 0 0 #596d36; }
+
+/* About: Windows-dialog framing on an ordinary, non-modal page. */
+.about-window {
+  width: min(100%, 520px);
+  margin: 48px auto 72px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 18px 50px #20251e1f, 0 2px 6px #20251e14;
+}
+.about-titlebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+  padding: 0 10px 0 14px;
+  background: var(--ink);
+  color: #fffdf8;
+}
+.about-titlebar-icon { display: grid; place-items: center; color: var(--lime); }
+.about-titlebar h1 { flex: 1; margin: 0; font-family: var(--font-sans); font-size: 12px; font-weight: 600; }
+.about-close { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; color: inherit; }
+.about-close:hover { background: #fffdf820; }
+.about-content { padding-bottom: 4px; }
+.about-hero { display: flex; align-items: center; gap: 14px; padding: 24px 24px 20px; border-bottom: 1px solid #e4e6dd; }
+.about-app-icon { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border-radius: 12px; background: var(--ink); color: var(--lime); }
+.about-app-name { margin: 0; font-family: var(--font-serif); font-size: 22px; line-height: 1.2; }
+.about-tagline { margin: 3px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.about-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.about-badge { padding: 2px 8px; border-radius: 999px; background: var(--lime); color: var(--ink); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; }
+.about-badge-dev { border: 1px solid #e8c46a; background: #fff4d6; color: #7a5200; }
+.about-pane { padding: 20px 24px; }
+.about-section-title { margin: 0 0 12px; color: #596d36; font-family: var(--font-sans); font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+.about-rows { display: grid; gap: 8px; margin: 0 0 22px; }
+.about-rows > div { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding-bottom: 7px; border-bottom: 1px solid #eff0e9; }
+.about-rows dt { color: var(--muted-foreground); font-size: 12px; }
+.about-rows dd { margin: 0; font-size: 12px; font-weight: 600; text-align: right; }
+.about-rows code { padding: 1px 5px; border-radius: 4px; background: #f2f3ec; font-family: var(--font-mono); font-size: 11px; font-weight: 400; user-select: text; }
+.about-license { padding-top: 4px; }
+.about-license p { margin: 0 0 8px; color: var(--muted-foreground); font-size: 12px; line-height: 1.65; }
+.about-license p:first-of-type { color: var(--ink); font-weight: 600; }
+.about-actions { display: flex; justify-content: flex-end; padding: 12px 24px 20px; border-top: 1px solid #e4e6dd; }
+.about-ok { min-width: 84px; padding: 8px 18px; border-radius: 6px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 600; text-align: center; text-decoration: none; }
+.about-ok:hover { background: #39402f; }
+@media (max-width: 640px) {
+  .about-window { margin-block: 24px 48px; }
+  .about-hero { padding: 20px; }
+  .about-pane, .about-actions { padding-inline: 20px; }
+  .about-rows > div { gap: 8px; }
+  .about-rows dt, .about-rows dd { font-size: 11px; }
+}
 .structure-kind {
   flex: none;
   padding: 0.15rem 0.4rem;
