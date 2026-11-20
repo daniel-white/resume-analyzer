@@ -237,6 +237,23 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 200, { vote: body.vote });
     }
 
+    const checklistItem = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/checklist\/([^/]+)$/);
+    if (checklistItem && method === "PATCH") {
+      if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
+      const found = scenario.resumes.find((item) => item.id === decodeURIComponent(checklistItem[1]));
+      const version = found?.versions.find((item) => item.id === decodeURIComponent(checklistItem[2]));
+      const item = version?.checklist?.find((entry) => entry.id === decodeURIComponent(checklistItem[3]));
+      if (!item) return sendJson(response, 404, { error: "missing" });
+      const body = await readJson(request);
+      if (typeof body.done !== "boolean" || typeof body.answer !== "string") {
+        return send(response, 400, "Invalid checklist update");
+      }
+      item.done = body.done;
+      item.answer = body.answer.trim() || null;
+      item.checked_at = item.done ? "2026-11-08T00:00:00Z" : null;
+      return sendJson(response, 200, item);
+    }
+
     const file = pathname.match(/^\/api\/resumes\/([^/]+)\/versions\/([^/]+)\/file$/);
     if (file && method === "GET") {
       if (!scenario.signedIn) return sendJson(response, 401, { error: "unauthorized" });
