@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { draftMarkdown, normalizeMarkdown, parseChangelog, stripRefs } from "./release-notes.mjs";
+import {
+  assertCleanMarkdown,
+  draftMarkdown,
+  normalizeMarkdown,
+  parseChangelog,
+  stripRefs,
+  unwrapModelContent,
+} from "./release-notes.mjs";
 
 const changelog = `# Changelog
 
@@ -88,6 +95,32 @@ test("a user-facing bullet containing the word build is kept", () => {
     normalizeMarkdown(edited, "1.2.0"),
     "## Version 1.2.0\n\n### Features\n\n- Build a clearer résumé in fewer steps\n",
   );
+});
+
+test("unwrapModelContent extracts markdown from a JSON-wrapped model reply", () => {
+  const reply = `{"markdown": "## Version 0.3.0\\n\\nUsers can now read release notes in the app.\\n"}`;
+  assert.equal(
+    unwrapModelContent(reply),
+    "## Version 0.3.0\n\nUsers can now read release notes in the app.\n",
+  );
+});
+
+test("unwrapModelContent leaves plain markdown untouched", () => {
+  const reply = "## Version 0.3.0\n\nA plain markdown reply.\n";
+  assert.equal(unwrapModelContent(reply), reply.trim());
+});
+
+test("the model pipeline unwraps JSON and drops internal bullets", () => {
+  const leaked = `{"markdown": "## Version 0.3.0\\n\\nUsers can now view a changelog in the app.\\n\\n### Fixes\\n\\n- The app now includes checksums in its release jobs.\\n\\n### Performance\\n\\n- The app's build metadata is now displayed on the About page.\\n"}`;
+  const notes = normalizeMarkdown(unwrapModelContent(leaked), "0.3.0");
+  assert.equal(notes, "## Version 0.3.0\n\nUsers can now view a changelog in the app.\n");
+  assertCleanMarkdown(notes);
+});
+
+test("assertCleanMarkdown rejects JSON or code-fence artifacts", () => {
+  assert.throws(() => assertCleanMarkdown('{"markdown": "notes"}'), /JSON wrapper|code fence/);
+  assert.throws(() => assertCleanMarkdown("```markdown\nnotes\n```"), /JSON wrapper|code fence/);
+  assert.doesNotThrow(() => assertCleanMarkdown("## Version 0.3.0\n\nClean notes.\n"));
 });
 
 test("normalizeMarkdown keeps section order independent of the input", () => {
