@@ -1,4 +1,4 @@
-import { CheckSquare2, Scissors, Sparkles, SquarePen } from "lucide-react";
+import { CheckSquare2, Flag, Scissors, Sparkles, SquarePen } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { saveChecklistItem } from "~/fns/resumes.functions";
@@ -29,6 +29,12 @@ const GROUPS: {
     intro: "Lines that cost space without showing a result.",
     icon: <Scissors size={20} aria-hidden="true" />,
   },
+  {
+    kind: "flag",
+    title: "Flag bad practices",
+    intro: "Model-spotted wording that works against you, quoted from your own draft.",
+    icon: <Flag size={20} aria-hidden="true" />,
+  },
 ];
 
 /** The stored item plus the uncommitted text in its answer box. */
@@ -57,8 +63,8 @@ function templateNodes(template: string, answer: string): ReactNode[] {
 
 /**
  * A per-version writing checklist that behaves like a todo list: toggle an
- * item, write an optional note, and both survive a reload. Every suggestion is
- * grounded in the document, so the page only asks for facts the writer has.
+ * item, write an optional note, and both survive a reload. Every suggestion,
+ * including the model's bad-practice flags, is grounded in the document.
  */
 export function SecondDraft({
   items,
@@ -228,7 +234,7 @@ export function SecondDraft({
       ) : (
         <p className="second-draft-pending">
           {pending
-            ? "Building your checklist from the sections and skills we found. It will appear here in a moment."
+            ? "Building your checklist from the sections, skills and wording we found. It will appear here in a moment."
             : "No edits suggested for this version yet."}
         </p>
       )}

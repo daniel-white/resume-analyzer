@@ -82,7 +82,7 @@ export type SkillSet = {
   model: string;
 };
 
-export type ChecklistKind = "blank" | "promote" | "cut";
+export type ChecklistKind = "blank" | "promote" | "cut" | "flag";
 
 /** One grounded edit on a version's Second Draft checklist. */
 export type ChecklistItem = {

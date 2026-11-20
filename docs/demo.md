@@ -35,7 +35,8 @@ error can indicate a stale API image; re-run `just demo` to replace it.
 4. Upload a plain DOCX or PDF and compare its results with the designed file.
 5. In a complete version, open the Second Draft panel. Tick an item and write
    a note in its empty box; the line strikes through and the answer fills the
-   preview. Refresh the page to confirm both survive. Each version has its own
+   preview. Refresh the page to confirm both survive. Look for the
+   model-flagged bad practices in their own group. Each version has its own
    checklist, so switching versions shows a different set of edits.
 6. Sign out and confirm the library sends you back to sign-in.
    Open an analysis email while signed out, request a sign-in link, and confirm

@@ -224,7 +224,7 @@ export const stored = resume({
 export type SeedChecklistItem = {
   id: string;
   fingerprint: string;
-  kind: "blank" | "promote" | "cut";
+  kind: "blank" | "promote" | "cut" | "flag";
   title: string;
   detail: string;
   why: string;

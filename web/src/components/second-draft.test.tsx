@@ -65,6 +65,25 @@ const items: ChecklistItem[] = [
     checked_at: null,
     created_at: "2026-01-01T00:00:00Z",
   },
+  {
+    id: "item-flag",
+    fingerprint: "fp-flag",
+    kind: "flag",
+    title: "Flag: Blaming a former manager",
+    detail: "Found in Experience: \"My old manager never explained the process.\"",
+    why: "It puts the focus on a person instead of your work.",
+    placeholder: "Describe the gap without naming anyone.",
+    section_id: "experience-1",
+    section_heading: "Experience",
+    quote: "My old manager never explained the process.",
+    template: null,
+    cut_text: null,
+    position: 3,
+    done: false,
+    answer: null,
+    checked_at: null,
+    created_at: "2026-01-01T00:00:00Z",
+  },
 ];
 
 function render(value: ChecklistItem[] = items, pending = false) {
@@ -97,15 +116,17 @@ describe("second draft", () => {
     expect(html).toContain("Fill the blanks");
     expect(html).toContain("Bring up the gold");
     expect(html).toContain("Cut the fluff");
+    expect(html).toContain("Flag bad practices");
     expect(html).toContain('data-kind="blank"');
     expect(html).toContain('data-kind="promote"');
     expect(html).toContain('data-kind="cut"');
+    expect(html).toContain('data-kind="flag"');
   });
 
   it("shows a progress count and bar for the checked items", () => {
     const html = render();
-    expect(html).toContain("1 of 3 done");
-    expect(html).toContain("width:33%");
+    expect(html).toContain("1 of 4 done");
+    expect(html).toContain("width:25%");
     expect(html.match(/checked=""/g)).toHaveLength(1);
   });
 
@@ -126,6 +147,13 @@ describe("second draft", () => {
     const html = render();
     expect(html).toContain("Hard-working team player with a passion for excellence.");
     expect(html).toContain("Show in Experience");
+  });
+
+  it("shows the model's flag with its own rewrite hint", () => {
+    const html = render();
+    expect(html).toContain("Flag: Blaming a former manager");
+    expect(html).toContain("My old manager never explained the process.");
+    expect(html).toContain('placeholder="Describe the gap without naming anyone."');
   });
 
   it("keeps an encouraging waiting state while the checklist is built", () => {
