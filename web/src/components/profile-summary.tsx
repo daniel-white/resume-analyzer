@@ -40,13 +40,13 @@ export function ProfileSummaryCard({
   const liveText = live?.text ?? "";
   const streaming = Boolean(live && !live.done && !live.error && liveText.trim());
   const text = liveText.trim() ? liveText : (current?.text ?? "");
-  const isNotResume = text.startsWith(IS_NOT_RESUME_PREFIX);
+  const isResume = !text.startsWith(IS_NOT_RESUME_PREFIX);
   const isEmpty = text.trim() === "";
   // Show the thinking state immediately, before the first token frame arrives.
-  const progressRun = live ?? (pending && isEmpty && !isNotResume ? seedRun(key) : undefined);
+  const progressRun = live ?? (pending && isEmpty && isResume ? seedRun(key) : undefined);
 
   async function vote(choice: SectionVote) {
-    if (!current || busy || isNotResume || streaming) return;
+    if (!current || busy || !isResume || streaming) return;
     const previous = current.feedback ?? null;
     const next = previous === choice ? null : choice;
     setBusy(true);
@@ -79,10 +79,10 @@ export function ProfileSummaryCard({
         <span className="profile-summary-icon"><UserRound size={20} aria-hidden="true" /></span>
         <div>
           <p className="profile-summary-eyebrow">
-            {streaming ? "Writing now" : isNotResume ? "Not a résumé" : "Model impression"}
+            {streaming ? "Writing now" : isResume ? "Model impression" : "Not a résumé"}
           </p>
           <h2 id="profile-summary-heading">
-            {isNotResume ? "This doesn’t look like a résumé" : "Who the model thinks you are"}
+            {isResume ? "Who the model thinks you are" : "This doesn’t look like a résumé"}
           </h2>
         </div>
       </div>
@@ -97,7 +97,7 @@ export function ProfileSummaryCard({
               {text}
             </Markdown>
           </div>
-          {!isNotResume && !streaming && current ? (
+          {isResume && !streaming && current ? (
             <>
               <p className="profile-summary-model">
                 Local LLM · {current.model}
@@ -115,7 +115,7 @@ export function ProfileSummaryCard({
               </div>
             </>
           ) : null}
-          {isNotResume && !streaming ? (
+          {!isResume && !streaming ? (
             <p className="profile-summary-model">
               <span>Upload a document with work experience, education, skills, or projects.</span>
             </p>

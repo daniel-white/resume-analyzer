@@ -55,7 +55,6 @@ function cloud() {
       skills={skills}
       sections={sections}
       versionId="version-1"
-      onFocusSection={() => undefined}
     />,
   );
 }
@@ -103,7 +102,6 @@ describe("skill cloud", () => {
         sections={null}
         versionId="version-1"
         pending
-        onFocusSection={() => undefined}
       />,
     );
     expect(html).toContain("Tags will appear here one at a time");

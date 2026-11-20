@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi, reading, stored } from "./api";
+import { designed, installApi, openTab, reading, stored } from "./api";
 
 const plugin = {
   id: "smart_resume",
@@ -32,6 +32,7 @@ for (const pending of [true, false]) {
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
     await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
+    await openTab(page, "ATS insights");
     const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
     await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
     await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
@@ -59,6 +60,7 @@ test("SmartResume and the original DOCX viewer render together", async ({ page }
   const preview = page.getByLabel("Original résumé");
   await expect(preview.getByText("Original DOCX résumé")).toBeVisible({ timeout: 20_000 });
   await expect(preview.getByRole("link", { name: "Download original" })).toBeVisible();
+  await openTab(page, "ATS insights");
   const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: plugin.name }) });
   await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
   await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();
@@ -68,6 +70,7 @@ test("SmartResume and the original DOCX viewer render together", async ({ page }
 test("an email deep link opens the selected provider on the selected version", async ({ page }) => {
   await installApi(page, { resumes: [designed] });
   await page.goto(`/resumes/${designed.id}?version=${designed.versions[0].id}&provider=greenline`);
+  await openTab(page, "ATS insights");
   const selected = page.getByRole("article", { name: "Greenline", exact: true });
   await expect(selected.locator("details")).toHaveAttribute("open", "");
   await expect(selected.getByRole("heading", { name: "Why", exact: true })).toBeVisible();

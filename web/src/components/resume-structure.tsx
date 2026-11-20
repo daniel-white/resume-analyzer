@@ -24,9 +24,8 @@ export function ResumeStructure({
   fields?: ExtractField[] | null;
   resumeId: string;
   versionId: string;
-  onHighlight: (kind: DetectedSection["kind"] | null) => void;
+  onHighlight?: (kind: DetectedSection["kind"] | null) => void;
   initialSelectedId?: string | null;
-  /** When present, the page owns the open section (skill evidence can focus one). */
   selectedId?: string | null;
 }) {
   const [map, setMap] = useState<SectionMap | null>(sections);
@@ -35,18 +34,10 @@ export function ResumeStructure({
   const [error, setError] = useState<string | null>(null);
   const selectedId = controlledId === undefined ? internalId : controlledId;
 
-  // Initialize selectedId only once on mount, not on every sections change
+  // A refreshed route (or a different version) replaces the whole map.
   useEffect(() => {
     setMap(sections);
   }, [sections]);
-
-  useEffect(() => {
-    if (!selectedId || typeof document === "undefined") return;
-    document.getElementById(`structure-button-${selectedId}`)?.scrollIntoView({
-      block: "nearest",
-      behavior: "smooth",
-    });
-  }, [selectedId]);
 
   if (controlledId === undefined && initialSelectedId && !internalId) {
     setInternalId(initialSelectedId);
@@ -71,7 +62,7 @@ export function ResumeStructure({
   function select(section: DetectedSection) {
     const next = selectedId === section.id ? null : section.id;
     if (controlledId === undefined) setInternalId(next);
-    onHighlight(next ? section.kind : null);
+    onHighlight?.(next ? section.kind : null);
   }
 
   async function vote(section: DetectedSection, choice: SectionVote) {
@@ -106,7 +97,7 @@ export function ResumeStructure({
       </h2>
       <ResumeFacts fields={fields} />
       <p className="note">
-        Select a section to check our reading and compare ATS results.
+        Select a section to check our reading.
       </p>
       <ol className="structure-sections">
         {map.sections.map((section) => {

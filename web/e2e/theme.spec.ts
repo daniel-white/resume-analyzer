@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi, ready } from "./api";
+import { designed, installApi, openTab, ready } from "./api";
 
 test("prevents UI selection but preserves textbox editing", async ({ page }) => {
   await installApi(page, { signedIn: false, resumes: [] });
@@ -45,10 +45,11 @@ test("uses consistent editorial headings, readable sans copy, and technical mono
   await page.goto(`/resumes/${designed.id}`);
   await ready(page);
   await expect(page.locator(".filename")).toHaveCSS("font-family", /Georgia/);
+  await openTab(page, "ATS insights");
   await expect(page.locator(".results-heading h2")).toHaveCSS("font-family", /Georgia/);
   await expect(page.locator(".results-heading h2")).toHaveCSS("font-size", "28px");
-  await expect(page.locator(".overview-stats > div:nth-child(2) strong")).toHaveCSS("font-family", /Arial/);
-  await expect(page.locator(".overall-rating-value strong")).toHaveCSS("font-family", /Georgia/);
+  await expect(page.locator(".insight-grades .stat-label").first()).toHaveCSS("font-family", /Arial/);
+  await expect(page.locator('.insight-grades [aria-label="Overall rating"]')).toHaveCSS("font-family", /Georgia/);
   await expect(page.locator(".stat-label").first()).toHaveCSS("font-family", /Arial/);
   await expect(page.locator(".viewer-heading h2")).toHaveCSS("font-family", /Arial/);
   await page.locator(".fold-summary").first().click();
@@ -87,10 +88,12 @@ test("keeps library, analysis, and destructive controls on the same theme", asyn
   await page.goto("/resumes/resume-designed");
   await ready(page);
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
-  await expect(page.locator(".version-upload")).toHaveCSS("background-color", "rgb(209, 242, 103)");
+  await expect(page.locator(".resume-detail-upload")).toHaveCSS("background-color", "rgb(36, 79, 66)");
+  await expect(page.getByRole("link", { name: /View original/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({ path: testInfo.outputPath("analysis-mobile.png"), fullPage: true, caret: "initial" });
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page.getByRole("link", { name: /View original/ })).toBeHidden();
   await page.screenshot({ path: testInfo.outputPath("analysis-desktop.png"), fullPage: true, caret: "initial" });
   await page.getByRole("button", { name: "Account menu" }).click();
   await expect(page.getByRole("menu")).toHaveCSS("color", "rgb(32, 37, 30)");

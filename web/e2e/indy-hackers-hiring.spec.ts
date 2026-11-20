@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { designed, installApi, reading } from "./api";
+import { designed, installApi, openTab, reading } from "./api";
 
 const plugin = {
   id: "indy_hackers_hiring",
@@ -28,6 +28,7 @@ for (const pending of [true, false]) {
     };
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
+    await openTab(page, "ATS insights");
     const card = page.getByRole("article", { name: plugin.name, exact: true });
     await expect(card.getByRole("heading", { name: plugin.name })).toBeVisible();
     await expect(card.getByText(plugin.subtitle, { exact: true })).toBeVisible();

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { designed, installApi, reading } from "./api";
+import { designed, installApi, openTab, reading } from "./api";
 
 for (const pending of [true, false]) {
   test(`BlastTrack logo and simulation disclosure when ${pending ? "pending" : "complete"}`, async ({ page }, testInfo) => {
@@ -24,6 +24,7 @@ for (const pending of [true, false]) {
     };
     await installApi(page, { resumes: [resume] });
     await page.goto(`/resumes/${resume.id}`);
+    await openTab(page, "ATS insights");
     const card = page.getByRole("article", { name: "BlastTrack", exact: true });
     await expect(card.getByRole("heading", { name: "BlastTrack" })).toBeVisible();
     await expect(card.getByText("Keeps contact and table text, needs linear chronology. Simulated, modeled on publicly described parser behavior.", { exact: true })).toBeVisible();

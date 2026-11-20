@@ -18,6 +18,11 @@ import { Route as LoginIndexRouteImport } from './routes/login.index'
 import { Route as LoginVerifyRouteImport } from './routes/login.verify'
 import { Route as ResumesIdRouteImport } from './routes/resumes/$id'
 import { Route as ApiAdminEventsRouteImport } from './routes/api/admin/events'
+import { Route as ResumesIdIndexRouteImport } from './routes/resumes/$id.index'
+import { Route as ResumesIdAtsInsightsRouteImport } from './routes/resumes/$id.ats-insights'
+import { Route as ResumesIdIdeasRouteImport } from './routes/resumes/$id.ideas'
+import { Route as ResumesIdSkillsRouteImport } from './routes/resumes/$id.skills'
+import { Route as ResumesIdStructureRouteImport } from './routes/resumes/$id.structure'
 import { Route as ApiResumesIdEventsRouteImport } from './routes/api/resumes/$id/events'
 import { Route as ApiResumesIdVersionsVersionIdFileRouteImport } from './routes/api/resumes/$id/versions/$versionId/file'
 
@@ -66,6 +71,31 @@ const ApiAdminEventsRoute = ApiAdminEventsRouteImport.update({
   path: '/api/admin/events',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ResumesIdIndexRoute = ResumesIdIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ResumesIdRoute,
+} as any)
+const ResumesIdAtsInsightsRoute = ResumesIdAtsInsightsRouteImport.update({
+  id: '/ats-insights',
+  path: '/ats-insights',
+  getParentRoute: () => ResumesIdRoute,
+} as any)
+const ResumesIdIdeasRoute = ResumesIdIdeasRouteImport.update({
+  id: '/ideas',
+  path: '/ideas',
+  getParentRoute: () => ResumesIdRoute,
+} as any)
+const ResumesIdSkillsRoute = ResumesIdSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => ResumesIdRoute,
+} as any)
+const ResumesIdStructureRoute = ResumesIdStructureRouteImport.update({
+  id: '/structure',
+  path: '/structure',
+  getParentRoute: () => ResumesIdRoute,
+} as any)
 const ApiResumesIdEventsRoute = ApiResumesIdEventsRouteImport.update({
   id: '/api/resumes/$id/events',
   path: '/api/resumes/$id/events',
@@ -85,9 +115,14 @@ export interface FileRoutesByFullPath {
   '/health': typeof HealthRoute
   '/login': typeof LoginRouteWithChildren
   '/login/verify': typeof LoginVerifyRoute
-  '/resumes/$id': typeof ResumesIdRoute
+  '/resumes/$id': typeof ResumesIdRouteWithChildren
   '/login/': typeof LoginIndexRoute
   '/api/admin/events': typeof ApiAdminEventsRoute
+  '/resumes/$id/ats-insights': typeof ResumesIdAtsInsightsRoute
+  '/resumes/$id/ideas': typeof ResumesIdIdeasRoute
+  '/resumes/$id/skills': typeof ResumesIdSkillsRoute
+  '/resumes/$id/structure': typeof ResumesIdStructureRoute
+  '/resumes/$id/': typeof ResumesIdIndexRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -97,9 +132,13 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminRoute
   '/health': typeof HealthRoute
   '/login/verify': typeof LoginVerifyRoute
-  '/resumes/$id': typeof ResumesIdRoute
   '/login': typeof LoginIndexRoute
   '/api/admin/events': typeof ApiAdminEventsRoute
+  '/resumes/$id/ats-insights': typeof ResumesIdAtsInsightsRoute
+  '/resumes/$id/ideas': typeof ResumesIdIdeasRoute
+  '/resumes/$id/skills': typeof ResumesIdSkillsRoute
+  '/resumes/$id/structure': typeof ResumesIdStructureRoute
+  '/resumes/$id': typeof ResumesIdIndexRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -111,9 +150,14 @@ export interface FileRoutesById {
   '/health': typeof HealthRoute
   '/login': typeof LoginRouteWithChildren
   '/login/verify': typeof LoginVerifyRoute
-  '/resumes/$id': typeof ResumesIdRoute
+  '/resumes/$id': typeof ResumesIdRouteWithChildren
   '/login/': typeof LoginIndexRoute
   '/api/admin/events': typeof ApiAdminEventsRoute
+  '/resumes/$id/ats-insights': typeof ResumesIdAtsInsightsRoute
+  '/resumes/$id/ideas': typeof ResumesIdIdeasRoute
+  '/resumes/$id/skills': typeof ResumesIdSkillsRoute
+  '/resumes/$id/structure': typeof ResumesIdStructureRoute
+  '/resumes/$id/': typeof ResumesIdIndexRoute
   '/api/resumes/$id/events': typeof ApiResumesIdEventsRoute
   '/api/resumes/$id/versions/$versionId/file': typeof ApiResumesIdVersionsVersionIdFileRoute
 }
@@ -129,6 +173,11 @@ export interface FileRouteTypes {
     | '/resumes/$id'
     | '/login/'
     | '/api/admin/events'
+    | '/resumes/$id/ats-insights'
+    | '/resumes/$id/ideas'
+    | '/resumes/$id/skills'
+    | '/resumes/$id/structure'
+    | '/resumes/$id/'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesByTo: FileRoutesByTo
@@ -138,9 +187,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/health'
     | '/login/verify'
-    | '/resumes/$id'
     | '/login'
     | '/api/admin/events'
+    | '/resumes/$id/ats-insights'
+    | '/resumes/$id/ideas'
+    | '/resumes/$id/skills'
+    | '/resumes/$id/structure'
+    | '/resumes/$id'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   id:
@@ -154,6 +207,11 @@ export interface FileRouteTypes {
     | '/resumes/$id'
     | '/login/'
     | '/api/admin/events'
+    | '/resumes/$id/ats-insights'
+    | '/resumes/$id/ideas'
+    | '/resumes/$id/skills'
+    | '/resumes/$id/structure'
+    | '/resumes/$id/'
     | '/api/resumes/$id/events'
     | '/api/resumes/$id/versions/$versionId/file'
   fileRoutesById: FileRoutesById
@@ -164,7 +222,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRoute
   HealthRoute: typeof HealthRoute
   LoginRoute: typeof LoginRouteWithChildren
-  ResumesIdRoute: typeof ResumesIdRoute
+  ResumesIdRoute: typeof ResumesIdRouteWithChildren
   ApiAdminEventsRoute: typeof ApiAdminEventsRoute
   ApiResumesIdEventsRoute: typeof ApiResumesIdEventsRoute
   ApiResumesIdVersionsVersionIdFileRoute: typeof ApiResumesIdVersionsVersionIdFileRoute
@@ -235,6 +293,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAdminEventsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/resumes/$id/': {
+      id: '/resumes/$id/'
+      path: '/'
+      fullPath: '/resumes/$id/'
+      preLoaderRoute: typeof ResumesIdIndexRouteImport
+      parentRoute: typeof ResumesIdRoute
+    }
+    '/resumes/$id/ats-insights': {
+      id: '/resumes/$id/ats-insights'
+      path: '/ats-insights'
+      fullPath: '/resumes/$id/ats-insights'
+      preLoaderRoute: typeof ResumesIdAtsInsightsRouteImport
+      parentRoute: typeof ResumesIdRoute
+    }
+    '/resumes/$id/ideas': {
+      id: '/resumes/$id/ideas'
+      path: '/ideas'
+      fullPath: '/resumes/$id/ideas'
+      preLoaderRoute: typeof ResumesIdIdeasRouteImport
+      parentRoute: typeof ResumesIdRoute
+    }
+    '/resumes/$id/skills': {
+      id: '/resumes/$id/skills'
+      path: '/skills'
+      fullPath: '/resumes/$id/skills'
+      preLoaderRoute: typeof ResumesIdSkillsRouteImport
+      parentRoute: typeof ResumesIdRoute
+    }
+    '/resumes/$id/structure': {
+      id: '/resumes/$id/structure'
+      path: '/structure'
+      fullPath: '/resumes/$id/structure'
+      preLoaderRoute: typeof ResumesIdStructureRouteImport
+      parentRoute: typeof ResumesIdRoute
+    }
     '/api/resumes/$id/events': {
       id: '/api/resumes/$id/events'
       path: '/api/resumes/$id/events'
@@ -264,13 +357,33 @@ const LoginRouteChildren: LoginRouteChildren = {
 
 const LoginRouteWithChildren = LoginRoute._addFileChildren(LoginRouteChildren)
 
+interface ResumesIdRouteChildren {
+  ResumesIdAtsInsightsRoute: typeof ResumesIdAtsInsightsRoute
+  ResumesIdIdeasRoute: typeof ResumesIdIdeasRoute
+  ResumesIdSkillsRoute: typeof ResumesIdSkillsRoute
+  ResumesIdStructureRoute: typeof ResumesIdStructureRoute
+  ResumesIdIndexRoute: typeof ResumesIdIndexRoute
+}
+
+const ResumesIdRouteChildren: ResumesIdRouteChildren = {
+  ResumesIdAtsInsightsRoute: ResumesIdAtsInsightsRoute,
+  ResumesIdIdeasRoute: ResumesIdIdeasRoute,
+  ResumesIdSkillsRoute: ResumesIdSkillsRoute,
+  ResumesIdStructureRoute: ResumesIdStructureRoute,
+  ResumesIdIndexRoute: ResumesIdIndexRoute,
+}
+
+const ResumesIdRouteWithChildren = ResumesIdRoute._addFileChildren(
+  ResumesIdRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AdminRoute: AdminRoute,
   HealthRoute: HealthRoute,
   LoginRoute: LoginRouteWithChildren,
-  ResumesIdRoute: ResumesIdRoute,
+  ResumesIdRoute: ResumesIdRouteWithChildren,
   ApiAdminEventsRoute: ApiAdminEventsRoute,
   ApiResumesIdEventsRoute: ApiResumesIdEventsRoute,
   ApiResumesIdVersionsVersionIdFileRoute:
