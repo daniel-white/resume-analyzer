@@ -10,8 +10,8 @@ use std::time::Duration;
 use base64::Engine;
 use chrono::Utc;
 use domain::{
-    AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateMarkdownPayload, ResumeFile,
-    RunPayload, UploadedPayload,
+    AnalyzeFeedbackPayload, Ats, EventName, EventRecord, GenerateChecklistPayload,
+    GenerateMarkdownPayload, ResumeFile, RunPayload, UploadedPayload,
 };
 use feedback::{FeedbackAnalyzer, markdown};
 use plugins::structure;
@@ -244,6 +244,7 @@ impl Worker {
             EventName::AtsCallbackReceived => Ok(()),
             EventName::GenerateMarkdown => self.generate_markdown(event).await,
             EventName::AnalyzeFeedback => self.analyze_feedback(event).await,
+            EventName::GenerateChecklist => self.generate_checklist(event).await,
             // Live frames are published directly, never queued in the outbox.
             EventName::GenerationStream => {
                 warn!("ignoring live-only GenerationStream event on the outbox");
@@ -317,6 +318,7 @@ impl Worker {
             engine = field::Empty,
             model = field::Empty,
             skills = field::Empty,
+            flags = field::Empty,
         );
         let _enter = span.enter();
         let summary_emitter = Arc::new(BusEmitter::new(
@@ -364,6 +366,7 @@ impl Worker {
         span.record("engine", &impression.profile_summary.engine);
         span.record("model", &impression.profile_summary.model);
         span.record("skills", impression.skills.skills.len());
+        span.record("flags", impression.issues.issues.len());
         info!("profile impression generated");
         self.store
             .save_parse(
@@ -374,13 +377,35 @@ impl Worker {
             )
             .await?;
         self.store
-            .save_skills(event.version_id, &impression.skills)
+            .save_impression_reading(event.version_id, &impression.skills, &impression.issues)
             .await?;
         for emitter in [&summary_emitter, &skills_emitter] {
             emitter.emit(&ModelEvent::Stage {
                 label: "complete".to_owned(),
             });
         }
+        Ok(())
+    }
+
+    /// Build the writer's checklist from the stored reading. No extra model
+    /// call: the sections, skills, writing flags and layout are already on the
+    /// version.
+    async fn generate_checklist(&self, event: &EventRecord) -> anyhow::Result<()> {
+        let payload: GenerateChecklistPayload = serde_json::from_value(event.payload.clone())?;
+        let inputs = self.store.checklist_inputs(payload.version_id).await?;
+        let Some((parse, sections, skills, issues)) = inputs else {
+            anyhow::bail!("checklist inputs are missing for {}", payload.version_id);
+        };
+        let items = checklist::generate(&sections, &skills, &parse, &issues.issues);
+        checklist::validate(&items, &sections)?;
+        self.store
+            .replace_checklist(payload.version_id, &items)
+            .await?;
+        info!(
+            version_id = %payload.version_id,
+            items = items.len(),
+            "second draft generated"
+        );
         Ok(())
     }
 

@@ -14,6 +14,7 @@ import { ResumeComparison } from "~/components/resume-comparison";
 import { ResumeStructure } from "~/components/resume-structure";
 import { ProfileSummaryCard } from "~/components/profile-summary";
 import { SkillCloud } from "~/components/skill-cloud";
+import { SecondDraft } from "~/components/second-draft";
 import { getTeardown } from "~/fns/resumes.functions";
 import type { SectionKind } from "~/server/resumes";
 
@@ -86,6 +87,14 @@ function TeardownPage() {
               key={`skills-${view.versionId}`}
               skills={view.skills}
               sections={view.sections}
+              versionId={view.versionId}
+              pending={view.kind === "reading"}
+              onFocusSection={focusEvidence}
+            />
+            <SecondDraft
+              key={`checklist-${view.versionId}`}
+              items={view.checklist}
+              resumeId={view.resumeId}
               versionId={view.versionId}
               pending={view.kind === "reading"}
               onFocusSection={focusEvidence}

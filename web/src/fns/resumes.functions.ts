@@ -11,6 +11,8 @@ import {
   deleteResume,
   renameResume,
   voteSection,
+  updateChecklistItem,
+  type ChecklistResult,
   type RenameResult,
   type DeleteResult,
   type VoteResult,
@@ -149,6 +151,36 @@ export const voteResumeSection = createServerFn({ method: "POST" })
         data.versionId,
         data.sectionId,
         data.vote,
+        cookie(),
+      );
+    } catch (error) {
+      if (error instanceof SignedOut) signedOut(`/resumes/${data.resumeId}`);
+      throw error;
+    }
+  });
+
+export const saveChecklistItem = createServerFn({ method: "POST" })
+  .validator((data: {
+    resumeId: string;
+    versionId: string;
+    itemId: string;
+    done: boolean;
+    answer: string;
+  }) => {
+    if (!data.resumeId || !data.versionId || !data.itemId) {
+      throw new Error("missing checklist item");
+    }
+    return data;
+  })
+  .handler(async ({ data }): Promise<ChecklistResult> => {
+    try {
+      return await updateChecklistItem(
+        apiBase(),
+        data.resumeId,
+        data.versionId,
+        data.itemId,
+        data.done,
+        data.answer,
         cookie(),
       );
     } catch (error) {

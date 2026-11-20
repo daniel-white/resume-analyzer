@@ -14,6 +14,7 @@ path = "src/main.rs"
 s3 = { version = "0.1", features = ["async", "rustls"] }
 anyhow = "1"
 base64 = "0.23"
+checklist = { path = "../models/checklist" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "env-filter"] }
 async-stream = "0.3"

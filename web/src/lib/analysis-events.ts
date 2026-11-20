@@ -10,6 +10,7 @@ const lifecycleEvents = [
   "AtsCallbackReceived",
   "GenerateMarkdown",
   "AnalyzeFeedback",
+  "GenerateChecklist",
 ] as const;
 
 export type WatchOptions = {

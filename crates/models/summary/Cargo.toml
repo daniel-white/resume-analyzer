@@ -7,6 +7,7 @@ publish.workspace = true
 
 [dependencies]
 domain = { path = "../../domain" }
+issues = { path = "../issues" }
 skills = { path = "../skills" }
 stream-protocol = { path = "../stream-protocol" }
 reqwest = { version = "0.13", default-features = false, features = ["blocking", "json", "rustls"] }

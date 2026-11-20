@@ -297,6 +297,45 @@ pub async fn vote_section(
     }
 }
 
+#[derive(Deserialize)]
+pub struct ChecklistUpdateBody {
+    done: bool,
+    answer: String,
+}
+
+/// Check off one edit or save the writer's own note. Both fields are always
+/// sent, so clearing an answer is simply an empty string.
+pub async fn update_checklist_item(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    Path((resume_id, version_id, item_id)): Path<(Uuid, Uuid, Uuid)>,
+    Json(body): Json<ChecklistUpdateBody>,
+) -> Response {
+    let user_id = match crate::auth_api::current_user(&api, &headers).await {
+        Ok(user_id) => user_id,
+        Err(status) => return status.into_response(),
+    };
+    match api
+        .store
+        .update_checklist_item(
+            user_id,
+            resume_id,
+            version_id,
+            item_id,
+            body.done,
+            &body.answer,
+        )
+        .await
+    {
+        Ok(Some(item)) => Json(item).into_response(),
+        Ok(None) => StatusCode::NOT_FOUND.into_response(),
+        Err(err) => {
+            eprintln!("update checklist item: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
 pub async fn plugins(State(api): State<Arc<Api>>) -> Response {
     Json(PluginList {
         plugins: api

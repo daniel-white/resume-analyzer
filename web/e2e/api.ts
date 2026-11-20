@@ -221,7 +221,29 @@ export const stored = resume({
   runs: [],
 });
 
-type SeedVersion = (typeof designed)["versions"][number];
+export type SeedChecklistItem = {
+  id: string;
+  fingerprint: string;
+  kind: "blank" | "promote" | "cut" | "flag";
+  title: string;
+  detail: string;
+  why: string;
+  placeholder: string;
+  section_id: string | null;
+  section_heading: string | null;
+  quote: string | null;
+  template: string | null;
+  cut_text: string | null;
+  position: number;
+  done: boolean;
+  answer: string | null;
+  checked_at: string | null;
+  created_at: string;
+};
+
+type SeedVersion = (typeof designed)["versions"][number] & {
+  checklist?: SeedChecklistItem[] | undefined;
+};
 export type SeedResume = Omit<typeof designed, "versions"> & { versions: SeedVersion[] };
 
 /** A GenerationStream frame the stub can push to every open SSE connection. */

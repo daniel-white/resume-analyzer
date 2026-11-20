@@ -185,6 +185,10 @@ pub enum EventName {
     AnalyzeFeedback,
     /// A live token/stage frame from a summary or diagnosis generation. Unlike
     /// the event above, these are emitted while the model is still working.
+    /// Build a version's writing checklist after its skills have been stored.
+    GenerateChecklist,
+    /// A live token/stage frame from a summary or diagnosis generation. Unlike
+    /// the event above, these are emitted while the model is still working.
     GenerationStream,
 }
 
@@ -198,6 +202,7 @@ impl EventName {
             Self::AtsCallbackReceived => "AtsCallbackReceived",
             Self::GenerateMarkdown => "GenerateMarkdown",
             Self::AnalyzeFeedback => "AnalyzeFeedback",
+            Self::GenerateChecklist => "GenerateChecklist",
             Self::GenerationStream => "GenerationStream",
         }
     }
@@ -211,6 +216,7 @@ impl EventName {
             "AtsCallbackReceived" => Self::AtsCallbackReceived,
             "GenerateMarkdown" => Self::GenerateMarkdown,
             "AnalyzeFeedback" => Self::AnalyzeFeedback,
+            "GenerateChecklist" => Self::GenerateChecklist,
             "GenerationStream" => Self::GenerationStream,
             _ => return None,
         })
@@ -599,11 +605,102 @@ pub struct SkillSet {
     pub model: String,
 }
 
-/// One read of the résumé produces both model impressions in the same call.
+/// A bad résumé practice the model can prove from the writer's own words. The
+/// label, reason and fix are guidance; the quote is the evidence, never a rewrite.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WritingIssue {
+    pub label: String,
+    pub why: String,
+    pub fix: String,
+    pub section_id: String,
+    pub quote: String,
+}
+
+/// The validated bad-practice flags from the same read that produced the skills.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WritingIssueSet {
+    pub issues: Vec<WritingIssue>,
+    pub engine: String,
+    pub model: String,
+}
+
+impl WritingIssueSet {
+    #[must_use]
+    pub fn empty(engine: &str, model: &str) -> Self {
+        Self {
+            issues: Vec::new(),
+            engine: engine.to_owned(),
+            model: model.to_owned(),
+        }
+    }
+}
+
+/// One read of the résumé produces the profile, skills and writing flags in the
+/// same model call. Rust validates every quote before any of it is stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfileImpression {
     pub profile_summary: ProfileSummary,
     pub skills: SkillSet,
+    pub issues: WritingIssueSet,
+}
+
+/// What the writer can do about one finding in the Second Draft checklist.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChecklistKind {
+    /// A claim that needs a fact only the writer can supply.
+    Blank,
+    /// Well-evidenced material that is hiding in a weak position.
+    Promote,
+    /// Text that spends space without supporting anything.
+    Cut,
+    /// A bad résumé practice the model flagged in the writer's own words.
+    Flag,
+}
+
+impl ChecklistKind {
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Blank => "blank",
+            Self::Promote => "promote",
+            Self::Cut => "cut",
+            Self::Flag => "flag",
+        }
+    }
+}
+
+/// One grounded edit on a version's writing checklist. The generator never
+/// invents a fact: quotes and cut text are copied from stored sections, and a
+/// blank is the writer's own line with room left for the missing detail.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChecklistItem {
+    pub id: Uuid,
+    /// Stable identity across regeneration, so a checked item stays checked.
+    pub fingerprint: String,
+    pub kind: ChecklistKind,
+    pub title: String,
+    pub detail: String,
+    pub why: String,
+    /// Guidance shown in the empty answer box. A hint, never a fabricated fact.
+    pub placeholder: String,
+    pub section_id: Option<String>,
+    pub section_heading: Option<String>,
+    pub quote: Option<String>,
+    /// The writer's line with a blank in it, filled in live as they type.
+    pub template: Option<String>,
+    pub cut_text: Option<String>,
+    pub position: i32,
+    pub done: bool,
+    pub answer: Option<String>,
+    pub checked_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Payload for the outbox event that builds a version's checklist.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GenerateChecklistPayload {
+    pub version_id: Uuid,
 }
 
 /// A markdown rendering of the detected sections. Built once per version,
@@ -705,6 +802,9 @@ pub struct VersionDetail {
     /// Evidence-backed skill map, when the model has finished it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub skills: Option<SkillSet>,
+    /// The writer's grounded edit checklist, newest generation first.
+    #[serde(default)]
+    pub checklist: Vec<ChecklistItem>,
     pub runs: Vec<RunView>,
 }
 

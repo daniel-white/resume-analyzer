@@ -82,6 +82,29 @@ export type SkillSet = {
   model: string;
 };
 
+export type ChecklistKind = "blank" | "promote" | "cut" | "flag";
+
+/** One grounded edit on a version's Second Draft checklist. */
+export type ChecklistItem = {
+  id: string;
+  fingerprint: string;
+  kind: ChecklistKind;
+  title: string;
+  detail: string;
+  why: string;
+  placeholder: string;
+  section_id: string | null;
+  section_heading: string | null;
+  quote: string | null;
+  template: string | null;
+  cut_text: string | null;
+  position: number;
+  done: boolean;
+  answer: string | null;
+  checked_at: string | null;
+  created_at: string;
+};
+
 export type SkillSummary = {
   name: string;
   canonical: string;
@@ -186,6 +209,7 @@ export type VersionDetail = {
   sections?: SectionMap | null | undefined;
   profile_summary?: ProfileSummary | null | undefined;
   skills?: SkillSet | null | undefined;
+  checklist?: ChecklistItem[] | undefined;
   runs: RunView[];
 };
 
@@ -296,6 +320,7 @@ export type Teardown =
       sections: SectionMap | null;
       profileSummary: ProfileSummary | null;
       skills: SkillSet | null;
+      checklist: ChecklistItem[];
       cards: VerdictCard[];
     };
 
@@ -491,6 +516,7 @@ export function teardown(detail: ResumeDetail, plugins: Plugin[], versionId?: st
     sections: version.sections ?? null,
     profileSummary: version.profile_summary ?? null,
     skills: presentedSkills(version.skills),
+    checklist: version.checklist ?? [],
     cards: pluginCards(plugins, version.runs),
   };
 }
@@ -570,6 +596,35 @@ export type RenameResult = { ok: true } | { ok: false; message: string };
 export type VoteResult =
   | { ok: true; vote: SectionVote | null }
   | { ok: false; message: string };
+
+export type ChecklistResult =
+  | { ok: true; item: ChecklistItem }
+  | { ok: false; message: string };
+
+export async function updateChecklistItem(
+  baseUrl: string,
+  resumeId: string,
+  versionId: string,
+  itemId: string,
+  done: boolean,
+  answer: string,
+  cookie: string | undefined,
+): Promise<ChecklistResult> {
+  const path = `/api/resumes/${encodeURIComponent(resumeId)}`
+    + `/versions/${encodeURIComponent(versionId)}`
+    + `/checklist/${encodeURIComponent(itemId)}`;
+  const result = await apiFetch(baseUrl, path, cookie, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ done, answer }),
+  });
+  if (!result.ok) {
+    return { ok: false, message: result.status === 404
+      ? "That item is no longer here. Refresh and try again."
+      : "Could not save your checklist. Please try again." };
+  }
+  return { ok: true, item: (await result.value.json()) as ChecklistItem };
+}
 
 export async function renameResume(
   baseUrl: string,

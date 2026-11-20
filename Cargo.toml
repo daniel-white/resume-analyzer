@@ -3,11 +3,13 @@ resolver = "3"
 members = [
     "crates/app",
     "crates/domain",
+    "crates/models/checklist",
     "crates/plugins",
     "crates/storage",
     "crates/auth",
     "crates/mail",
     "crates/models/feedback",
+    "crates/models/issues",
     "crates/models/sections",
     "crates/models/skills",
     "crates/models/stream-protocol",

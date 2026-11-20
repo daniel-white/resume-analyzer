@@ -144,6 +144,19 @@ async fn chat_sink() -> String {
                             })
                             .to_string(),
                         );
+                        lines.push(
+                            serde_json::json!({
+                                "type": "field",
+                                "name": "issue",
+                                "value": {
+                                    "label": "Blaming a former manager",
+                                    "why": "It puts the focus on a person instead of your work.",
+                                    "fix": "Describe the gap without naming anyone.",
+                                    "evidence": { "section_id": id, "quote": quote },
+                                },
+                            })
+                            .to_string(),
+                        );
                     }
                 }
                 lines.push(
@@ -537,6 +550,26 @@ async fn one_callback(
     assert_eq!(
         tags[0]["confidence_reason"],
         "Cited from a concrete résumé line."
+    );
+    // The model's grounded bad-practice flag becomes a Second Draft item.
+    let checklist = version["checklist"].as_array().expect("checklist");
+    let flag = checklist
+        .iter()
+        .find(|item| item["kind"] == "flag")
+        .expect("a model-flagged item");
+    assert!(
+        flag["title"]
+            .as_str()
+            .expect("flag title")
+            .contains("Blaming a former manager")
+    );
+    assert_eq!(
+        flag["why"],
+        "It puts the focus on a person instead of your work."
+    );
+    assert_eq!(
+        flag["placeholder"],
+        "Describe the gap without naming anyone."
     );
     let verdict = &version["runs"][0]["verdict"];
     assert!(verdict["kept"].is_array());

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use axum::Json;
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, State};
-use axum::routing::{delete, get, post, put};
+use axum::routing::{delete, get, patch, post, put};
 use domain::MAX_UPLOAD_BYTES;
 
 use crate::config::Config;
@@ -78,6 +78,10 @@ pub fn api_router(api: Arc<Api>) -> Router {
         .route(
             "/api/resumes/{id}/versions/{version_id}/sections/{section_id}",
             put(api::vote_section),
+        )
+        .route(
+            "/api/resumes/{id}/versions/{version_id}/checklist/{item_id}",
+            patch(api::update_checklist_item),
         )
         .route("/api/resumes/{id}/events", get(api::events))
         .route("/api/plugins", get(api::plugins))
