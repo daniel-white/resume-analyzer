@@ -1,9 +1,8 @@
-## Version 0.3.0
+## Version 0.4.0
 
-Users can now access release notes and learn about the app's updates.
+Users can now access a second draft writing checklist and view résumé detail in path-based analysis pages.
 
 ### Features
 
-- View the changelog to see what's new in The Other Read.
-- Discover the story behind the app's latest features and improvements.
-- Explore the Skill Signal tag cloud to learn more about the app's capabilities.
+- Users can now access a second draft writing checklist to help refine their résumé content.
+- Résumé detail is now organized into path-based analysis pages, making it easier to navigate and analyze specific sections.

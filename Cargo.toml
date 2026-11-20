@@ -19,7 +19,7 @@ members = [
 [workspace.package]
 edition = "2024"
 license = "MIT"
-version = "0.3.0"
+version = "0.4.0"
 publish = false
 
 # Every crate inherits these via `[lints] workspace = true`. Severity is set to

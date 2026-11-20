@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/daniel-white/resume-analyzer/compare/v0.3.0...v0.4.0) (2026-11-20)
+
+
+### Features
+
+* **checklist:** add the second draft writing checklist ([#26](https://github.com/daniel-white/resume-analyzer/issues/26)) ([84f1a14](https://github.com/daniel-white/resume-analyzer/commit/84f1a146cf3d1e25ed7f53512daf32affdd8bf70))
+* **web:** split résumé detail into path-based analysis pages ([#28](https://github.com/daniel-white/resume-analyzer/issues/28)) ([981b2f1](https://github.com/daniel-white/resume-analyzer/commit/981b2f186f6e2142e58be84d71ddcf8c9319d762))
+
 ## [0.3.0](https://github.com/daniel-white/resume-analyzer/compare/v0.2.4...v0.3.0) (2026-11-20)
 
 
