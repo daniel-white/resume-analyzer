@@ -9,7 +9,11 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, anyhow};
-use domain::{ParseInput, ProfileImpression, ProfileSummary, SectionKind, SectionMap, SkillSet};
+use domain::{
+    ParseInput, ProfileImpression, ProfileSummary, SectionKind, SectionMap, SkillSet,
+    WritingIssueSet,
+};
+use issues as writing_issues;
 use serde::Serialize;
 use skills::PresentableEmitter;
 use stream_protocol::{Emitter, NoopEmitter, infer_stream};
@@ -81,24 +85,27 @@ inside a name. Do not add fake names; only use names supported by the document."
 /// still arrives as deltas.
 fn system_prompt() -> String {
     format!(
-        "{PROFILE_RULES}\n\n{}\n\nOUTPUT FORMAT: return only newline-delimited JSON objects, one \
+        "{PROFILE_RULES}\n\n{}\n\n{}\n\nOUTPUT FORMAT: return only newline-delimited JSON objects, one \
          complete object per line, with no code fence, no markdown, and no prose outside the lines. \
          Emit them in this order: first {{\"type\":\"stage\",\"label\":\"reading\"}}, then \
          {{\"type\":\"stage\",\"label\":\"understanding\"}}, and then \
          {{\"type\":\"stage\",\"label\":\"mapping\"}} as progress updates; then exactly one \
          {{\"type\":\"field\",\"name\":\"is_resume\",\"value\":true}} (or false); then one skill \
-         field event per tag, shaped like {}; then many \
+         field event per tag, shaped like {}; then one issue field event per writing flag, shaped \
+         like {}; then many \
          {{\"type\":\"delta\",\"field\":\"profile_text\",\"value\":\"...\"}} lines whose values \
          concatenate in order to form `profile_text` exactly as written above, including spaces \
          at word boundaries; finally {{\"type\":\"done\"}} as the last line. If `is_resume` is \
-         false, emit no skill events. Keep each delta short — at least fifteen lines of a few \
+         false, emit no skill or issue events. Keep each delta short — at least fifteen lines of a few \
          words each, three to eight words per line. Never put a whole sentence in one delta, and \
-         never put prose in a `field` line: `field` is for `is_resume` and `skill`, and every \
+         never put prose in a `field` line: `field` is for `is_resume`, `skill`, and `issue`, and every \
          `profile_text` value must arrive as `delta` lines. Escape quotes, backslashes and control \
          characters inside JSON strings, and never put a literal newline inside a string. Emit no \
          other keys.",
         skills::SKILL_RULES,
+        writing_issues::ISSUE_RULES,
         skills::SKILL_EVENT_SHAPE,
+        writing_issues::ISSUE_EVENT_SHAPE,
     )
 }
 
@@ -194,6 +201,7 @@ impl SummaryGenerator {
             model = field::Empty,
             declined = field::Empty,
             skills = field::Empty,
+            flags = field::Empty,
         );
         let _enter = span.enter();
         let impression = self.infer_output(parse, sections, emitter)?;
@@ -204,6 +212,7 @@ impl SummaryGenerator {
             impression.profile_summary.text.starts_with(DECLINE_PREFIX),
         );
         span.record("skills", impression.skills.skills.len());
+        span.record("flags", impression.issues.issues.len());
         info!("profile impression generated");
         Ok(impression)
     }
@@ -277,6 +286,11 @@ impl SummaryGenerator {
         } else {
             skills::extract(&output, sections, model)?
         };
+        let issues = if is_resume == Some(false) {
+            WritingIssueSet::empty("chat", model)
+        } else {
+            writing_issues::extract(&output, sections, model)
+        };
         span.record("outcome", "accepted");
         span.record("engine", "chat");
         span.record("response_chars", response_chars);
@@ -290,6 +304,7 @@ impl SummaryGenerator {
                 feedback: None,
             },
             skills: skill_set,
+            issues,
         })
     }
 
@@ -382,7 +397,7 @@ fn chat_request_body(model: &str, content: &str, stream: bool) -> ChatRequest {
         stream,
         options: ChatOptions {
             temperature: 0.1,
-            num_predict: 1_024,
+            num_predict: 1_536,
         },
     }
 }
@@ -659,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn one_prompt_asks_for_streamable_profile_and_skill_lines() {
+    fn one_prompt_asks_for_streamable_profile_skill_and_issue_lines() {
         let prompt = system_prompt();
         assert!(prompt.contains("newline-delimited JSON"));
         assert!(prompt.contains("\"type\":\"stage\""));
@@ -668,7 +683,10 @@ mod tests {
         assert!(prompt.contains("\"type\":\"done\""));
         assert!(prompt.contains("three to eight words"));
         assert!(prompt.contains(skills::SKILL_EVENT_SHAPE));
+        assert!(prompt.contains(writing_issues::ISSUE_EVENT_SHAPE));
         assert!(prompt.contains("every other kind of work"));
+        assert!(prompt.contains("name-calling"));
+        assert!(prompt.contains("blaming"));
         assert!(!prompt.contains("Return a JSON object with exactly two keys"));
     }
 

@@ -1,21 +1,22 @@
-//! Build a per-version writing checklist from signals the scan already has.
+//! Build a per-version writing checklist from the stored reading.
 //!
-//! This generator deliberately does not call a model. Every item is derived
-//! from stored sections, validated skills and layout flags, and every quote or
-//! deletion is copied verbatim from a detected section. A blank is the
-//! writer's own line with a hole left in it, so the app can never put a fact
-//! into the résumé that the writer did not supply.
+//! This generator does not call a model. It combines stored sections, skills
+//! and layout flags with the bad-practice flags the model already returned and
+//! Rust validated. Every quote or deletion is copied verbatim from a detected
+//! section. A blank is the writer's own line with a hole left in it, so the app
+//! can never put a fact into the résumé that the writer did not supply.
 
 use std::collections::BTreeSet;
 
 use anyhow::{Result, anyhow, ensure};
-use domain::{ChecklistKind, ParseInput, SectionKind, SectionMap, Skill, SkillSet};
+use domain::{ChecklistKind, ParseInput, SectionKind, SectionMap, Skill, SkillSet, WritingIssue};
 use sha2::{Digest, Sha256};
 
 const MAX_BLANKS: usize = 4;
 const MAX_PROMOTES: usize = 2;
 const MAX_CUTS: usize = 2;
-const MAX_ITEMS: usize = MAX_BLANKS + MAX_PROMOTES + MAX_CUTS;
+const MAX_FLAGS: usize = 4;
+const MAX_ITEMS: usize = MAX_BLANKS + MAX_PROMOTES + MAX_CUTS + MAX_FLAGS;
 const QUOTE_CHARS: usize = 240;
 const TITLE_CHARS: usize = 90;
 
@@ -36,14 +37,15 @@ pub struct GeneratedItem {
     pub position: i32,
 }
 
-/// Build the checklist in reading order: blanks first, then promoted proof,
-/// then cuts. The result is deterministic, so regeneration keeps the same
-/// fingerprints and therefore the reader's checked state.
+/// Build the checklist in reading order: blanks, promoted proof, cuts, then
+/// model-flagged bad practices. The result is deterministic, so regeneration
+/// keeps the same fingerprints and therefore the reader's checked state.
 #[must_use]
 pub fn generate(
     sections: &SectionMap,
     skills: &SkillSet,
     parse: &ParseInput,
+    issues: &[WritingIssue],
 ) -> Vec<GeneratedItem> {
     let blanks = blanks(sections, skills);
     let blanked = blanks
@@ -53,6 +55,7 @@ pub fn generate(
     let mut items = blanks;
     items.extend(promotes(sections, skills, parse, &blanked));
     items.extend(cuts(sections, skills));
+    items.extend(flags(sections, issues));
     for (index, item) in items.iter_mut().enumerate() {
         item.position = i32::try_from(index).unwrap_or(i32::MAX);
     }
@@ -321,6 +324,57 @@ fn is_fluff(line: &str, section: &domain::DetectedSection, evidence: &[String]) 
     !evidence.iter().any(|quote| text.contains(quote.as_str()))
 }
 
+/// Turn each validated model flag into a grounded edit. The generator checks
+/// the quote again, so stale or hand-edited stored flags cannot surface text
+/// that is no longer in the detected section.
+fn flags(sections: &SectionMap, issues: &[WritingIssue]) -> Vec<GeneratedItem> {
+    let mut items = Vec::new();
+    let mut seen = BTreeSet::new();
+    for issue in issues {
+        if items.len() >= MAX_FLAGS {
+            break;
+        }
+        let Some(section) = find_section(sections, &issue.section_id) else {
+            continue;
+        };
+        let quote = issue.quote.trim();
+        if quote.is_empty() || !normalize(&section.body).contains(&normalize(quote)) {
+            continue;
+        }
+        if !seen.insert((
+            normalize(&issue.label),
+            section.id.clone(),
+            normalize(quote),
+        )) {
+            continue;
+        }
+        let text = clip(quote, QUOTE_CHARS);
+        items.push(GeneratedItem {
+            fingerprint: hash(
+                "flag",
+                &format!(
+                    "{}|{}|{}",
+                    normalize(&issue.label),
+                    section.id,
+                    normalize(quote)
+                ),
+            ),
+            kind: ChecklistKind::Flag,
+            title: clip(&format!("Flag: {}", issue.label), TITLE_CHARS),
+            detail: format!("Found in {}: \"{text}\"", section.heading),
+            why: issue.why.clone(),
+            placeholder: issue.fix.clone(),
+            section_id: Some(section.id.clone()),
+            section_heading: Some(section.heading.clone()),
+            quote: Some(text),
+            template: None,
+            cut_text: None,
+            position: 0,
+        });
+    }
+    items
+}
+
 fn reason(skill: &Skill) -> String {
     let text = skill.confidence_reason.trim();
     if (20..=180).contains(&text.len()) {
@@ -466,7 +520,7 @@ mod tests {
             engine: "chat".to_owned(),
             model: "test".to_owned(),
         };
-        let items = generate(&sections, &skills, &parse(Vec::new()));
+        let items = generate(&sections, &skills, &parse(Vec::new()), &[]);
         validate(&items, &sections).expect("items are grounded");
         let blank = items
             .iter()
@@ -500,7 +554,7 @@ mod tests {
             engine: "chat".to_owned(),
             model: "test".to_owned(),
         };
-        let items = generate(&sections, &skills, &parse(Vec::new()));
+        let items = generate(&sections, &skills, &parse(Vec::new()), &[]);
         assert!(items.iter().all(|item| item.kind != ChecklistKind::Blank));
     }
 
@@ -529,6 +583,7 @@ mod tests {
             &sections,
             &skills,
             &parse(vec![layout_section("Skills", false)]),
+            &[],
         );
         validate(&items, &sections).expect("items are grounded");
         assert!(items.iter().any(|item| item.kind == ChecklistKind::Promote));
@@ -547,7 +602,7 @@ mod tests {
             engine: "chat".to_owned(),
             model: "test".to_owned(),
         };
-        let items = generate(&sections, &skills, &parse(Vec::new()));
+        let items = generate(&sections, &skills, &parse(Vec::new()), &[]);
         validate(&items, &sections).expect("items are grounded");
         let cut = items
             .iter()
@@ -577,9 +632,79 @@ mod tests {
             engine: "chat".to_owned(),
             model: "test".to_owned(),
         };
-        let first = generate(&sections, &skills, &parse(Vec::new()));
-        let second = generate(&sections, &skills, &parse(Vec::new()));
+        let first = generate(&sections, &skills, &parse(Vec::new()), &[]);
+        let second = generate(&sections, &skills, &parse(Vec::new()), &[]);
         assert_eq!(first, second);
+    }
+
+    fn writing_issue(label: &str, quote: &str) -> WritingIssue {
+        WritingIssue {
+            label: label.to_owned(),
+            why: "It shifts the focus from your work to a person.".to_owned(),
+            fix: "Describe the gap without naming anyone.".to_owned(),
+            section_id: "experience-1".to_owned(),
+            quote: quote.to_owned(),
+        }
+    }
+
+    #[test]
+    fn model_flags_become_grounded_checklist_items() {
+        let quote = "My old manager never explained the process.";
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "test".to_owned(),
+            sections: vec![section(
+                "experience-1",
+                SectionKind::Experience,
+                "Experience",
+                quote,
+            )],
+        };
+        let skills = SkillSet {
+            skills: Vec::new(),
+            engine: "chat".to_owned(),
+            model: "test".to_owned(),
+        };
+        let items = generate(
+            &sections,
+            &skills,
+            &parse(Vec::new()),
+            &[writing_issue("Blaming a former manager", quote)],
+        );
+        validate(&items, &sections).expect("items are grounded");
+        let flag = items
+            .iter()
+            .find(|item| item.kind == ChecklistKind::Flag)
+            .expect("a flag");
+        assert_eq!(flag.quote.as_deref(), Some(quote));
+        assert_eq!(flag.placeholder, "Describe the gap without naming anyone.");
+        assert!(flag.title.contains("Blaming a former manager"));
+    }
+
+    #[test]
+    fn an_ungrounded_flag_cannot_reach_the_checklist() {
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "test".to_owned(),
+            sections: vec![section(
+                "experience-1",
+                SectionKind::Experience,
+                "Experience",
+                "Real text.",
+            )],
+        };
+        let skills = SkillSet {
+            skills: Vec::new(),
+            engine: "chat".to_owned(),
+            model: "test".to_owned(),
+        };
+        let items = generate(
+            &sections,
+            &skills,
+            &parse(Vec::new()),
+            &[writing_issue("Name-calling", "A line never written.")],
+        );
+        assert_eq!(items, [] as [GeneratedItem; 0]);
     }
 
     #[test]

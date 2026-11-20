@@ -3151,6 +3151,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 
 [[package]]
+name = "issues"
+version = "0.3.0"
+dependencies = [
+ "domain",
+ "serde",
+ "serde_json",
+ "stream-protocol",
+]
+
+[[package]]
 name = "itertools"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5484,6 +5494,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "domain",
+ "issues",
  "once_cell",
  "reqwest 0.13.5",
  "serde",

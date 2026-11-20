@@ -6,7 +6,7 @@ use domain::{
     ChecklistKind, EventName, FeedbackAnalysis, GenerateChecklistPayload, GenerateMarkdownPayload,
     PROFILE_SUMMARY_ID, ParseInput, ProfileSummary, ResumeDetail, ResumeMarkdown, ResumeStatus,
     ResumeSummary, RunPayload, RunStatus, RunView, SectionKind, SectionMap, SectionVote, SkillSet,
-    UploadedPayload, Verdict, VersionDetail, VersionSummary,
+    UploadedPayload, Verdict, VersionDetail, VersionSummary, WritingIssueSet,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -567,14 +567,20 @@ impl Store {
         Ok(())
     }
 
-    /// Store the validated skill map produced with the profile impression, and
-    /// queue the writing checklist now that its inputs are all present. The
+    /// Store the validated skills and writing flags from one profile impression,
+    /// then queue the writing checklist now that its inputs are all present. The
     /// guard keeps a retried upload from queueing a second checklist.
-    pub async fn save_skills(&self, version_id: Uuid, skills: &SkillSet) -> anyhow::Result<()> {
+    pub async fn save_impression_reading(
+        &self,
+        version_id: Uuid,
+        skills: &SkillSet,
+        issues: &WritingIssueSet,
+    ) -> anyhow::Result<()> {
         let mut tx = self.pool.begin().await?;
-        sqlx::query("update versions set skills = $2 where id = $1")
+        sqlx::query("update versions set skills = $2, writing_issues = $3 where id = $1")
             .bind(version_id)
             .bind(jsonb(skills)?)
+            .bind(jsonb(issues)?)
             .execute(&mut *tx)
             .await?;
         let already = sqlx::query(
@@ -603,23 +609,34 @@ impl Store {
         Ok(())
     }
 
-    /// Inputs for the writing checklist. All three are written before the
-    /// `GenerateChecklist` event is queued, so a missing one is a retryable
-    /// failure rather than an empty checklist.
+    /// Inputs for the writing checklist. Parse, sections and skills are written
+    /// before the `GenerateChecklist` event is queued, so a missing one is a
+    /// retryable failure rather than an empty checklist. Flags are optional for
+    /// versions read before bad-practice detection existed.
     pub async fn checklist_inputs(
         &self,
         version_id: Uuid,
-    ) -> anyhow::Result<Option<(ParseInput, SectionMap, SkillSet)>> {
-        let row = sqlx::query("select parse, sections, skills from versions where id = $1")
-            .bind(version_id)
-            .fetch_optional(&self.pool)
-            .await?;
+    ) -> anyhow::Result<Option<(ParseInput, SectionMap, SkillSet, WritingIssueSet)>> {
+        let row = sqlx::query(
+            "select parse, sections, skills, writing_issues from versions where id = $1",
+        )
+        .bind(version_id)
+        .fetch_optional(&self.pool)
+        .await?;
         let Some(row) = row else {
             return Ok(None);
         };
         let parse: Option<Json<ParseInput>> = row.try_get("parse")?;
         let sections: Option<Json<SectionMap>> = row.try_get("sections")?;
         let skills: Option<Json<SkillSet>> = row.try_get("skills")?;
+        let issues: Option<Json<WritingIssueSet>> = row.try_get("writing_issues")?;
+        let skills = skills
+            .map(|json| json.0)
+            .ok_or_else(|| anyhow::anyhow!("skills are missing"))?;
+        let issues = issues.map_or_else(
+            || WritingIssueSet::empty("chat", &skills.model),
+            |json| json.0,
+        );
         Ok(Some((
             parse
                 .map(|json| json.0)
@@ -627,9 +644,8 @@ impl Store {
             sections
                 .map(|json| json.0)
                 .ok_or_else(|| anyhow::anyhow!("sections are missing"))?,
-            skills
-                .map(|json| json.0)
-                .ok_or_else(|| anyhow::anyhow!("skills are missing"))?,
+            skills,
+            issues,
         )))
     }
 
@@ -1521,6 +1537,7 @@ fn checklist_view(row: &sqlx::postgres::PgRow) -> anyhow::Result<ChecklistItem> 
             "blank" => ChecklistKind::Blank,
             "promote" => ChecklistKind::Promote,
             "cut" => ChecklistKind::Cut,
+            "flag" => ChecklistKind::Flag,
             other => anyhow::bail!("bad checklist kind {other}"),
         },
         title: row.try_get("title")?,
@@ -2884,5 +2901,93 @@ mod tests {
                 .iter()
                 .any(|section| section == domain::PROFILE_SUMMARY_ID)
         );
+    }
+
+    #[tokio::test]
+    async fn writing_flags_round_trip_and_flag_items_store() {
+        let store = Ephemeral::start().await.unwrap();
+        let resume = Uuid::new_v4();
+        let version = Uuid::new_v4();
+        store
+            .create_resume(
+                domain::DEMO_USER_ID,
+                resume,
+                version,
+                "flags.pdf",
+                domain::PDF,
+                "flags-key",
+            )
+            .await
+            .unwrap();
+        let parse = ParseInput::empty(domain::LayoutConfidence::Structural);
+        let sections = SectionMap {
+            engine: "test".to_owned(),
+            model: "test".to_owned(),
+            sections: vec![domain::DetectedSection {
+                id: "experience-1".to_owned(),
+                kind: SectionKind::Experience,
+                heading: "Experience".to_owned(),
+                body: "My old manager never explained the process.".to_owned(),
+                confidence: 0.9,
+                feedback: None,
+            }],
+        };
+        store
+            .save_parse(version, &parse, Some(&sections), None)
+            .await
+            .unwrap();
+        let skills = SkillSet {
+            skills: Vec::new(),
+            engine: "chat".to_owned(),
+            model: "stub".to_owned(),
+        };
+        let issues = WritingIssueSet {
+            issues: vec![domain::WritingIssue {
+                label: "Blaming a former manager".to_owned(),
+                why: "It sounds like a complaint.".to_owned(),
+                fix: "Describe the gap without naming anyone.".to_owned(),
+                section_id: "experience-1".to_owned(),
+                quote: "My old manager never explained the process.".to_owned(),
+            }],
+            engine: "chat".to_owned(),
+            model: "stub".to_owned(),
+        };
+        store
+            .save_impression_reading(version, &skills, &issues)
+            .await
+            .unwrap();
+        let (_, _, saved_skills, saved_issues) = store
+            .checklist_inputs(version)
+            .await
+            .unwrap()
+            .expect("inputs");
+        assert_eq!(saved_skills.model, "stub");
+        assert_eq!(saved_issues.issues.len(), 1);
+        assert_eq!(saved_issues.issues[0].label, "Blaming a former manager");
+
+        let item = checklist::GeneratedItem {
+            fingerprint: "flag-test".to_owned(),
+            kind: ChecklistKind::Flag,
+            title: "Flag: Blaming a former manager".to_owned(),
+            detail: "Found in Experience.".to_owned(),
+            why: "It sounds like a complaint.".to_owned(),
+            placeholder: "Describe the gap without naming anyone.".to_owned(),
+            section_id: Some("experience-1".to_owned()),
+            section_heading: Some("Experience".to_owned()),
+            quote: Some("My old manager never explained the process.".to_owned()),
+            template: None,
+            cut_text: None,
+            position: 0,
+        };
+        store
+            .replace_checklist(version, std::slice::from_ref(&item))
+            .await
+            .unwrap();
+        let detail = store
+            .detail(domain::DEMO_USER_ID, resume)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(detail.versions[0].checklist[0].kind, ChecklistKind::Flag);
     }
 }

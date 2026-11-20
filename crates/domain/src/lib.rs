@@ -605,11 +605,43 @@ pub struct SkillSet {
     pub model: String,
 }
 
-/// One read of the résumé produces both model impressions in the same call.
+/// A bad résumé practice the model can prove from the writer's own words. The
+/// label, reason and fix are guidance; the quote is the evidence, never a rewrite.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WritingIssue {
+    pub label: String,
+    pub why: String,
+    pub fix: String,
+    pub section_id: String,
+    pub quote: String,
+}
+
+/// The validated bad-practice flags from the same read that produced the skills.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WritingIssueSet {
+    pub issues: Vec<WritingIssue>,
+    pub engine: String,
+    pub model: String,
+}
+
+impl WritingIssueSet {
+    #[must_use]
+    pub fn empty(engine: &str, model: &str) -> Self {
+        Self {
+            issues: Vec::new(),
+            engine: engine.to_owned(),
+            model: model.to_owned(),
+        }
+    }
+}
+
+/// One read of the résumé produces the profile, skills and writing flags in the
+/// same model call. Rust validates every quote before any of it is stored.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ProfileImpression {
     pub profile_summary: ProfileSummary,
     pub skills: SkillSet,
+    pub issues: WritingIssueSet,
 }
 
 /// What the writer can do about one finding in the Second Draft checklist.
@@ -622,6 +654,8 @@ pub enum ChecklistKind {
     Promote,
     /// Text that spends space without supporting anything.
     Cut,
+    /// A bad résumé practice the model flagged in the writer's own words.
+    Flag,
 }
 
 impl ChecklistKind {
@@ -631,6 +665,7 @@ impl ChecklistKind {
             Self::Blank => "blank",
             Self::Promote => "promote",
             Self::Cut => "cut",
+            Self::Flag => "flag",
         }
     }
 }
