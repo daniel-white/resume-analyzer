@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.3.0](https://github.com/daniel-white/resume-analyzer/compare/v0.2.4...v0.3.0) (2026-11-20)
+
+
+### Features
+
+* **about:** add changelog tab with generated release notes ([#22](https://github.com/daniel-white/resume-analyzer/issues/22)) ([f18d20c](https://github.com/daniel-white/resume-analyzer/commit/f18d20cf53662d53d86505e6035e9ed710d539be))
+* add About page with build metadata ([#20](https://github.com/daniel-white/resume-analyzer/issues/20)) ([60d7efe](https://github.com/daniel-white/resume-analyzer/commit/60d7efe392359c30ee0914399f544990d472e36b))
+* add evidence-backed, job-agnostic Skill Signal tag cloud ([#21](https://github.com/daniel-white/resume-analyzer/issues/21)) ([cd3608e](https://github.com/daniel-white/resume-analyzer/commit/cd3608e71b36e13723709ca9d4d4b708c9c26101))
+
+
+### Bug Fixes
+
+* **ci:** generate release notes on release-please PRs ([#23](https://github.com/daniel-white/resume-analyzer/issues/23)) ([f59d73a](https://github.com/daniel-white/resume-analyzer/commit/f59d73af6116bd78b329ad374aca02427393a61c))
+* pass checksums from sign to release job ([#19](https://github.com/daniel-white/resume-analyzer/issues/19)) ([27cc486](https://github.com/daniel-white/resume-analyzer/commit/27cc486e29b1b23147e1515b8ab3ce65076e0516))
+* **release-notes:** keep every changelog item ([#25](https://github.com/daniel-white/resume-analyzer/issues/25)) ([2c25580](https://github.com/daniel-white/resume-analyzer/commit/2c255801ee1132d867f611db2a5b6a89e1d6bf0d))
+* **release-notes:** strip model JSON wrappers from notes ([#24](https://github.com/daniel-white/resume-analyzer/issues/24)) ([793d2e7](https://github.com/daniel-white/resume-analyzer/commit/793d2e7164a1935db69cdad7674387777a830210))
+* use a plain OCI reference for cosign chart signing ([#16](https://github.com/daniel-white/resume-analyzer/issues/16)) ([a66b280](https://github.com/daniel-white/resume-analyzer/commit/a66b2800c8e72ec29413940adf1516a11f5fc4e4))
+
 ## [0.2.4](https://github.com/daniel-white/resume-analyzer/compare/v0.2.3...v0.2.4) (2026-11-18)
 
 

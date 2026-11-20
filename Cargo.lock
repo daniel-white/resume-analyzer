@@ -104,7 +104,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "app"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -247,7 +247,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "auth"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "base64 0.23.1",
  "getrandom 0.2.17",
@@ -1193,7 +1193,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "hex",
@@ -1415,7 +1415,7 @@ dependencies = [
 
 [[package]]
 name = "feedback"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "domain",
  "once_cell",
@@ -3459,7 +3459,7 @@ checksum = "fc04a4c58212d57930a24bf47d3fa87485264a3a054e9c10e042eb373573ad3c"
 
 [[package]]
 name = "mail"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "lettre",
 ]
@@ -4044,7 +4044,7 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
 name = "plugins"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "domain",
@@ -4863,7 +4863,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "sections"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "domain",
  "fastembed",
@@ -5131,7 +5131,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
 name = "skills"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "domain",
@@ -5397,7 +5397,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "storage"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5413,7 +5413,7 @@ dependencies = [
 
 [[package]]
 name = "stream-protocol"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "reqwest 0.13.5",
  "serde",
@@ -5468,7 +5468,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "summary"
-version = "0.2.4"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "domain",
