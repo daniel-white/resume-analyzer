@@ -34,7 +34,7 @@ const sectionNames = new Map([
 // Other release-please sections are always dropped. This second pass catches
 // internal work that release-please filed under Features or Bug Fixes.
 const internalWork =
-  /\b(?:ci|github actions|workflow|pipeline|buildx|imagetools|docker|helm|charts?|pnpm|cargo|dependenc(?:y|ies)|dependabot|lockfile|e2e|tests?|release-please|cosign|ghcr|signing|attestations?|registry cache|bake)\b/i;
+  /\b(?:ci|github actions|workflow|pipeline|buildx|imagetools|docker|helm|charts?|pnpm|cargo|dependenc(?:y|ies)|dependabot|lockfile|e2e|tests?|release-please|release jobs?|release pipeline|release workflow|cosign|ghcr|signing|signed|attestations?|checksums?|registry|build metadata|bake|cache)\b/i;
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -127,7 +127,10 @@ export function draftMarkdown(draft) {
 // Unknown headings, links, hashes, and PR numbers are removed here, not in the
 // UI, so the committed artifact is always safe to render as HTML.
 export function normalizeMarkdown(markdown, version) {
-  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const lines = markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/```[\s\S]*?```/g, "")
+    .split("\n");
   const paragraphs = [];
   const items = new Map([
     ["Features", []],
@@ -139,7 +142,7 @@ export function normalizeMarkdown(markdown, version) {
   const flushParagraph = () => {
     if (paragraph.length === 0) return;
     const text = stripRefs(paragraph.join(" "));
-    if (text.length > 0) paragraphs.push(text);
+    if (text.length > 0 && !internalWork.test(text)) paragraphs.push(text);
     paragraph = [];
   };
 
@@ -147,6 +150,12 @@ export function normalizeMarkdown(markdown, version) {
   for (const raw of lines) {
     const line = raw.trim();
     if (line.length === 0) {
+      flushParagraph();
+      continue;
+    }
+    // A quoted JSON wrapper or code fence is never release-note content. Drop
+    // it here as a second line of defence after unwrapModelContent.
+    if (/^[{[]/.test(line) || /^"(?:markdown|content)"\s*:/.test(line)) {
       flushParagraph();
       continue;
     }
@@ -192,6 +201,13 @@ function curatedPath(version) {
   return join(notesDirectory, `${version}.md`);
 }
 
+// A bad model response must fail the release job, not ship as release notes.
+export function assertCleanMarkdown(markdown) {
+  if (/```/.test(markdown) || /^[{[]/m.test(markdown) || /\\n/.test(markdown)) {
+    throw new Error("release notes contain a JSON wrapper or code fence");
+  }
+}
+
 export function expectedMarkdown(version) {
   const markdown = readFileSync(changelogPath, "utf8");
   const draft = parseChangelog(markdown, version);
@@ -201,7 +217,9 @@ export function expectedMarkdown(version) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  return normalizeMarkdown(source, version);
+  const notes = normalizeMarkdown(source, version);
+  assertCleanMarkdown(notes);
+  return notes;
 }
 
 function writeOutput(path, contents) {
@@ -221,6 +239,29 @@ function parseModelResponse(raw) {
     }
     return JSON.parse(fenced.slice(start, end + 1));
   }
+}
+
+// Some chat models return the requested JSON object *as the message text*
+// instead of as the completion payload. Accept both shapes: plain markdown or
+// a `{"markdown": "..."}` wrapper, with or without a code fence.
+export function unwrapModelContent(content) {
+  let text = content.trim();
+  const fenced = /^```(?:markdown|md|json)?\s*([\s\S]*?)```$/i.exec(text);
+  if (fenced) text = fenced[1].trim();
+
+  const candidates = [text];
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed.markdown === "string") return parsed.markdown;
+    } catch {
+      // Plain markdown, or a JSON object that is not a wrapper.
+    }
+  }
+  return text;
 }
 
 async function editWithModel(version) {
@@ -253,7 +294,9 @@ async function editWithModel(version) {
   if (typeof content !== "string" || content.trim().length === 0) {
     throw new Error("the model returned an empty response");
   }
-  return normalizeMarkdown(content, version);
+  const notes = normalizeMarkdown(unwrapModelContent(content), version);
+  assertCleanMarkdown(notes);
+  return notes;
 }
 
 async function main() {
