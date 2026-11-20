@@ -71,13 +71,11 @@ export function SecondDraft({
   resumeId,
   versionId,
   pending = false,
-  onFocusSection,
 }: {
   items: ChecklistItem[];
   resumeId: string;
   versionId: string;
   pending?: boolean;
-  onFocusSection: (sectionId: string, heading: string) => void;
 }) {
   const [rows, setRows] = useState<Row[]>(() => toRows(items));
   const [busy, setBusy] = useState<Record<string, boolean>>({});
@@ -170,7 +168,6 @@ export function SecondDraft({
                 </div>
                 <ul className="second-draft-list">
                   {groupItems.map((row) => {
-                    const sectionId = row.section_id;
                     const sectionHeading = row.section_heading;
                     return (
                       <li
@@ -209,14 +206,8 @@ export function SecondDraft({
                             onChange={(event) => patch(row.id, { draft: event.target.value })}
                             onBlur={() => saveAnswer(row)}
                           />
-                          {sectionId && sectionHeading ? (
-                            <button
-                              type="button"
-                              className="second-draft-focus"
-                              onClick={() => onFocusSection(sectionId, sectionHeading)}
-                            >
-                              Show in {sectionHeading}
-                            </button>
+                          {sectionHeading ? (
+                            <p className="second-draft-source">From {sectionHeading}</p>
                           ) : null}
                         </div>
                       </li>

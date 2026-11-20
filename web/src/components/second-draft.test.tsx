@@ -93,7 +93,6 @@ function render(value: ChecklistItem[] = items, pending = false) {
       resumeId="resume-1"
       versionId="version-1"
       pending={pending}
-      onFocusSection={() => undefined}
     />,
   );
 }
@@ -143,10 +142,10 @@ describe("second draft", () => {
     expect(html).toContain("Resolved escalations — ");
   });
 
-  it("keeps the exact line to cut and a link back to its section", () => {
+  it("keeps the exact line to cut and labels its source section", () => {
     const html = render();
     expect(html).toContain("Hard-working team player with a passion for excellence.");
-    expect(html).toContain("Show in Experience");
+    expect(html).toContain("From Experience");
   });
 
   it("shows the model's flag with its own rewrite hint", () => {

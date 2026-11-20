@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi, reading } from "./api";
+import { designed, installApi, openTab, reading } from "./api";
 
 function completeReading() {
   return {
@@ -19,6 +19,8 @@ test("streams analysis results without polling and closes on completion", async 
   await page.waitForTimeout(2500);
   expect((await api.stats()).detailReads).toBe(before);
   await api.update({ resumes: [completeReading()], event: "AtsCallbackReceived" });
+  await openTab(page, "ATS insights");
+  await expect(page).toHaveURL(/\/ats-insights$/);
   await expect(page.getByLabel("Grade F", { exact: true })).toBeVisible();
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByLabel("Pending")).toHaveCount(0);
@@ -33,6 +35,7 @@ test("reloads authoritative state after reconnect even when events were missed",
   // refresh. No event is sent: the reconnect's open handler must reconcile it.
   await api.update({ onConnectResumes: [completeReading()], disconnect: true });
   await expect.poll(async () => (await api.stats()).connections).toBe(2);
+  await openTab(page, "ATS insights");
   await expect(page.getByLabel("Grade F", { exact: true })).toBeVisible();
   await expect.poll(async () => (await api.stats()).streams).toBe(0);
 });

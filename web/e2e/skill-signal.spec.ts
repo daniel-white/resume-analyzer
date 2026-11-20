@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, designedSkills, installApi, ready, type SeedFrame } from "./api";
+import { designed, designedSkills, installApi, openTab, ready, type SeedFrame } from "./api";
 
 const waiting = {
   ...designed,
@@ -12,6 +12,7 @@ test("stored skills filter by contextual nature and focus their evidence", async
   await installApi(page, { resumes: [designed] });
   await page.goto(`/resumes/${designed.id}`);
   await ready(page);
+  await openTab(page, "Skills");
   const cloud = page.getByRole("region", { name: "Skills in this résumé" });
   await expect(cloud).toBeVisible();
   // The evidence map sits in the same bordered, padded box as the model impression.
@@ -30,8 +31,8 @@ test("stored skills filter by contextual nature and focus their evidence", async
   const evidence = cloud.getByRole("region", { name: "Evidence for Analytical engines" });
   await expect(evidence).toContainText("Analytical Engines");
   await expect(evidence).toContainText("Tools · Technical");
-  await evidence.getByRole("button", { name: /Show in Skills/ }).click();
-  await expect(page.locator("#structure-button-skills-1")).toHaveClass(/is-selected/);
+  await expect(evidence).toContainText("From Skills");
+  await expect(evidence.getByRole("button")).toHaveCount(0);
 });
 
 test("version comparison shows skills gained and growing in importance", async ({ page }) => {
@@ -54,6 +55,7 @@ test("version comparison shows skills gained and growing in importance", async (
   await installApi(page, { resumes: [versioned] });
   await page.goto(`/resumes/${designed.id}?version=latest-version`);
   await ready(page);
+  await openTab(page, "ATS insights");
   const comparison = page.getByRole("region", { name: "Compare versions", exact: true });
   await comparison.locator("summary").click();
   await expect(comparison).toContainText("Skill signal changes");
@@ -69,6 +71,7 @@ test("skills pop in one at a time as stream frames arrive and push the cloud wid
   await page.goto(`/resumes/${waiting.id}`);
   await ready(page);
   await expect.poll(async () => (await api.stats()).streams).toBe(1);
+  await openTab(page, "Skills");
   const cloud = page.getByRole("region", { name: "Skills in this résumé" });
   const tags = cloud.getByTestId("skill-tag");
   await expect(tags).toHaveCount(0);

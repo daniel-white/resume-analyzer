@@ -1,4 +1,4 @@
-import { ArrowRight, Tags } from "lucide-react";
+import { Tags } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { liveKey, seedRun } from "~/lib/generation";
@@ -32,13 +32,11 @@ export function SkillCloud({
   sections,
   versionId,
   pending = false,
-  onFocusSection,
 }: {
   skills: SkillSet | null;
   sections: SectionMap | null;
   versionId: string;
   pending?: boolean;
-  onFocusSection: (sectionId: string, heading: string) => void;
 }) {
   const live = useLiveRun(liveKey("skills", versionId));
   const streaming = Boolean(live && !live.done && !live.error);
@@ -199,13 +197,10 @@ export function SkillCloud({
               <ul>
                 {selected.evidence.map((item, index) => {
                   const section = sections?.sections.find((entry) => entry.id === item.section_id);
-                  const heading = section?.heading ?? "résumé details";
                   return (
                     <li key={`${item.section_id}-${index}`}>
                       <blockquote>{item.quote}</blockquote>
-                      <button type="button" onClick={() => onFocusSection(item.section_id, heading)}>
-                        Show in {heading} <ArrowRight size={14} aria-hidden="true" />
-                      </button>
+                      {section ? <span className="skill-evidence-where">From {section.heading}</span> : null}
                     </li>
                   );
                 })}

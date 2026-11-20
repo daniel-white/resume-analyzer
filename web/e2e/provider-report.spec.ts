@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { designed, installApi } from "./api";
+import { designed, installApi, openTab } from "./api";
 
 test("persisted provider reports render after reload without affecting older results", async ({ page }, testInfo) => {
   const resume = structuredClone(designed);
@@ -16,6 +16,7 @@ test("persisted provider reports render after reload without affecting older res
   });
   await installApi(page, { resumes: [resume] });
   await page.goto(`/resumes/${resume.id}?provider=greenline`);
+  await openTab(page, "ATS insights");
   const card = page.getByRole("article", { name: "Greenline", exact: true });
   const report = card.getByRole("region", { name: "Simulated parser report" });
   await expect(report.getByText("Plaintext Classic")).toBeVisible();

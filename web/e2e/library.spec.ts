@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { designed, installApi, reading, ready, stored } from "./api";
+import { designed, installApi, openTab, reading, ready, stored } from "./api";
 
 test("welcomes a signed-out visitor with an upload-first landing", async ({ page }) => {
   await installApi(page, { signedIn: false, resumes: [] });
@@ -68,9 +68,11 @@ test("opens a scored teardown from the library", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/resumes\/resume-designed$/);
   await expect(page.getByRole("heading", { name: "ada-designed.pdf" })).toBeVisible();
+  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
+  await openTab(page, "Structure");
   await expect(page.getByLabel("Résumé details", { exact: true })).toContainText("contact in the header");
   await expect(page.getByLabel("Résumé details", { exact: true })).toContainText("Ada Lovelace");
-  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
+  await openTab(page, "ATS insights");
   const greenline = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Greenline" }) });
   await expect(greenline.getByRole("heading", { name: "Greenline" })).toBeVisible();
   await expect(greenline.getByLabel("Grade F", { exact: true })).toBeVisible();
@@ -88,9 +90,10 @@ test("keeps a reading file on the teardown without scores", async ({ page }) => 
 
   await expect(page.getByRole("heading", { name: "workshop.pdf" })).toBeVisible();
   await expect(page.getByText("Analysis in progress", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
+  await openTab(page, "ATS insights");
   await expect(page.getByText("Reading the file").first()).toBeVisible();
   await expect(page.getByLabel("Pending").first()).toBeVisible();
-  await expect(page.getByLabel("Original résumé").getByText("Original PDF résumé")).toBeVisible({ timeout: 20_000 });
 });
 
 test("renders the original DOCX even before parsing finishes", async ({ page }) => {

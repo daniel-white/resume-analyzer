@@ -56,6 +56,11 @@ test("the second draft groups edits and keeps a tick and note across a reload", 
   await installApi(page, { resumes: [withChecklist] });
   await page.goto(`/resumes/${designed.id}`);
   await ready(page);
+  await expect(page.getByText("Ideas only · 0 of 4 done · your PDF is unchanged", { exact: true })).toBeHidden();
+  await page.getByRole("link", { name: "See improvement ideas" }).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+  await expect(page.getByText("Ideas only · 0 of 4 done · your PDF is unchanged", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Back to analysis" })).toBeVisible();
 
   const panel = page.getByRole("region", { name: "Your editing checklist" });
   await expect(panel).toBeVisible();

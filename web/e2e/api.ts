@@ -272,6 +272,15 @@ export async function ready(page: Page) {
   );
 }
 
+export async function openTab(
+  page: Page,
+  name: "Overview" | "Structure" | "Skills" | "ATS insights",
+) {
+  await page.getByRole("navigation", { name: "Analysis sections" })
+    .getByRole("link", { name })
+    .click();
+}
+
 export async function installApi(page: Page, options: ApiOptions = {}) {
   const response = await page.request.post(`${api}/__seed`, { data: options });
   if (!response.ok()) {
