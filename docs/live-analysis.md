@@ -21,6 +21,12 @@ without reloading the route on every token. A refresh happens after completion
 so the stored result becomes authoritative. Legacy whole-blob model replies are
 still parsed into the same final result.
 
+Storing a version's validated skill set also emits a `GenerateChecklist`
+lifecycle event. It has no token stream: the worker derives the Second Draft
+edits from the stored sections, skills and layout. The page treats the event as
+a hint and reloads the detail route, so the checklist panel fills in on its own
+and ticks and notes saved just before a re-read are never lost.
+
 Streamed feedback diagnosis is admin-only. The admin dashboard uses
 `GET /api/admin/events`, a cookie-protected global stream that forwards only
 feedback `GenerationStream` frames; resume owners never receive diagnosis text.

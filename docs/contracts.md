@@ -67,7 +67,7 @@ than or equal to 1. `name`, `email`, and `phone` are strings or null.
 
 `name` is exactly one of `ResumeUploaded`, `ResumeParsed`, `AtsRunRequested`,
 `AtsCallbackReceived`, `GenerateMarkdown`, `AnalyzeFeedback`,
-`GenerationStream`.
+`GenerateChecklist`, `GenerationStream`.
 
 ```json
 {
@@ -90,6 +90,7 @@ Payloads:
 | `AtsCallbackReceived` | `{ "run_id", "plugin_id", "parse": ParseInput, "verdict": Verdict }` |
 | `GenerateMarkdown` | `{ "version_id" }` |
 | `AnalyzeFeedback` | `{ "version_id", "user_id", "section_id", "section_heading", "section_kind" }` |
+| `GenerateChecklist` | `{ "version_id" }` |
 | `GenerationStream` | a `GenerationFrame`, described with the SSE stream below |
 
 `media_type` is `application/pdf` or
@@ -120,6 +121,17 @@ model that invents every quote is an error and neither reading is saved. Live
 frames route by content: prose, `is_resume`, and the `reading` and `understanding`
 stages go to the `summary` flow, while skill fields and the `mapping` stage go
 to the `skills` flow. `queued` and `complete` stages are sent to both flows.
+
+Storing the validated skill set also queues one `GenerateChecklist` event for
+that version, guarded so a retried upload cannot queue a second one. Its worker
+builds the Second Draft checklist with no model call: it reads the stored
+`sections`, `skills` and `parse` and derives at most four blanks (a writer's own
+line with a `___` hole), two promotions (well-evidenced skill buried in a list
+or weak position), and two cuts (unsupported trait or duty phrases). Every
+quote and cut text is copied verbatim from a detected section and validated
+before storage, so a suggestion can never invent a fact. Items have a stable
+`fingerprint`, so regenerating after a re-read updates the wording while
+preserving the reader's `done`, `answer`, and `checked_at`.
 
 When the registry gains a plugin, an authenticated detail visit reconciles the
 newest parsed version with the active registry. Missing runs and their
@@ -244,6 +256,7 @@ GET /api/resumes/:id
       "parse": null,
       "sections": null,
       "skills": null,
+      "checklist": [],
       "runs": [
         {
           "id": "uuid",
@@ -294,6 +307,52 @@ Each `evidence` quote is copied verbatim from the cited `sections` entry. The
 comparison view sends a compact summary (`name`, `canonical`, `nature`,
 `importance`) of presented skills per version and derives gained, lost, and
 shifted tags from it.
+
+`checklist` is that version's Second Draft items, in reading order. It is `[]`
+until the version's combined impression finishes. Each item is one grounded
+edit:
+
+```json
+{
+  "id": "uuid",
+  "fingerprint": "sha256-of-the-source-facts",
+  "kind": "blank",
+  "title": "Add a number to Triage",
+  "detail": "Your line: \"Triaged patients in the emergency department.\"",
+  "why": "This line is a duty rather than a result.",
+  "placeholder": "how many triage · how often · what changed",
+  "section_id": "uuid",
+  "section_heading": "Experience",
+  "quote": "Triaged patients in the emergency department.",
+  "template": "Triaged patients — ___",
+  "cut_text": null,
+  "position": 0,
+  "done": false,
+  "answer": null,
+  "checked_at": null,
+  "created_at": "2026-11-17T14:08:38Z"
+}
+```
+
+`kind` is `blank`, `promote`, or `cut`. `blank` and `promote` items carry a
+`template` whose `___` the page fills with `answer` as the writer types;
+`cut` items carry the exact `cut_text` to delete instead. `section_id` and
+`section_heading` point at the source section. `placeholder` is a hint, never a
+fabricated fact. `done`, `answer`, and `checked_at` are the reader's own state;
+`checked_at` is set on tick and cleared on untick.
+
+```text
+PATCH /api/resumes/:id/versions/:version_id/checklist/:item_id
+content-type: application/json
+```
+
+```json
+{ "done": true, "answer": "40 patients per shift" }
+```
+
+`404` when the item is unknown or belongs to another user. The response is the
+updated item. Both fields are always sent; an empty `answer` clears the note.
+Ownership is checked in the update statement itself.
 
 ```text
 GET /api/resumes/:id/events
