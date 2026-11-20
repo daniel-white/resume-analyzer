@@ -112,6 +112,7 @@ dependencies = [
  "auth",
  "axum",
  "base64 0.23.1",
+ "checklist",
  "chrono",
  "domain",
  "feedback",
@@ -681,6 +682,16 @@ dependencies = [
  "cfg-if",
  "cpufeatures 0.3.1",
  "rand_core 0.10.1",
+]
+
+[[package]]
+name = "checklist"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "domain",
+ "hex",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -5401,6 +5412,7 @@ version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "checklist",
  "chrono",
  "domain",
  "serde",

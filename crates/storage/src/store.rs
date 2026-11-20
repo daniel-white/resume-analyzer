@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use domain::{
-    AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, CallbackPayload, EventName,
-    FeedbackAnalysis, GenerateMarkdownPayload, PROFILE_SUMMARY_ID, ParseInput, ProfileSummary,
-    ResumeDetail, ResumeMarkdown, ResumeStatus, ResumeSummary, RunPayload, RunStatus, RunView,
-    SectionKind, SectionMap, SectionVote, SkillSet, UploadedPayload, Verdict, VersionDetail,
-    VersionSummary,
+    AdminFeedback, AdminFeedbackAnalysis, AnalyzeFeedbackPayload, CallbackPayload, ChecklistItem,
+    ChecklistKind, EventName, FeedbackAnalysis, GenerateChecklistPayload, GenerateMarkdownPayload,
+    PROFILE_SUMMARY_ID, ParseInput, ProfileSummary, ResumeDetail, ResumeMarkdown, ResumeStatus,
+    ResumeSummary, RunPayload, RunStatus, RunView, SectionKind, SectionMap, SectionVote, SkillSet,
+    UploadedPayload, Verdict, VersionDetail, VersionSummary,
 };
 use serde::Serialize;
 use sqlx::postgres::PgPoolOptions;
@@ -343,6 +343,15 @@ impl Store {
         .bind(user_id)
         .fetch_all(&self.pool)
         .await?;
+        let checklist = sqlx::query(
+            "select items.* from version_checklist_items items
+             join versions on versions.id = items.version_id
+             where versions.resume_id = $1
+             order by items.version_id, items.position, items.id",
+        )
+        .bind(id)
+        .fetch_all(&self.pool)
+        .await?;
         let mut details = Vec::with_capacity(versions.len());
         for version in &versions {
             let version_id: Uuid = version.try_get("id")?;
@@ -401,6 +410,11 @@ impl Store {
                 sections,
                 profile_summary,
                 skills,
+                checklist: checklist
+                    .iter()
+                    .filter(|item| item.try_get::<Uuid, _>("version_id").ok() == Some(version_id))
+                    .map(checklist_view)
+                    .collect::<anyhow::Result<_>>()?,
                 runs: runs
                     .iter()
                     .filter(|run| run.try_get::<Uuid, _>("version_id").ok() == Some(version_id))
@@ -553,14 +567,171 @@ impl Store {
         Ok(())
     }
 
-    /// Store the validated skill map produced with the profile impression.
+    /// Store the validated skill map produced with the profile impression, and
+    /// queue the writing checklist now that its inputs are all present. The
+    /// guard keeps a retried upload from queueing a second checklist.
     pub async fn save_skills(&self, version_id: Uuid, skills: &SkillSet) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
         sqlx::query("update versions set skills = $2 where id = $1")
             .bind(version_id)
             .bind(jsonb(skills)?)
-            .execute(&self.pool)
+            .execute(&mut *tx)
             .await?;
+        let already = sqlx::query(
+            "select 1 as present from outbox where version_id = $1 and name = 'GenerateChecklist' limit 1",
+        )
+        .bind(version_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+        if already.is_none() {
+            let resume_id: Uuid =
+                sqlx::query_scalar("select resume_id from versions where id = $1")
+                    .bind(version_id)
+                    .fetch_one(&mut *tx)
+                    .await?;
+            let payload = serde_json::to_value(GenerateChecklistPayload { version_id })?;
+            enqueue(
+                &mut tx,
+                resume_id,
+                version_id,
+                EventName::GenerateChecklist,
+                &payload,
+            )
+            .await?;
+        }
+        tx.commit().await?;
         Ok(())
+    }
+
+    /// Inputs for the writing checklist. All three are written before the
+    /// `GenerateChecklist` event is queued, so a missing one is a retryable
+    /// failure rather than an empty checklist.
+    pub async fn checklist_inputs(
+        &self,
+        version_id: Uuid,
+    ) -> anyhow::Result<Option<(ParseInput, SectionMap, SkillSet)>> {
+        let row = sqlx::query("select parse, sections, skills from versions where id = $1")
+            .bind(version_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        let parse: Option<Json<ParseInput>> = row.try_get("parse")?;
+        let sections: Option<Json<SectionMap>> = row.try_get("sections")?;
+        let skills: Option<Json<SkillSet>> = row.try_get("skills")?;
+        Ok(Some((
+            parse
+                .map(|json| json.0)
+                .ok_or_else(|| anyhow::anyhow!("parse is missing"))?,
+            sections
+                .map(|json| json.0)
+                .ok_or_else(|| anyhow::anyhow!("sections are missing"))?,
+            skills
+                .map(|json| json.0)
+                .ok_or_else(|| anyhow::anyhow!("skills are missing"))?,
+        )))
+    }
+
+    /// Replace generated items while preserving the reader's own state. The
+    /// fingerprint is stable across scans, so a checked item stays checked and
+    /// its answer survives a re-analysis.
+    pub async fn replace_checklist(
+        &self,
+        version_id: Uuid,
+        items: &[checklist::GeneratedItem],
+    ) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let fingerprints = items
+            .iter()
+            .map(|item| item.fingerprint.clone())
+            .collect::<Vec<_>>();
+        if fingerprints.is_empty() {
+            sqlx::query("delete from version_checklist_items where version_id = $1")
+                .bind(version_id)
+                .execute(&mut *tx)
+                .await?;
+        } else {
+            sqlx::query(
+                "delete from version_checklist_items
+                 where version_id = $1 and not (fingerprint = any($2))",
+            )
+            .bind(version_id)
+            .bind(fingerprints)
+            .execute(&mut *tx)
+            .await?;
+        }
+        for item in items {
+            sqlx::query(
+                "insert into version_checklist_items (
+                    id, version_id, fingerprint, kind, title, detail, why, placeholder,
+                    section_id, section_heading, quote, template, cut_text, position
+                 ) values (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+                 )
+                 on conflict (version_id, fingerprint) do update set
+                    kind = excluded.kind, title = excluded.title, detail = excluded.detail,
+                    why = excluded.why, placeholder = excluded.placeholder,
+                    section_id = excluded.section_id, section_heading = excluded.section_heading,
+                    quote = excluded.quote, template = excluded.template,
+                    cut_text = excluded.cut_text, position = excluded.position",
+            )
+            .bind(Uuid::new_v4())
+            .bind(version_id)
+            .bind(&item.fingerprint)
+            .bind(item.kind.as_str())
+            .bind(&item.title)
+            .bind(&item.detail)
+            .bind(&item.why)
+            .bind(&item.placeholder)
+            .bind(item.section_id.as_deref())
+            .bind(item.section_heading.as_deref())
+            .bind(item.quote.as_deref())
+            .bind(item.template.as_deref())
+            .bind(item.cut_text.as_deref())
+            .bind(item.position)
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Set one reader's state on one checklist item. Ownership is checked in
+    /// the same statement, so unknown ids and other users' items look alike.
+    pub async fn update_checklist_item(
+        &self,
+        user_id: Uuid,
+        resume_id: Uuid,
+        version_id: Uuid,
+        item_id: Uuid,
+        done: bool,
+        answer: &str,
+    ) -> anyhow::Result<Option<ChecklistItem>> {
+        let answer = answer.trim();
+        let answer = if answer.is_empty() {
+            None
+        } else {
+            Some(clip(answer, 500))
+        };
+        let row = sqlx::query(
+            "update version_checklist_items as item
+             set done = $4, answer = $5,
+                 checked_at = case when $4 then coalesce(item.checked_at, now()) else null end
+             from versions, resumes
+             where versions.id = item.version_id and resumes.id = versions.resume_id
+               and resumes.user_id = $1 and resumes.id = $2 and versions.id = $3 and item.id = $6
+             returning item.*",
+        )
+        .bind(user_id)
+        .bind(resume_id)
+        .bind(version_id)
+        .bind(done)
+        .bind(answer)
+        .bind(item_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(|row| checklist_view(&row)).transpose()
     }
 
     /// Record, change, or clear one user's vote on a model reading. Returns
@@ -1339,6 +1510,45 @@ async fn insert_version(
         &payload,
     )
     .await
+}
+
+fn checklist_view(row: &sqlx::postgres::PgRow) -> anyhow::Result<ChecklistItem> {
+    let kind: String = row.try_get("kind")?;
+    Ok(ChecklistItem {
+        id: row.try_get("id")?,
+        fingerprint: row.try_get("fingerprint")?,
+        kind: match kind.as_str() {
+            "blank" => ChecklistKind::Blank,
+            "promote" => ChecklistKind::Promote,
+            "cut" => ChecklistKind::Cut,
+            other => anyhow::bail!("bad checklist kind {other}"),
+        },
+        title: row.try_get("title")?,
+        detail: row.try_get("detail")?,
+        why: row.try_get("why")?,
+        placeholder: row.try_get("placeholder")?,
+        section_id: row.try_get("section_id")?,
+        section_heading: row.try_get("section_heading")?,
+        quote: row.try_get("quote")?,
+        template: row.try_get("template")?,
+        cut_text: row.try_get("cut_text")?,
+        position: row.try_get("position")?,
+        done: row.try_get("done")?,
+        answer: row.try_get("answer")?,
+        checked_at: row.try_get("checked_at")?,
+        created_at: row.try_get("created_at")?,
+    })
+}
+
+fn clip(text: &str, limit: usize) -> String {
+    if text.len() <= limit {
+        return text.to_owned();
+    }
+    let mut end = limit;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text[..end].trim_end().to_owned()
 }
 
 fn run_view(run: &sqlx::postgres::PgRow) -> anyhow::Result<RunView> {
