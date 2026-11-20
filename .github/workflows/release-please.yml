@@ -29,8 +29,11 @@ jobs:
         with:
           config-file: release-please-config.json
           token: ${{ secrets.GITHUB_TOKEN }}
+      # release-please-action v5 exposes `prs_created` and a JSON `pr` object,
+      # not `pull_request_number` (the v4 output). Gating on the old name
+      # silently skipped generation on the 0.3.0 release PR.
       - name: cache release-notes model
-        if: ${{ steps.release.outputs.pull_request_number != '' }}
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .release-notes-model
@@ -42,10 +45,10 @@ jobs:
       # the result is committed to the release PR, so builds are reproducible
       # and never call an LLM at verification or build time.
       - name: refresh release notes on the release PR
-        if: ${{ steps.release.outputs.pull_request_number != '' }}
+        if: ${{ steps.release.outputs.prs_created == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ steps.release.outputs.pull_request_number }}
+          PR_NUMBER: ${{ fromJSON(steps.release.outputs.pr).number }}
         run: |
           set -euo pipefail
           gh pr checkout "$PR_NUMBER"
