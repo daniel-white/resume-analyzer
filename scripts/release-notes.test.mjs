@@ -6,8 +6,10 @@ import {
   draftMarkdown,
   normalizeMarkdown,
   parseChangelog,
+  parseRewriteResponse,
+  rewriteMarkdown,
+  rewritePromptPayload,
   stripRefs,
-  unwrapModelContent,
 } from "./release-notes.mjs";
 
 const changelog = `# Changelog
@@ -49,6 +51,14 @@ test("parseChangelog keeps user-facing sections and strips refs", () => {
         items: ["keep the upload button visible on mobile"],
       },
     ],
+  });
+});
+
+test("parseChangelog drops internal commit scopes and strips user-facing ones", () => {
+  const scoped = `# Changelog\n\n## [2.0.0](https://example.com) (2026-11-20)\n\n### Features\n\n* **about:** add a changelog tab\n\n### Bug Fixes\n\n* **release-notes:** strip model JSON wrappers\n`;
+  assert.deepEqual(parseChangelog(scoped, "2.0.0"), {
+    version: "2.0.0",
+    sections: [{ title: "Features", items: ["add a changelog tab"] }],
   });
 });
 
@@ -97,24 +107,44 @@ test("a user-facing bullet containing the word build is kept", () => {
   );
 });
 
-test("unwrapModelContent extracts markdown from a JSON-wrapped model reply", () => {
-  const reply = `{"markdown": "## Version 0.3.0\\n\\nUsers can now read release notes in the app.\\n"}`;
+test("rewritePromptPayload numbers every changelog item", () => {
+  const draft = parseChangelog(changelog, "1.2.0");
   assert.equal(
-    unwrapModelContent(reply),
-    "## Version 0.3.0\n\nUsers can now read release notes in the app.\n",
+    rewritePromptPayload(draft),
+    "[Features]\n- (0) stream analysis to the UI\n\n[Fixes]\n- (1) keep the upload button visible on mobile",
   );
 });
 
-test("unwrapModelContent leaves plain markdown untouched", () => {
-  const reply = "## Version 0.3.0\n\nA plain markdown reply.\n";
-  assert.equal(unwrapModelContent(reply), reply.trim());
+test("parseRewriteResponse accepts fenced JSON and rejects prose", () => {
+  const reply = '```json\n{"summary": "A summary.", "rewrites": {"0": "A rewrite."}}\n```';
+  assert.deepEqual(parseRewriteResponse(reply), {
+    summary: "A summary.",
+    rewrites: { 0: "A rewrite." },
+  });
+  assert.throws(() => parseRewriteResponse("here are the notes"), /did not return a JSON object/);
 });
 
-test("the model pipeline unwraps JSON and drops internal bullets", () => {
-  const leaked = `{"markdown": "## Version 0.3.0\\n\\nUsers can now view a changelog in the app.\\n\\n### Fixes\\n\\n- The app now includes checksums in its release jobs.\\n\\n### Performance\\n\\n- The app's build metadata is now displayed on the About page.\\n"}`;
-  const notes = normalizeMarkdown(unwrapModelContent(leaked), "0.3.0");
-  assert.equal(notes, "## Version 0.3.0\n\nUsers can now view a changelog in the app.\n");
+test("rewriteMarkdown keeps every changelog item even if the model omits one", () => {
+  const draft = parseChangelog(changelog, "1.2.0");
+  const notes = normalizeMarkdown(
+    rewriteMarkdown(draft, "Feedback now arrives as analysis runs.", { 0: "Analysis streams into the page as it runs." }),
+    "1.2.0",
+  );
+  assert.equal(
+    notes,
+    "## Version 1.2.0\n\nFeedback now arrives as analysis runs.\n\n### Features\n\n- Analysis streams into the page as it runs.\n\n### Fixes\n\n- keep the upload button visible on mobile\n",
+  );
   assertCleanMarkdown(notes);
+});
+
+test("rewriteMarkdown falls back to the draft when a rewrite is internal", () => {
+  const draft = parseChangelog(changelog, "1.2.0");
+  const notes = normalizeMarkdown(
+    rewriteMarkdown(draft, "", { 0: "checksums are signed in the release job" }),
+    "1.2.0",
+  );
+  assert.match(notes, /- stream analysis to the UI/);
+  assert.doesNotMatch(notes, /checksums/);
 });
 
 test("assertCleanMarkdown rejects JSON or code-fence artifacts", () => {

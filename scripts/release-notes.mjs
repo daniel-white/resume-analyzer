@@ -34,7 +34,16 @@ const sectionNames = new Map([
 // Other release-please sections are always dropped. This second pass catches
 // internal work that release-please filed under Features or Bug Fixes.
 const internalWork =
-  /\b(?:ci|github actions|workflow|pipeline|buildx|imagetools|docker|helm|charts?|pnpm|cargo|dependenc(?:y|ies)|dependabot|lockfile|e2e|tests?|release-please|release jobs?|release pipeline|release workflow|cosign|ghcr|signing|signed|attestations?|checksums?|registry|build metadata|bake|cache)\b/i;
+  /\b(?:ci|github actions|workflow|pipeline|buildx|imagetools|docker|helm|charts?|pnpm|cargo|dependenc(?:y|ies)|dependabot|lockfile|e2e|tests?|release-please|release jobs?|release pipeline|release workflow|cosign|ghcr|signing|signed|attestations?|checksums?|registry|bake|cache)\b/i;
+
+// release-please prefixes scoped commit subjects, e.g. `**about:** ...`.
+// Some scopes are plumbing and never belong in user-facing notes.
+const internalScopes = /^(?:release-notes?|release-please|ci|build|deps?|tests?|chore|refactor)$/i;
+
+function hasInternalScope(text) {
+  const scope = /^\*\*([^*]+):\*\*/.exec(text);
+  return scope !== null && internalScopes.test(scope[1].trim().toLowerCase());
+}
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -42,6 +51,7 @@ function escapeRegExp(value) {
 
 export function stripRefs(text) {
   return text
+    .replace(/^\*\*[^*]+:\*\*\s*/, "")
     .replace(/\(\s*\[#\d+\]\([^)]*\)\s*\)/g, "")
     .replace(/\(\s*\[[0-9a-f]{7,40}\]\([^)]*\)\s*\)/g, "")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
@@ -97,6 +107,7 @@ export function parseChangelog(markdown, version) {
 
   for (const section of sections) {
     section.items = section.items
+      .filter((item) => item.length > 0 && !hasInternalScope(item))
       .map(stripRefs)
       .filter((item) => item.length > 0 && !internalWork.test(item));
   }
@@ -117,6 +128,79 @@ export function draftMarkdown(draft) {
     lines.push(`### ${section.title}`, "");
     for (const item of section.items) {
       lines.push(`- ${item}`);
+    }
+    lines.push("");
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
+// The changelog draft is the source of truth. The model may reword each item,
+// but it cannot add, drop, or reorder them: the notes are rebuilt from the
+// draft below, with rewritten text only where the model supplied a safe line.
+function draftEntries(draft) {
+  const entries = [];
+  for (const section of draft.sections) {
+    for (const text of section.items) {
+      entries.push({ id: String(entries.length), section: section.title, text });
+    }
+  }
+  return entries;
+}
+
+export function rewritePromptPayload(draft) {
+  const entries = draftEntries(draft);
+  const lines = [];
+  let index = 0;
+  for (const section of draft.sections) {
+    lines.push(`[${section.title}]`);
+    for (let i = 0; i < section.items.length; i += 1) {
+      lines.push(`- (${entries[index].id}) ${section.items[i]}`);
+      index += 1;
+    }
+    lines.push("");
+  }
+  return lines.join("\n").trim();
+}
+
+export function parseRewriteResponse(content) {
+  const text = content.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)```$/i.exec(text);
+  const body = fenced ? fenced[1].trim() : text;
+  const start = body.indexOf("{");
+  const end = body.lastIndexOf("}");
+  if (start === -1 || end <= start) {
+    throw new Error("the model did not return a JSON object");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(body.slice(start, end + 1));
+  } catch {
+    throw new Error("the model returned invalid JSON");
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("the model did not return a JSON object");
+  }
+  return parsed;
+}
+
+export function rewriteMarkdown(draft, summary, rewrites) {
+  const entries = draftEntries(draft);
+  const lines = [`## Version ${draft.version}`, ""];
+  const cleanSummary = stripRefs(typeof summary === "string" ? summary : "");
+  if (cleanSummary.length > 0 && !internalWork.test(cleanSummary)) lines.push(cleanSummary, "");
+
+  if (entries.length === 0) {
+    lines.push(EMPTY_NOTES);
+    return `${lines.join("\n")}\n`;
+  }
+  for (const title of ["Features", "Fixes", "Performance"]) {
+    const sectionEntries = entries.filter((entry) => entry.section === title);
+    if (sectionEntries.length === 0) continue;
+    lines.push(`### ${title}`, "");
+    for (const entry of sectionEntries) {
+      const candidate = stripRefs(typeof rewrites?.[entry.id] === "string" ? rewrites[entry.id] : "");
+      const text = candidate.length > 0 && !internalWork.test(candidate) ? candidate : entry.text;
+      lines.push(`- ${text}`);
     }
     lines.push("");
   }
@@ -241,36 +325,15 @@ function parseModelResponse(raw) {
   }
 }
 
-// Some chat models return the requested JSON object *as the message text*
-// instead of as the completion payload. Accept both shapes: plain markdown or
-// a `{"markdown": "..."}` wrapper, with or without a code fence.
-export function unwrapModelContent(content) {
-  let text = content.trim();
-  const fenced = /^```(?:markdown|md|json)?\s*([\s\S]*?)```$/i.exec(text);
-  if (fenced) text = fenced[1].trim();
-
-  const candidates = [text];
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start !== -1 && end > start) candidates.push(text.slice(start, end + 1));
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed.markdown === "string") return parsed.markdown;
-    } catch {
-      // Plain markdown, or a JSON object that is not a wrapper.
-    }
-  }
-  return text;
-}
-
 async function editWithModel(version) {
   const endpoint = process.env["RELEASE_NOTES_LLM_URL"] ?? "http://127.0.0.1:8080/v1/chat/completions";
   const model = process.env["RELEASE_NOTES_LLM_MODEL"] ?? "llama-3.2-3b-instruct-q4_k_m";
-  const draft = draftMarkdown(parseChangelog(readFileSync(changelogPath, "utf8"), version));
+  const parsedChangelog = parseChangelog(readFileSync(changelogPath, "utf8"), version);
+  const draft = draftMarkdown(parsedChangelog);
   const prompt = readFileSync(promptPath, "utf8")
     .replaceAll("{{VERSION}}", version)
-    .replaceAll("{{DRAFT}}", draft);
+    .replaceAll("{{DRAFT}}", draft)
+    .replaceAll("{{ITEMS}}", rewritePromptPayload(parsedChangelog));
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -294,7 +357,8 @@ async function editWithModel(version) {
   if (typeof content !== "string" || content.trim().length === 0) {
     throw new Error("the model returned an empty response");
   }
-  const notes = normalizeMarkdown(unwrapModelContent(content), version);
+  const reply = parseRewriteResponse(content);
+  const notes = normalizeMarkdown(rewriteMarkdown(parsedChangelog, reply.summary, reply.rewrites), version);
   assertCleanMarkdown(notes);
   return notes;
 }
