@@ -4,7 +4,7 @@
 # ./scripts/check.sh so GitHub Actions can run checks inside an image and avoid
 # host toolchain/dependency conflicts. The dev shell closure is realized at
 # build time and cached in image layers.
-FROM nixos/nix:2.24.11
+FROM nixos/nix:2.35.6
 
 # git is required by scripts/check.sh (e.g. git diff/ls-files). bash/coreutils
 # are present in nixos/nix, but ensure common tools are available.
